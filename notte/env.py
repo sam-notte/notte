@@ -82,7 +82,7 @@ class NotteEnv(AsyncResource):
 
     @timeit("goto")
     async def goto(self, url: str) -> Observation:
-        snapshot = await self._browser.goto(url)
+        snapshot = await self._browser.goto(url)n
         self._action_space = None
         return await self._observe(snapshot)
 
