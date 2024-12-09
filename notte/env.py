@@ -4,6 +4,7 @@ from loguru import logger
 
 from notte.actions.base import Action, ActionParameterValue
 from notte.actions.code import process_action_code
+from notte.actions.space import ActionSpace
 from notte.browser.context import Context, Observation
 from notte.browser.driver import BrowserArgs, BrowserDriver
 from notte.browser.snapshot import BrowserSnapshot
@@ -52,46 +53,57 @@ class NotteEnv(AsyncResource):
         self._trajectory: list[Observation] = trajectory or []
         self._parser: Parser = parser or BaseNotteParser()
         self._context: Context | None = None
+        self._action_space: ActionSpace | None = None
         if model is not None:
             ModelRouter.set(model)
 
+    @property
+    def context(self) -> Context:
+        if self._context is None:
+            raise ValueError("Need to observe first to get a context.")
+        return self._context
+
+    @property
+    def list_actions(self) -> list[Action] | None:
+        if self._action_space is None:
+            return None
+        if len(self._trajectory) >= 2 and self._trajectory[-1].clean_url != self._trajectory[-2].clean_url:
+            # If the last two observations are not on the same page, the last action space is invalid.
+            return None
+        return self._action_space.actions(status=["valid", "failed", "excluded"])
+
     # ---------------------------- observe, step functions ----------------------------
 
-    async def _obslisting(self, snapshot: BrowserSnapshot, list_next: bool = True) -> Observation:
+    async def _observe(self, snapshot: BrowserSnapshot) -> Observation:
         self._context = BrowserSnapshotToContextPipe.forward(snapshot)
-        space = None
-        if list_next:
-            space = await ContextToActionSpacePipe.forward(self._context, self.get_last_actions(snapshot))
-        obs = Observation(url=snapshot.clean_url, screenshot=snapshot.screenshot, space=space)
+        obs = Observation(url=snapshot.url, screenshot=snapshot.screenshot, space=None)
         self._trajectory.append(obs)
         return obs
 
-    async def _obs(self, url: str, list_next: bool = False) -> Observation:
-        snapshot = await self._browser.goto(url)
-        return await self._obslisting(snapshot, list_next)
-
     @timeit("goto")
     async def goto(self, url: str) -> Observation:
-        return await self._obs(url, list_next=False)
+        snapshot = await self._browser.goto(url)
+        return await self._observe(snapshot)
 
     @timeit("observe")
     async def observe(self, url: str) -> Observation:
         snapshot = await self._browser.goto(url)
-        return await self._obslisting(snapshot)
+        obs = await self._observe(snapshot)
+        obs.space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        return obs
 
-    async def _step(
+    async def _execute(
         self,
         action_id: str,
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
-        list_next: bool = True,
     ) -> Observation:
         if self._context is None:
             raise ValueError("Need to observe first to get a context.")
         action, _params = self._parse_env(action_id, params)
         enter = enter if enter is not None else action.id.startswith("I")
         snapshot = await ExecutionPipe.forward(action, _params, self._context, self._browser, enter=enter)
-        return await self._obslisting(snapshot, list_next=list_next)
+        return await self._observe(snapshot)
 
     @timeit("execute")
     async def execute(
@@ -100,7 +112,7 @@ class NotteEnv(AsyncResource):
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
-        return await self._step(action_id, params, enter=enter, list_next=False)
+        return await self._execute(action_id, params, enter=enter)
 
     @timeit("step")
     async def step(
@@ -109,7 +121,9 @@ class NotteEnv(AsyncResource):
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
-        return await self._step(action_id, params, enter, list_next=True)
+        obs = await self._execute(action_id, params, enter=enter)
+        obs.space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        return obs
 
     @timeit("reset")
     async def reset(self, url: str) -> Observation:
@@ -131,18 +145,6 @@ class NotteEnv(AsyncResource):
             obs = await self.step(step_params.action_id, step_params.params, enter=False)
             return self._parser.textify(obs)
         return self._parser.rules()
-
-    # ------------------------------ Getters ---------------------------------------
-
-    def get_last_actions(self, snapshot: BrowserSnapshot) -> list[Action] | None:
-        if len(self._trajectory) == 0:
-            return None
-        prev_obs: Observation = self._trajectory[-1]
-        if snapshot.clean_url != prev_obs.url:
-            return None
-        if prev_obs.space is None:
-            return None
-        return prev_obs.space.actions(status=["valid", "failed", "excluded"])
 
     # ------------------------------ Private ---------------------------------------
 
