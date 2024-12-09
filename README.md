@@ -14,11 +14,13 @@
 
 # Install
 
-Requires Python 3.11+ easy peasy.
+Requires Python 3.11+
 
 ```bash
 pip install notte
 ```
+
+You will need a `.env` file with your LLM provider API keys.
 
 # Usage
 
@@ -27,6 +29,7 @@ As a reinforcement learning environment to get full control;
 ```python
 from notte.env import NotteEnv
 model = "groq/llama-3.3-70b-versatile"
+
 async with NotteEnv(model=model, headless=False) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
@@ -50,11 +53,6 @@ The observation object contains all you need about the current state of a page;
 * B2: Swaps origin and destination locations
 * B3: Search flights options with current filters
 
-# Destination Exploration
-* L1: Shows flights from London to Tokyo
-* L2: Shows flights from New York to Rome
-* [... More actions ...]
-
 # Website Navigation
 * B5: Opens Google apps menu
 * L28: Navigates to Google homepage
@@ -65,8 +63,13 @@ The observation object contains all you need about the current state of a page;
 * B27: Open menu to change location settings
 * B28: Open menu to change currency settings
 
+# Destination Exploration
+* L1: Shows flights from London to Tokyo
+* L2: Shows flights from New York to Rome
 [... More actions/categories ...]
 ```
+
+## As a backend for LLM web agents
 
 Or alternatively, you can use Notte conversationally with an LLM agent:
 
@@ -80,25 +83,27 @@ max_steps = 10
 
 def llm_agent(messages):
     response = litellm.completion(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=messages,
     )
     return response.choices[0].message.content
 
-async with NotteEnv(headless=False) as env:
-  while '<done>' not in messages[-1]['content'] and max_steps > 0:
+async def main(max_steps=10):
+  async with NotteEnv(headless=False) as env:
+    while '<done>' not in messages[-1]['content'] and max_steps > 0:
+      resp = llm_agent(messages) # query your llm policy.
+      obs = await env.chat(resp) # query notte with llm response.
+      messages.append({"role": "assistant", "content": resp})
+      messages.append({"role": "user", "content": obs})
+      max_steps -= 1
 
-    resp = llm_agent(messages) # query your llm policy.
-    obs = await env.chat(resp) # query notte with llm response.
-
-    messages.append({"role": "assistant", "content": resp})
-    messages.append({"role": "user", "content": obs})
-    max_steps -= 1
+import asyncio
+asyncio.run(main())
 ```
 
-👷🏻‍♂️ See how to create your own advanced agent with Notte in [examples](#examples)!
+🌌 Use Notte as a backend environment for a web-based LLM agent. In this example, you integrate your own LLM policy, manage the interaction flow, handle errors, and define rewards, all while letting Notte handle webpages parsing/understanding and browser interactions.
 
-## Main features
+# Main features
 
 - **Web Driver Support:** Compatible with any web driver. Defaults to Playwright.
 - **LLM Integration:** Use any LLM as a policy engine with quick prompt tuning.
@@ -122,13 +127,14 @@ from notte.sdk import NotteClient
 env = NotteClient(api_key="your-api-key")
 ```
 
-# Examples
+# Contribute
+Setup your local working environment;
+```bash
+poetry env use 3.11 && poetry shell
+poetry install --with dev
+```
 
-1. [Drop-in your own agent super easy](examples/agent.py)
-
-# How to Contribute
-
-Check out the [contributing docs](docs/CONTRIBUTING.md) file for more information on how to contribute to Notte.
+Find an issue, fork, open a PR, and merge :)
 
 # License
 

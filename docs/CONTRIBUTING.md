@@ -18,4 +18,4 @@ You can contribute to Notte by submitting a PR or by reporting an issue.
 
 ## Installing Notte
 
-Follow the instructions in the [setup docs](docs/setup.md) file.
+Follow the instructions in the [setup docs](../docs/setup.md) file.
