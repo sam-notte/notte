@@ -82,14 +82,16 @@ class NotteEnv(AsyncResource):
 
     @timeit("goto")
     async def goto(self, url: str) -> Observation:
-        snapshot = await self._browser.goto(url)
+        snapshot = await self._browser.goto(url)n
+        self._action_space = None
         return await self._observe(snapshot)
 
     @timeit("observe")
     async def observe(self, url: str) -> Observation:
         snapshot = await self._browser.goto(url)
         obs = await self._observe(snapshot)
-        obs.space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        self._action_space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        obs.space = self._action_space
         return obs
 
     async def _execute(
@@ -112,6 +114,7 @@ class NotteEnv(AsyncResource):
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
+        self._action_space = None
         return await self._execute(action_id, params, enter=enter)
 
     @timeit("step")
@@ -122,13 +125,15 @@ class NotteEnv(AsyncResource):
         enter: bool | None = None,
     ) -> Observation:
         obs = await self._execute(action_id, params, enter=enter)
-        obs.space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        self._action_space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        obs.space = self._action_space
         return obs
 
     @timeit("reset")
     async def reset(self, url: str) -> Observation:
         self._trajectory = []
         self._context = None
+        self._action_space = None
         return await self.observe(url)
 
     # ---------------------------- conversational environment ----------------------------
