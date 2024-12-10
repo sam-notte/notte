@@ -54,7 +54,7 @@ def list_interactive_nodes(
 
     interactions: list[A11yNode] = []
     id = ax_tree.get("id")
-    if ax_tree.get("role") in NodeCategory.INTERACTION.roles():
+    if ax_tree["role"] in NodeCategory.INTERACTION.roles() and len(ax_tree["name"].strip()) > 0:
         node: A11yNode = {
             "role": ax_tree["role"],
             "name": ax_tree["name"],

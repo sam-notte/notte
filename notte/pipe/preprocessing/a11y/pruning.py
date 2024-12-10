@@ -1,3 +1,7 @@
+from copy import deepcopy
+
+from loguru import logger
+
 from notte.browser.node_type import A11yNode, NodeCategory
 
 # TODO: disabled for now because it creates some issues with text grouping
@@ -44,6 +48,22 @@ def fold_link_button(node: A11yNode) -> A11yNode:
     return node
 
 
+def fold_button_in_button(node: A11yNode) -> A11yNode:
+    children: list[A11yNode] = node.get("children", [])
+    if (
+        node.get("role") == "button"
+        and len(children) == 1
+        and children[0].get("role") == "button"
+        and node.get("name") == children[0].get("name")
+    ):
+        logger.info(f"Folding button in button with name '{node.get('name')}'")
+        node["children"] = children[0].get("children", [])
+        return node
+
+    node["children"] = [fold_button_in_button(child) for child in children]
+    return node
+
+
 def nb_real_children(node: A11yNode) -> int:
     return len([child for child in node.get("children", []) if is_interesting(child, prune_text_nodes=True)])
 
@@ -85,9 +105,17 @@ def prune_non_interesting_nodes(node: A11yNode) -> A11yNode | None:
     return node
 
 
+def deep_copy_node(node: A11yNode) -> A11yNode:
+    if node.get("children"):
+        node["children"] = [deep_copy_node(child) for child in node.get("children", [])]
+    return deepcopy(node)
+
+
 def prune_simple_accessiblity_tree(node: A11yNode) -> A11yNode | None:
+    node = deep_copy_node(node)
     pipe = [
         fold_link_button,
+        fold_button_in_button,
         prune_non_interesting_nodes,
         prune_empty_links,
         prune_text_child_in_interaction_nodes,
@@ -105,6 +133,7 @@ def prune_simple_accessiblity_tree(node: A11yNode) -> A11yNode | None:
 
 
 def prune_accessiblity_tree(node: A11yNode) -> A11yNode:
+    node = deep_copy_node(node)
 
     def add_children_to_pruned_node(node: A11yNode, children: list[A11yNode]) -> A11yNode:
         node["children"] = children
@@ -141,16 +170,20 @@ def prune_accessiblity_tree(node: A11yNode) -> A11yNode:
                 return child_role, node_role
         raise ValueError(f"No priority found for {node_role} and {child_role}")
 
-    base: A11yNode = {
-        "role": node["role"],
-        "name": node["name"],
-    }
-    if not node.get("children"):
+    base: A11yNode = deepcopy(node)
+    if base.get("children"):
+        del base["children"]
+    children = node.get("children", [])
+    nb_children = len(children)
+    if nb_children == 0:
         return base
+
     # if there is only one child and the note is not interesting, skip it
-    pruned_children = [prune_accessiblity_tree(child) for child in node.get("children", []) if filter_node(child)]
+    pruned_children = [prune_accessiblity_tree(child) for child in children if filter_node(child)]
     # scond round of filtrering
     pruned_children = [child for child in pruned_children if filter_node(child)]
+    base["nb_pruned_children"] = nb_children - len(pruned_children)
+    # TODO: remove this
 
     if len(pruned_children) == 0:
         return base
@@ -172,7 +205,7 @@ def prune_accessiblity_tree(node: A11yNode) -> A11yNode:
             return node
 
         if child.get("role") in ["group", "none", "generic"]:
-            if not child.get("children"):
+            if not child.get("children") and child.get("nb_pruned_children") in [None, 0]:
                 raise ValueError(f"Group nodes should have children: {child}")
             children = child.get("children", [])
         else:

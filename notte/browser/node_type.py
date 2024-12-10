@@ -27,6 +27,7 @@ class NodeCategory(Enum):
                     "searchbox",
                     "radio",
                     "tab",
+                    "menuitem",
                 }
             case NodeCategory.TEXT.value:
                 roles = {"text", "heading", "paragraph"}
@@ -35,9 +36,9 @@ class NodeCategory(Enum):
             case NodeCategory.TABLE.value:
                 roles = {"table", "row", "column", "cell"}
             case NodeCategory.OTHER.value:
-                pass
+                roles = {"iframe"}
             case NodeCategory.STRUCTURAL.value:
-                roles = {"group", "generic", "none", "navigation", "banner", "WebArea", "dialog"}
+                roles = {"group", "generic", "none", "navigation", "banner", "WebArea", "dialog", "menubar"}
             case NodeCategory.PARAMETERS.value:
                 roles = {"option"}
             case _:
@@ -56,6 +57,7 @@ class NodeRole(Enum):
     NAVIGATION = "navigation"
     BANNER = "banner"
     DIALOG = "dialog"
+    MENUBAR = "menubar"
 
     # text
     TEXT = "text"
@@ -72,6 +74,7 @@ class NodeRole(Enum):
     SEARCHBOX = "searchbox"
     RADIO = "radio"
     TAB = "tab"
+    MENUITEM = "menuitem"
 
     # parameters
     OPTION = "option"
@@ -87,11 +90,32 @@ class NodeRole(Enum):
     LISTITEM = "listitem"
     LISTMARKER = "listmarker"
 
+    # OTHER
+    IFRAME = "Iframe"
+
     @staticmethod
     def from_value(value: str) -> "NodeRole | str":
         if value.upper() in NodeRole.__members__:
             return NodeRole[value.upper()]
         return value
+
+    def short_id(self) -> str | None:
+        match self.value:
+            case NodeRole.LINK.value:
+                return "L"
+            case NodeRole.BUTTON.value | NodeRole.TAB.value | NodeRole.MENUITEM.value | NodeRole.RADIO.value:
+                return "B"
+            case (
+                NodeRole.COMBOBOX.value
+                | NodeRole.TEXTBOX.value
+                | NodeRole.SEARCHBOX.value
+                | NodeRole.LISTBOX.value
+                | NodeRole.CHECKBOX.value
+                | NodeRole.RADIO.value
+            ):
+                return "I"
+            case _:
+                return None
 
     def category(self) -> NodeCategory:
         match self.value:
@@ -107,6 +131,7 @@ class NodeRole(Enum):
                 | NodeRole.NAVIGATION.value
                 | NodeRole.BANNER.value
                 | NodeRole.DIALOG.value
+                | NodeRole.MENUBAR.value
             ):
                 return NodeCategory.STRUCTURAL
             case NodeRole.LIST.value | NodeRole.LISTITEM.value | NodeRole.LISTMARKER.value:
@@ -123,6 +148,7 @@ class NodeRole(Enum):
                 | NodeRole.RADIO.value
                 | NodeRole.TAB.value
                 | NodeRole.LISTBOX.value
+                | NodeRole.MENUITEM.value
             ):
                 return NodeCategory.INTERACTION
             case _:
@@ -189,6 +215,8 @@ class NotteNode:
     def is_interaction(self) -> bool:
         if isinstance(self.role, str):
             return False
+        if self.id is None:
+            return False
         return self.role.category().value == NodeCategory.INTERACTION.value
 
     def flatten(self, only_interaction: bool = False) -> list["NotteNode"]:
@@ -220,6 +248,7 @@ class A11yNode(TypedDict, total=False):
     children: list["A11yNode"]
     url: str
     # added by the tree processing
+    nb_pruned_children: int
     children_roles_count: dict[str, int]
     group_role: str
     group_roles: list[str]
