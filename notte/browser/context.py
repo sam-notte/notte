@@ -6,7 +6,7 @@ from PIL import Image
 from notte.actions.base import Action
 from notte.actions.space import ActionSpace
 from notte.browser.node_type import NotteNode
-from notte.browser.snapshot import BrowserSnapshot
+from notte.browser.snapshot import BrowserSnapshot, clean_url
 from notte.utils import image
 
 
@@ -18,8 +18,7 @@ class Observation:
 
     @property
     def clean_url(self) -> str:
-        # remove anything after ? i.. ?tfs=CBwQARooEgoyMDI0LTEyLTAzagwIAh
-        return self.url.split("?")[0]
+        return clean_url(self.url)
 
     def display_screenshot(self) -> Image.Image | None:
         if self.screenshot is None:
