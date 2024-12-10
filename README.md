@@ -33,7 +33,7 @@ model = "groq/llama-3.3-70b-versatile"
 async with NotteEnv(model=model, headless=False) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
-  obs = await env.step(obs.actions.sample().id)
+  obs = await env.step(obs.space.sample().id)
 ```
 
 The observation object contains all you need about the current state of a page;
