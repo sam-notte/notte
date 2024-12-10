@@ -18,9 +18,10 @@ Requires Python 3.11+
 
 ```bash
 pip install notte
+playwright install
 ```
 
-You will need a `.env` file with your LLM provider API keys.
+You will need a `.env` file with your LLM provider API keys (use `.env.example` for reference).
 
 # Usage
 
