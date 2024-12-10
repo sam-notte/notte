@@ -133,6 +133,7 @@ Setup your local working environment;
 ```bash
 poetry env use 3.11 && poetry shell
 poetry install --with dev
+poetry run playwright install
 ```
 
 Find an issue, fork, open a PR, and merge :)
