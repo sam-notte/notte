@@ -43,11 +43,14 @@ class ProcessedA11yTree:
             raise ValueError("Raw tree is None")
         raw_tree = sync_ids_between_trees(source=simple_tree, target=raw_tree)
 
-        _processed_tree = prune_accessiblity_tree(raw_tree)
+        _processed_tree = prune_accessiblity_tree(tree.raw)
         processed_tree = prune_simple_accessiblity_tree(_processed_tree)
         if processed_tree is None:
             raise ValueError("Processed tree is None")
         processed_tree = sync_ids_between_trees(source=simple_tree, target=processed_tree)
+
+        # Be aware that this call updates the IDs of the snapshot raw tree
+        tree.raw = sync_ids_between_trees(source=simple_tree, target=tree.raw)
 
         return ProcessedA11yTree(processed_tree=processed_tree, raw_tree=raw_tree, simple_tree=simple_tree)
 

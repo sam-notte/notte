@@ -21,7 +21,9 @@ class PromptLibrary:
             with open(prompt_file, "r") as file:
                 content: str = file.read()
                 role: str = prompt_file.name.split(".")[0]
-                messages.append(Message(role=role, content=content))
+                if role not in ["assistant", "user", "system", "tool", "function"]:
+                    raise ValueError(f"Invalid role: {role}")
+                messages.append(Message(role=role, content=content))  # type: ignore
         return messages
 
     def materialize(self, prompt_id: str, variables: dict[str, Any] | None = None) -> list[dict[str, str | None]]:
@@ -29,13 +31,15 @@ class PromptLibrary:
         # But you can fewer variables than in the prompt template
         messages = self.get(prompt_id)
         if variables is None:
-            return messages
+            return self.dictify(messages)
 
         try:
             materialized_messages: list[Message] = []
             for message in messages:
+                if message.content is None:
+                    raise ValueError(f"Message content is None: {message.role}")
                 formatted_content: str = chevron.render(message.content, variables)
-                materialized_messages.append(Message(role=message.role, content=formatted_content))
+                materialized_messages.append(Message(role=message.role, content=formatted_content))  # type: ignore
             return self.dictify(materialized_messages)
         except KeyError as e:
             raise ValueError(f"Missing required variable in prompt template: {str(e)}")

@@ -12,14 +12,11 @@ async def _test_action_node_resolution_pipe(url: str) -> None:
     errors: list[str] = []
     total_count = 0
     async with NotteEnv(headless=True) as env:
-        _ = await env.observe(url, list_next=False)
+        _ = await env.goto(url)
 
         action_node_resolution_pipe = ActionNodeResolutionPipe(browser=env._browser)
-        context = env._context
-        if context is None:
-            raise ValueError("Context is None")
 
-        for node in context.interaction_nodes():
+        for node in env.context.interaction_nodes():
             total_count += 1
             if node.id is None:
                 raise ValueError("Node id is None")
@@ -30,7 +27,7 @@ async def _test_action_node_resolution_pipe(url: str) -> None:
                 category="interaction",
             )
             try:
-                action = await action_node_resolution_pipe.forward(action, [], context)
+                action = await action_node_resolution_pipe.forward(action, [], env.context)
             except Exception as e:
                 errors.append(f"Error for node {node.id}: {e}")
 
@@ -85,6 +82,7 @@ async def test_notte() -> None:
     await _test_action_node_resolution_pipe("https://notte.cc")
 
 
+@pytest.mark.skip(reason="BBC is not too slow and faulty due to timeouts")
 async def test_bbc() -> None:
     """Test resolution pipe with BBC homepage"""
     await _test_action_node_resolution_pipe("https://www.bbc.com")
@@ -95,9 +93,10 @@ async def test_allrecipes() -> None:
     await _test_action_node_resolution_pipe("https://www.allrecipes.com")
 
 
-# async def test_amazon():
-#     """Test resolution pipe with Amazon homepage"""
-#     await _test_action_node_resolution_pipe("https://www.amazon.com")
+@pytest.mark.skip(reason="Amazon is too slow and faulty due to timeouts")
+async def test_amazon():
+    """Test resolution pipe with Amazon homepage"""
+    await _test_action_node_resolution_pipe("https://www.amazon.com")
 
 
 async def test_apple() -> None:

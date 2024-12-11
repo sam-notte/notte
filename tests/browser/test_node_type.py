@@ -158,7 +158,7 @@ def test_node_attributes():
 def test_consistency_node_role_and_category():
 
     for role in NodeRole:
-        assert role.value in role.category().roles()
+        assert role.value in role.category().roles(), f"Role {role.value} is not in category {role.category()}"
 
     for category in NodeCategory:
         for role_str in category.roles():
@@ -255,3 +255,20 @@ def test_subtree_keep_some_nodes(nested_graph: NotteNode):
     assert filtered_graph.find("L1") is None
     assert filtered_graph.find("B4") is None
     assert filtered_graph.find("B5") is None
+
+
+def test_all_interaction_roles_have_short_id():
+    for role in NodeRole:
+        if role.category() == NodeCategory.INTERACTION:
+            assert role.short_id() is not None, f"Role {role.value} has no short id"
+
+
+def test_non_intersecting_category_roles():
+
+    def all_except(category: NodeCategory) -> set[str]:
+        return set([role for cat in NodeCategory if cat.value != category.value for role in cat.roles()])
+
+    for category in NodeCategory:
+        _all = all_except(category)
+        cat_roles = category.roles()
+        assert len(cat_roles.intersection(_all)) == 0, f"Category {category.value} has intersecting roles"
