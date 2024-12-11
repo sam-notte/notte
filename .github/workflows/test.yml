@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pre-commit pytest pytest-testmon
+          pip install pre-commit pytest pytest-testmon mypy
           pip install -e .
 
       - name: Run pre-commit
@@ -29,6 +29,6 @@ jobs:
           pre-commit install
           pre-commit run --all-files
 
-      - name: Run tests
+      - name: Run unittests
         run: |
           pytest tests/ --testmon
