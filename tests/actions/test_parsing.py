@@ -41,11 +41,9 @@ def test_parse_parameter_single_value():
 
 def test_parse_table_empty_table():
     table = ""
-    try:
-        parse_table(table)
-        assert False
-    except ValueError as e:
-        assert "Empty table" in str(e)
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+    assert "Empty table" in str(e.value)
 
 
 def test_parse_table_invalid_headers():
@@ -54,11 +52,9 @@ def test_parse_table_invalid_headers():
     | --- | --- | --- | --- |
     | action_1 | Desc | name: p1, type: int | cat1 |
     """
-    try:
-        parse_table(table)
-        assert False
-    except ValueError as e:
-        assert "Invalid headers" in str(e)
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+    assert "Invalid headers" in str(e.value)
 
 
 def test_parse_table_invalid_params():
@@ -67,11 +63,9 @@ def test_parse_table_invalid_params():
     | --- | --- | --- | --- |
     | action_1 | Desc | invalid_param_format | cat1 |
     """
-    try:
-        parse_table(table)
-        assert False
-    except ValueError:
-        assert True
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+    assert "Invalid parameters" in str(e.value)
 
 
 def action_parameters() -> list[str]:

@@ -33,9 +33,12 @@ class ActionParameterValue:
     value: str
 
 
+ActionStatus = Literal["valid", "failed", "excluded"]
+
+
 @dataclass
 class CachedAction:
-    status: Literal["valid", "failed", "excluded"]
+    status: ActionStatus
     description: str
     category: str
     code: str | None
@@ -52,7 +55,7 @@ class PossibleAction:
 
 @dataclass
 class Action(PossibleAction):
-    status: Literal["valid", "failed", "excluded"] = "valid"
+    status: ActionStatus = "valid"
 
     def markdown(self) -> str:
         return self.description

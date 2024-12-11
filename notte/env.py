@@ -70,7 +70,7 @@ class NotteEnv(AsyncResource):
         if len(self._trajectory) >= 2 and self._trajectory[-1].clean_url != self._trajectory[-2].clean_url:
             # If the last two observations are not on the same page, the last action space is invalid.
             return None
-        return self._action_space.actions(status=["valid", "failed", "excluded"])
+        return self._action_space.actions(status="all")
 
     # ---------------------------- observe, step functions ----------------------------
 

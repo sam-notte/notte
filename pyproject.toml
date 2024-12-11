@@ -37,3 +37,13 @@ types-chevron = "^0.14.2.20240310"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:sklearn.utils.fixes:",
+    "ignore::DeprecationWarning:pandas.core.common:",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20:",
+    "ignore::DeprecationWarning:importlib.resources._legacy:",
+    "ignore::DeprecationWarning:litellm.utils:",
+    "ignore:open_text is deprecated*:DeprecationWarning"
+]
