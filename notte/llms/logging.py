@@ -2,7 +2,7 @@ from datetime import datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
-from litellm import Message, ModelResponse
+from litellm import ModelResponse
 from loguru import logger
 
 from notte.common.tracer import LlmTracer
@@ -18,7 +18,7 @@ def trace_llm_usage(tracer: LlmTracer | None = None) -> Callable[[Callable[..., 
         @wraps(func)
         def wrapper(
             engine: "LLMEngine",
-            messages: list[Message],
+            messages: list[dict[str, str]],
             model: str,
             **kwargs: Any,
         ) -> ResponseT:

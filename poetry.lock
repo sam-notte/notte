@@ -4381,6 +4381,42 @@ tests = ["autopep8", "flake8", "isort", "llnl-hatchet", "numpy", "pytest", "scip
 tutorials = ["matplotlib", "pandas", "tabulate"]
 
 [[package]]
+name = "types-beautifulsoup4"
+version = "4.12.0.20241020"
+description = "Typing stubs for beautifulsoup4"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-beautifulsoup4-4.12.0.20241020.tar.gz", hash = "sha256:158370d08d0cd448bd11b132a50ff5279237a5d4b5837beba074de152a513059"},
+    {file = "types_beautifulsoup4-4.12.0.20241020-py3-none-any.whl", hash = "sha256:c95e66ce15a4f5f0835f7fbc5cd886321ae8294f977c495424eaf4225307fd30"},
+]
+
+[package.dependencies]
+types-html5lib = "*"
+
+[[package]]
+name = "types-chevron"
+version = "0.14.2.20240310"
+description = "Typing stubs for chevron"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-chevron-0.14.2.20240310.tar.gz", hash = "sha256:01e33dea521a369ca36669db44d42ccd355287edb432cd5ebe985297bce50505"},
+    {file = "types_chevron-0.14.2.20240310-py3-none-any.whl", hash = "sha256:3583ccabdf11fbcabad48f26cda8814f3983b238635736c5bd02aa2fce196820"},
+]
+
+[[package]]
+name = "types-html5lib"
+version = "1.1.11.20241018"
+description = "Typing stubs for html5lib"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-html5lib-1.1.11.20241018.tar.gz", hash = "sha256:98042555ff78d9e3a51c77c918b1041acbb7eb6c405408d8a9e150ff5beccafa"},
+    {file = "types_html5lib-1.1.11.20241018-py3-none-any.whl", hash = "sha256:3f1e064d9ed2c289001ae6392c84c93833abb0816165c6ff0abfc304a779f403"},
+]
+
+[[package]]
 name = "types-python-dateutil"
 version = "2.9.0.20241206"
 description = "Typing stubs for python-dateutil"
@@ -4389,6 +4425,17 @@ python-versions = ">=3.8"
 files = [
     {file = "types_python_dateutil-2.9.0.20241206-py3-none-any.whl", hash = "sha256:e248a4bc70a486d3e3ec84d0dc30eec3a5f979d6e7ee4123ae043eedbb987f53"},
     {file = "types_python_dateutil-2.9.0.20241206.tar.gz", hash = "sha256:18f493414c26ffba692a72369fea7a154c502646301ebfe3d56a04b3767284cb"},
+]
+
+[[package]]
+name = "types-regex"
+version = "2024.11.6.20241108"
+description = "Typing stubs for regex"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "types-regex-2024.11.6.20241108.tar.gz", hash = "sha256:a774e307b99b3df49481b29e8b4962f021693052a8d8a2b9e6792fcec896cf5e"},
+    {file = "types_regex-2024.11.6.20241108-py3-none-any.whl", hash = "sha256:adec2ff2dfed00855551057334466fde923606599d01e7440556d53a3ef20835"},
 ]
 
 [[package]]
@@ -4675,4 +4722,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<4.0"
-content-hash = "acd5805bc4f83c05afa62e905f5a1775a7a909b644eeeef47b55088e55b42547"
+content-hash = "c5b350f60c55cb099c40d375a327c1e41f24692667b674de76f0b7c32a6029d2"
