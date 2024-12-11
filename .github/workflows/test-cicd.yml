@@ -32,4 +32,4 @@ jobs:
 
       - name: Run unittests
         run: |
-          pytest tests --ignore=tests/integration/tests/integration/test_resolution.py / --testmon
+          pytest tests --ignore=tests/integration/test_resolution.py --durations=10 / --testmon

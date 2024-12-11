@@ -73,15 +73,20 @@ class BrowserDriver(AsyncResource):
     def page(self) -> Page:
         return self._playwright.page
 
-    async def snapshot(self) -> BrowserSnapshot:
+    async def snapshot(self, retries: int = 5) -> BrowserSnapshot:
         if not self.page:
             raise RuntimeError("Browser not started. Call `start` first.")
-
+        if retries <= 0:
+            raise ValueError("Browser snapshot failed after 5 retries to get a non-empty web page")
         html_content = await self.page.content()
         a11y_tree = A11yTree(
             simple=await self.page.accessibility.snapshot(),  # type: ignore
             raw=await self.page.accessibility.snapshot(interesting_only=False),  # type: ignore
         )
+        if len(a11y_tree.simple.get("children", [])) == 0:
+            logger.warning(f"Simple tree is empty for page {self.page.url}. Retry in {DEFAULT_WAITING_TIMEOUT}ms")
+            await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+            return await self.snapshot(retries=retries - 1)
 
         screenshot = await self.page.screenshot() if self._screenshot else None
         return BrowserSnapshot(

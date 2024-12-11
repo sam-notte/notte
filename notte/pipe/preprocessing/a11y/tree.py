@@ -36,7 +36,7 @@ class ProcessedA11yTree:
     def from_a11y_tree(tree: A11yTree) -> "ProcessedA11yTree":
         simple_tree = prune_simple_accessiblity_tree(tree.simple)
         if simple_tree is None:
-            raise ValueError("Simple tree is None")
+            raise ValueError(f"Simple tree is empty after pruning from original tree: {tree.simple}")
         simple_tree = generate_sequential_ids(simple_tree)
         raw_tree = prune_simple_accessiblity_tree(tree.raw)
         if raw_tree is None:
