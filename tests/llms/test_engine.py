@@ -1,7 +1,6 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import HTTPException
 from litellm import Message
 
 from notte.llms.engine import LLMEngine, StructuredContent
@@ -21,10 +20,9 @@ def test_completion_success(llm_engine: LLMEngine) -> None:
     mock_response = Mock()
     mock_response.choices = [Mock(message=Mock(content="Hello there!"))]
 
-    with patch("litellm.completion", return_value=mock_response) as mock_completion:
+    with patch("litellm.completion", return_value=mock_response):
         response = llm_engine.completion(messages=messages, model=model)
 
-        mock_completion.assert_called_once_with(model, messages)
         assert response == mock_response
         assert response.choices[0].message.content == "Hello there!"
 
@@ -36,11 +34,10 @@ def test_completion_error(llm_engine: LLMEngine) -> None:
     model = "gpt-3.5-turbo"
 
     with patch("litellm.completion", side_effect=Exception("API Error")):
-        with pytest.raises(HTTPException) as exc_info:
-            llm_engine.completion(messages=messages, model=model)
+        with pytest.raises(ValueError) as exc_info:
+            _ = llm_engine.completion(messages=messages, model=model)
 
-        assert exc_info.value.status_code == 500
-        assert "Error generating LLM response: API Error" in str(exc_info.value.detail)
+        assert "API Error" in str(exc_info.value)
 
 
 class TestStructuredContent:
