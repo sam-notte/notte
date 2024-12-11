@@ -27,15 +27,21 @@ def action_list_answer() -> str:
 
 @pytest.fixture
 def action_table_answer() -> str:
-    return """
-| ID  | Description | Parameters | Category |
-| L37 | Shows flights from London to Tokyo | | Discovery & Exploration |
-| B30 | Explores available flights | | Discovery & Exploration |
-| I3  | Selects the origin location | name: origin: type: str | Search & Input |
-| I1  | Selects the ticket type | name: ticketType: type: str, default=\"Round trip\", values=[\"Round trip\", \"One way\", \"Multi-city\"] | Search & Input |
-| B6  | Changes the number of passengers | | Search & Input |
-| I6  | Enters the return date | name: returnDate: type: date | Search & Input |
-"""
+    return "\n".join(
+        [
+            "| ID  | Description | Parameters | Category |",
+            "| L37 | Shows flights from London to Tokyo | | Discovery & Exploration |",
+            "| B30 | Explores available flights | | Discovery & Exploration |",
+            "| I3  | Selects the origin location | name: origin: type: str | Search & Input |",
+            (
+                "| I1  | Selects the ticket type | name: ticketType: type: str, "
+                'default="Round trip", values=["Round trip", "One way", "Multi-city"]'
+                " | Search & Input |"
+            ),
+            "| B6  | Changes the number of passengers | | Search & Input |",
+            "| I6  | Enters the return date | name: returnDate: type: date | Search & Input |",
+        ]
+    )
 
 
 @pytest.fixture
