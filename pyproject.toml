@@ -20,6 +20,7 @@ loguru = "^0.7.2"
 sentence-transformers = "^3.3.1"
 litellm = "^1.53.3"
 chevron = "^0.14.0"
+llamux = "^0.1.2"
 
 [tool.poetry.group.dev.dependencies]
 types-requests = "^2.32.0.20241016"
@@ -37,3 +38,13 @@ types-chevron = "^0.14.2.20240310"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.flake8]
+max-line-length = 120
+
+[tool.isort]
+profile = "black"

@@ -1819,6 +1819,20 @@ extra-proxy = ["azure-identity (>=1.15.0,<2.0.0)", "azure-keyvault-secrets (>=4.
 proxy = ["PyJWT (>=2.8.0,<3.0.0)", "apscheduler (>=3.10.4,<4.0.0)", "backoff", "cryptography (>=42.0.5,<43.0.0)", "fastapi (>=0.111.0,<0.112.0)", "fastapi-sso (>=0.10.0,<0.11.0)", "gunicorn (>=22.0.0,<23.0.0)", "orjson (>=3.9.7,<4.0.0)", "pynacl (>=1.5.0,<2.0.0)", "python-multipart (>=0.0.9,<0.0.10)", "pyyaml (>=6.0.1,<7.0.0)", "rq", "uvicorn (>=0.22.0,<0.23.0)"]
 
 [[package]]
+name = "llamux"
+version = "0.1.4"
+description = "A simple llm router"
+optional = false
+python-versions = "<4.0,>=3.11"
+files = [
+    {file = "llamux-0.1.4-py3-none-any.whl", hash = "sha256:8d3ff35c3f8e444b89bcd68a861f06c60bce1114aaa8063a8bd7cee263922ab8"},
+    {file = "llamux-0.1.4.tar.gz", hash = "sha256:ac44de7f1e9dd5ee070f34f11da24bbdf40a420ca64df1b8306c89764d38ac40"},
+]
+
+[package.dependencies]
+litellm = ">=1.54.1,<2.0.0"
+
+[[package]]
 name = "loguru"
 version = "0.7.3"
 description = "Python logging made (stupidly) simple"
@@ -4731,4 +4745,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<4.0"
-content-hash = "c5b350f60c55cb099c40d375a327c1e41f24692667b674de76f0b7c32a6029d2"
+content-hash = "cef072816d94a7605b411015a628d9a9933243e1b60e0e3b905f99e13f22dcf8"
