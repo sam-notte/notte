@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 from sentence_transformers import SentenceTransformer
 
-from notte.actions.base import Action
+from notte.actions.base import Action, ActionStatus
 
 
 @dataclass
@@ -16,15 +16,15 @@ class ActionSpace:
 
     def actions(
         self,
-        status: list[Literal["valid", "failed", "excluded"]] | None = None,
+        status: Literal[ActionStatus, "all"] = "valid",
     ) -> list[Action]:
-        if status is None:
-            status = ["valid"]
-        return [action for action in self._actions if action.status in status]
+        if status == "all":
+            return self._actions
+        return [action for action in self._actions if action.status == status]
 
     def sample(
         self,
-        status: list[Literal["valid", "failed", "excluded"]] | None = None,
+        status: Literal[ActionStatus, "all"] = "valid",
     ) -> Action:
         action: Action = random.choice(self.actions(status))
         return Action(
@@ -37,7 +37,7 @@ class ActionSpace:
 
     def search(self, query: str, threshold: float = 0.60, max_results: int = 1) -> list[Action]:
         if self._embeddings is None:
-            self._embeddings = ActionEmbedding().embed_actions(self.actions(["valid"]))
+            self._embeddings = ActionEmbedding().embed_actions(self.actions("valid"))
 
         # Perform similarity search
         action_embs = self._embeddings
@@ -56,31 +56,31 @@ class ActionSpace:
 
         # Return up to max_results actions
         result_indices = sorted_indices[:max_results]
-        return [self.actions(["valid", "failed", "excluded"])[i] for i in result_indices]
+        return [self.actions("valid")[i] for i in result_indices]
 
     def markdown(
         self,
-        status: Literal["valid", "failed", "excluded"],
+        status: Literal[ActionStatus, "all"] = "valid",
     ) -> str:
         # Get actions with requested status
-        actions_to_format = self.actions([status])
+        actions_to_format = self.actions(status)
 
         # Group actions by category
         grouped_actions: dict[str, list[Action]] = {}
         for action in actions_to_format:
-            if action.category is None:
+            if len(action.category) == 0:
                 raise ValueError("Action has no category")
             if action.category not in grouped_actions:
                 grouped_actions[action.category] = []
             grouped_actions[action.category].append(action)
 
         # Build markdown output
-        output = []
+        output: list[str] = []
         for category, actions in grouped_actions.items():
             output.append(f"\n# {category}")
             for action in actions:
                 line = f"* {action.id}: {action.description}"
-                if action.params is not None and len(action.params) > 0:
+                if len(action.params) > 0:
                     line += f" ({action.params})"
                 output.append(line)
 

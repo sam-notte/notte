@@ -1,7 +1,26 @@
+from collections.abc import Callable
+from enum import Enum
+
 import regex as re
 from loguru import logger
 
 from notte.actions.base import ActionParameter, PossibleAction
+
+ActionListingParserFt = Callable[[str], list[PossibleAction]]
+
+
+class ActionListingParser(Enum):
+    MARKDOWN = "markdown"
+    TABLE = "table"
+
+    def parse(self, content: str) -> list[PossibleAction]:
+        match self:
+            case ActionListingParser.MARKDOWN:
+                return parse_markdown_action_list(content)
+            case ActionListingParser.TABLE:
+                return parse_table(content)
+            case _:
+                raise ValueError(f"Invalid action listing parser: {self}")
 
 
 def parse_action_ids(action: str) -> list[str]:
@@ -160,7 +179,7 @@ def parse_markdown_action_list(
             actions.append(
                 PossibleAction(
                     id=action_id[0],
-                    description=bullet_text,
+                    description=action_description,
                     category=current_category,
                     params=parameters,
                 )
@@ -170,7 +189,7 @@ def parse_markdown_action_list(
     return actions
 
 
-def parse_parameter(param_string: str) -> ActionParameter:
+def parse_table_parameter(param_string: str) -> ActionParameter:
     """
     Parse a parameter string into an ActionParameter object.
 
@@ -235,11 +254,11 @@ def parse_parameter(param_string: str) -> ActionParameter:
                     values_str = match.group(1)
                     values = [v.strip().strip("\"'") for v in values_str.split(",")]
                 else:
-                    raise ValueError("Values must be in list format: [value1, value2, ...]")
+                    raise ValueError(f"Values must be in list format: [value1, value2, ...] but is: '{value}'")
 
     # Validate required fields
     if not name or not param_type:
-        raise ValueError("Name and type are required fields")
+        raise ValueError(f"Name and type are required fields but not found in : {param_string}")
 
     return ActionParameter(name=name, type=param_type, default=default, values=values)
 
@@ -273,7 +292,7 @@ def parse_table(table_text: str) -> list[PossibleAction]:
             id=id_,
             description=description,
             category=category,
-            params=[] if params_str == "" else [parse_parameter(params_str)],
+            params=[] if params_str == "" else [parse_table_parameter(params_str)],
         )
         actions.append(action)
 

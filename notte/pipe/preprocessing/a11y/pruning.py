@@ -185,6 +185,8 @@ def prune_accessiblity_tree(node: A11yNode) -> A11yNode:
     pruned_children = [prune_accessiblity_tree(child) for child in children if filter_node(child)]
     # scond round of filtrering
     pruned_children = [child for child in pruned_children if filter_node(child)]
+    base["nb_pruned_children"] = nb_children - len(pruned_children)
+    # TODO: remove this
 
     if len(pruned_children) == 0:
         return base
@@ -206,7 +208,7 @@ def prune_accessiblity_tree(node: A11yNode) -> A11yNode:
             return node
 
         if child.get("role") in ["group", "none", "generic"]:
-            if not child.get("children"):
+            if not child.get("children") and child.get("nb_pruned_children") in [None, 0]:
                 raise ValueError(f"Group nodes should have children: {child}")
             children = child.get("children", [])
         else:

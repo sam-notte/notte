@@ -1,6 +1,6 @@
 from datetime import datetime
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, Callable
 
 from litellm import ModelResponse
 from loguru import logger
@@ -10,27 +10,26 @@ from notte.common.tracer import LlmTracer
 if TYPE_CHECKING:
     from notte.llms.engine import LLMEngine
 
-ResponseT = TypeVar("ResponseT", bound=ModelResponse)
 
-
-def trace_llm_usage(tracer: LlmTracer | None = None) -> Callable[[Callable[..., ResponseT]], Callable[..., ResponseT]]:
-    def decorator(func: Callable[..., ResponseT]) -> Callable[..., ResponseT]:
+def trace_llm_usage(
+    tracer: LlmTracer | None = None,
+) -> Callable[[Callable[..., ModelResponse]], Callable[..., ModelResponse]]:
+    def decorator(func: Callable[..., ModelResponse]) -> Callable[..., ModelResponse]:
         @wraps(func)
         def wrapper(
             engine: "LLMEngine",
             messages: list[dict[str, str]],
             model: str,
             **kwargs: Any,
-        ) -> ResponseT:
+        ) -> ModelResponse:
             # Call the original function
-            response = func(engine, messages, model, **kwargs)
+            response: ModelResponse = func(engine, messages, model, **kwargs)
 
             # Only trace if tracer is provided
             if tracer is not None:
                 try:
-                    completion = ""
-                    if response.choices and hasattr(response.choices[0], "message"):
-                        completion = response.choices[0].message.content or ""
+                    _completion: str | None = response.choices[0].message.content  # type: ignore
+                    completion: str = _completion or ""
 
                     usage = getattr(response, "usage", None)
                     usage_dict = (

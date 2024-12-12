@@ -27,10 +27,15 @@ class ModelRouter:
 @final
 class LLMService:
 
-    def __init__(self):
-        self.llm = LLMEngine()
-        self.lib = PromptLibrary(str(PROMPT_DIR))
-        self.router = ModelRouter()
+    def __init__(
+        self,
+        llm: LLMEngine | None = None,
+        lib: PromptLibrary | None = None,
+        router: ModelRouter | None = None,
+    ):
+        self.llm = llm or LLMEngine()
+        self.lib = lib or PromptLibrary(str(PROMPT_DIR))
+        self.router = router or ModelRouter()
 
     def completion(
         self,

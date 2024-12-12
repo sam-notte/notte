@@ -4,13 +4,13 @@ from notte.actions.base import ActionParameter
 from notte.actions.parsing import (
     parse_action_ids,
     parse_action_parameters,
-    parse_parameter,
     parse_table,
+    parse_table_parameter,
 )
 
 
 def test_parse_parameter_no_defaults_values():
-    param = parse_parameter("name: paramA, type: int")
+    param = parse_table_parameter("name: paramA, type: int")
     assert param.name == "paramA"
     assert param.type == "int"
     assert param.default is None
@@ -18,21 +18,21 @@ def test_parse_parameter_no_defaults_values():
 
 
 def test_parse_parameter_empty_values_list():
-    param = parse_parameter("name: paramB, type: float, values=[]")
+    param = parse_table_parameter("name: paramB, type: float, values=[]")
     assert param.name == "paramB"
     assert param.type == "float"
     assert param.values == [""]
 
 
 def test_parse_parameter_quoted_values():
-    param = parse_parameter('name: paramC, type: string, values=["val1","val2","val3"]')
+    param = parse_table_parameter('name: paramC, type: string, values=["val1","val2","val3"]')
     assert param.name == "paramC"
     assert param.type == "string"
     assert param.values == ["val1", "val2", "val3"]
 
 
 def test_parse_parameter_single_value():
-    param = parse_parameter("name: paramD, type: boolean, default=true")
+    param = parse_table_parameter("name: paramD, type: boolean, default=true")
     assert param.name == "paramD"
     assert param.type == "boolean"
     assert param.default == "true"
@@ -41,11 +41,9 @@ def test_parse_parameter_single_value():
 
 def test_parse_table_empty_table():
     table = ""
-    try:
-        parse_table(table)
-        assert False
-    except ValueError as e:
-        assert "Empty table" in str(e)
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+    assert "Empty table" in str(e.value)
 
 
 def test_parse_table_invalid_headers():
@@ -54,11 +52,9 @@ def test_parse_table_invalid_headers():
     | --- | --- | --- | --- |
     | action_1 | Desc | name: p1, type: int | cat1 |
     """
-    try:
-        parse_table(table)
-        assert False
-    except ValueError as e:
-        assert "Invalid headers" in str(e)
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+    assert "Invalid headers" in str(e.value)
 
 
 def test_parse_table_invalid_params():
@@ -67,11 +63,9 @@ def test_parse_table_invalid_params():
     | --- | --- | --- | --- |
     | action_1 | Desc | invalid_param_format | cat1 |
     """
-    try:
-        parse_table(table)
-        assert False
-    except ValueError:
-        assert True
+    with pytest.raises(ValueError) as e:
+        _ = parse_table(table)
+        assert "invalid_param_format" in str(e.value)
 
 
 def action_parameters() -> list[str]:
