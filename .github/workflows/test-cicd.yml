@@ -1,4 +1,4 @@
-name: Tests
+name: notte cicd
 
 on:
   push:
@@ -6,8 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  PYTHON_VERSION: "3.11"
+  CACHE_TYPE: "pip"
+
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,8 +19,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: ${{ env.CACHE_TYPE }}
 
       - name: Install dependencies
         run: |
@@ -31,6 +35,6 @@ jobs:
           pre-commit install
           pre-commit run --all-files
 
-      - name: Run unittests
+      - name: Run unit tests
         run: |
           pytest tests --ignore=tests/integration/test_resolution.py --durations=10
