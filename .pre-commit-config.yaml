@@ -9,13 +9,13 @@ repos:
     rev: 5.13.2
     hooks:
       - id: isort
-        args: ["--config", "pyproject.toml"]
+        args: ["--settings-path", "pyproject.toml"]
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
-        args: ["--config", "pyproject.toml"]
+        args: ["--max-line-length=120"]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0

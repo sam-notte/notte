@@ -1820,13 +1820,13 @@ proxy = ["PyJWT (>=2.8.0,<3.0.0)", "apscheduler (>=3.10.4,<4.0.0)", "backoff", "
 
 [[package]]
 name = "llamux"
-version = "0.1.4"
+version = "0.1.5"
 description = "A simple llm router"
 optional = false
 python-versions = "<4.0,>=3.11"
 files = [
-    {file = "llamux-0.1.4-py3-none-any.whl", hash = "sha256:8d3ff35c3f8e444b89bcd68a861f06c60bce1114aaa8063a8bd7cee263922ab8"},
-    {file = "llamux-0.1.4.tar.gz", hash = "sha256:ac44de7f1e9dd5ee070f34f11da24bbdf40a420ca64df1b8306c89764d38ac40"},
+    {file = "llamux-0.1.5-py3-none-any.whl", hash = "sha256:02d5cc552209389a0ae2310caee864db04b901991efa6216c7f193732a3bd84c"},
+    {file = "llamux-0.1.5.tar.gz", hash = "sha256:240c3a3951bb1e376a6c17d327928c06bfe776cdac53cd95471548f6435d5b62"},
 ]
 
 [package.dependencies]
