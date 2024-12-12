@@ -1,47 +1,33 @@
-import os
 from pathlib import Path
-from typing import Any, ClassVar, final
+from typing import Any
 
-from litellm import ModelResponse
+import litellm
+from llamux import Router
+from loguru import logger
 
-from notte.llms.engine import LLMEngine
 from notte.llms.prompt import PromptLibrary
 
 PROMPT_DIR = Path(__file__).parent.parent / "llms" / "prompts"
+LLAMUX_CONFIG = Path(__file__).parent.parent / "llms" / "config" / "endpoints.csv"
 
 
-class ModelRouter:
-    NOTTE_BASE_MODEL: ClassVar[str] = "NOTTE_BASE_MODEL"
-
-    def get(self) -> str:
-        model = os.getenv(self.NOTTE_BASE_MODEL)
-        if model is None:
-            return "groq/llama-3.3-70b-versatile"
-        return model
-
-    @staticmethod
-    def set(model: str):
-        os.environ[ModelRouter.NOTTE_BASE_MODEL] = model
-
-
-@final
 class LLMService:
 
-    def __init__(
-        self,
-        llm: LLMEngine | None = None,
-        lib: PromptLibrary | None = None,
-        router: ModelRouter | None = None,
-    ):
-        self.llm = llm or LLMEngine()
-        self.lib = lib or PromptLibrary(str(PROMPT_DIR))
-        self.router = router or ModelRouter()
+    def __init__(self):
+        self.lib: PromptLibrary = PromptLibrary(str(PROMPT_DIR))
+        self.router: Router = Router.from_csv(str(LLAMUX_CONFIG))
 
     def completion(
         self,
         prompt_id: str,
         variables: dict[str, Any] | None = None,
-    ) -> ModelResponse:
-        model = self.router.get()
+    ) -> litellm.ModelResponse:
         messages = self.lib.materialize(prompt_id, variables)
-        return self.llm.completion(messages=messages, model=model)
+        provider, model, eid, _ = self.router.query(messages=messages)
+        logger.debug(f"using {provider}/{model}")
+        response = litellm.completion(
+            model=f"{provider}/{model}",
+            messages=messages,
+        )
+        self.router.log(response.usage.total_tokens, eid)
+        return response
