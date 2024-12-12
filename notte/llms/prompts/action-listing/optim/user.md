@@ -109,5 +109,5 @@ Grouped actions into 8 main categories based on functionality...
 Please analyze the following web document and provide your output following these strict rules:
 
 <document>
-{{document}}
+{{{document}}}
 </document>

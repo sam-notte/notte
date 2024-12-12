@@ -1,6 +1,6 @@
 Create a flat list of each actions you find in this webpage accessibility tree. For each action, describe it a short natural language description, keep it's identifier, and group them in different categories that make sense. The objective is that someone could read your list and immediately get what actions are possibly executable on that webpage.
 
-{context}
+{{{context}}}
 
 The format should instead be a sort of markdown like:
 

@@ -3,7 +3,7 @@ You are an expert in web accessibility tasked with analyzing a web document and 
 Here is the document you need to analyze:
 
 <document>
-{{document}}
+{{{document}}}
 </document>
 
 Please follow these steps to complete your task:

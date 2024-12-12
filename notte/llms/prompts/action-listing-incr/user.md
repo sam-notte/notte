@@ -113,8 +113,8 @@ Please analyze the following web document and provide your output following thes
 
 
 <previous-action-list>
-{{previous_action_list}}
+{{{previous_action_list}}}
 </previous-action-list>
 <document>
-{{document}}
+{{{document}}}
 </document>
