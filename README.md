@@ -1,5 +1,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/nottelabs/notte?style=social)](https://github.com/nottelabs/notte/stargazers)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![PyPI version](https://img.shields.io/pypi/v/notte)](https://pypi.org/project/notte/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Discord](https://img.shields.io/discord/1312234428444966924?color=7289DA&label=Discord&logo=discord&logoColor=white)](https://discord.gg/atbh5s6bts)
 
