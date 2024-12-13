@@ -11,6 +11,7 @@ from notte.browser.snapshot import BrowserSnapshot
 from notte.common.logging import timeit
 from notte.common.parser import BaseNotteParser, Parser
 from notte.common.resource import AsyncResource
+from notte.llms.service import LLMService
 from notte.pipe.main import ContextToActionSpacePipe
 from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
@@ -44,6 +45,7 @@ class NotteEnv(AsyncResource):
         browser: BrowserDriver | None = None,
         trajectory: list[Observation] | None = None,
         parser: Parser | None = None,
+        llmserve: LLMService | None = None,
         **browser_kwargs: Unpack[BrowserArgs],
     ) -> None:
         self._browser: BrowserDriver = browser or BrowserDriver(**browser_kwargs)
@@ -52,6 +54,9 @@ class NotteEnv(AsyncResource):
         self._parser: Parser = parser or BaseNotteParser()
         self._context: Context | None = None
         self._action_space: ActionSpace | None = None
+        self._context_to_action_space_pipe: ContextToActionSpacePipe = ContextToActionSpacePipe(
+            llmserve=llmserve,
+        )
 
     @property
     def context(self) -> Context:
@@ -86,7 +91,7 @@ class NotteEnv(AsyncResource):
     async def observe(self, url: str) -> Observation:
         snapshot = await self._browser.goto(url)
         obs = await self._observe(snapshot)
-        self._action_space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        self._action_space = await self._context_to_action_space_pipe.forward(self.context, self.list_actions)
         obs.space = self._action_space
         return obs
 
@@ -121,7 +126,7 @@ class NotteEnv(AsyncResource):
         enter: bool | None = None,
     ) -> Observation:
         obs = await self._execute(action_id, params, enter=enter)
-        self._action_space = await ContextToActionSpacePipe.forward(self.context, self.list_actions)
+        self._action_space = await self._context_to_action_space_pipe.forward(self.context, self.list_actions)
         obs.space = self._action_space
         return obs
 
