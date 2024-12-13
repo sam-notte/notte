@@ -55,6 +55,7 @@ class NodeCategory(Enum):
                     "superscript",
                     "term",
                     "time",
+                    "LineBreak",
                 }
             case NodeCategory.LIST.value:
                 roles = {
@@ -182,6 +183,7 @@ class NodeRole(Enum):
     SUPERSCRIPT = "superscript"
     TERM = "term"
     TIME = "time"
+    LINEBREAK = "LineBreak"
 
     # interaction
     BUTTON = "button"
@@ -296,6 +298,7 @@ class NodeRole(Enum):
                 | NodeRole.SUPERSCRIPT.value
                 | NodeRole.TERM.value
                 | NodeRole.TIME.value
+                | NodeRole.LINEBREAK.value
             ):
                 return NodeCategory.TEXT
             case NodeRole.OPTION.value:
