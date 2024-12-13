@@ -1,4 +1,4 @@
-from notte.actions.base import ActionParameterValue, ExecutableAction
+from notte.actions.base import ExecutableAction
 from notte.browser.context import Context
 from notte.browser.node_type import HtmlSelector, NotteNode
 
@@ -36,18 +36,20 @@ def get_action_from_node(node: NotteNode) -> str:
 def get_playwright_code_from_selector(
     selectors: HtmlSelector,
     action_type: str,
-    parameters: list[ActionParameterValue],
+    param_value: str | None = None,
 ) -> str:
     parameter_str = ""
     execute_command = ""
     match action_type:
         case "fill":
-            if len(parameters) != 1:
-                raise ValueError(f"Fill action must have 1 parameter but got {parameters}")
-            parameter_str = f"'{parameters[0].value}'"
+            if param_value is None:
+                raise ValueError("Fill action must have a parameter value")
+            parameter_str = f"'{param_value}'"
             # execute_command = "await locator.press('Enter')"
         case "select_option":
-            parameter_str = f"'{parameters[0].value}'"
+            if param_value is None:
+                raise ValueError("Select option action must have a parameter value")
+            parameter_str = f"'{param_value}'"
         case "check" | "click" | _:
             pass
 
@@ -98,8 +100,16 @@ def compute_playwright_code(
         raise ValueError("Selectors are required to compute action code")
 
     action_type = get_action_from_node(node)
-
-    return get_playwright_code_from_selector(selectors, action_type, parameters=action.params_values)
+    param_value: str | None = None
+    if len(action.params_values) > 1:
+        raise ValueError("Multiple parameters are not supported for now")
+    if len(action.params_values) == 1:
+        param_value = action.params_values[0].value
+    return get_playwright_code_from_selector(
+        selectors,
+        action_type,
+        param_value=param_value,
+    )
 
 
 def process_action_code(
