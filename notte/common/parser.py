@@ -86,8 +86,10 @@ class BaseNotteParser(Parser):
         if action is None or not isinstance(action, str):
             raise ValueError("No action found")
         d = json.loads(action)
-        action_id = list(d.keys())[0]
-        params = d[action_id] if d[action_id] != {} else None
+        if "action-id" not in d:
+            raise ValueError("No action-id found in action")
+        action_id = d["action-id"]
+        params = d["params"] if d["params"] is not None else None
         return EnvStepParams(action_id=action_id, params=params)
 
     @override
@@ -111,8 +113,8 @@ If the action is parameterized, provide the value for each parameter.
 Use the exact following format:
 <action>
 {
-"action-id": {} # if an action has no params
-"action-id": { "name":"value" } # for action with params
+"action-id": "<YOUR_ACTION_ID>",
+"params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
 }
 </action>
 \nIf you're done, just say <done/>. Nothing else!
