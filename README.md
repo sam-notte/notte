@@ -94,32 +94,8 @@ The observation object contains all you need about the current state of a page;
 
 Or alternatively, you can use Notte conversationally with an LLM agent:
 
-```python
-from notte.env import NotteEnv
-import litellm
-
-goal = "Find best flights from Boston to Tokyo"
-messages = [{"role": "system", "content": goal}]
-max_steps = 10
-
-def llm_agent(messages):
-    response = litellm.completion(
-        model="gpt-4o",
-        messages=messages,
-    )
-    return response.choices[0].message.content
-
-async def main(max_steps=10):
-  async with NotteEnv(headless=False) as env:
-    while '<done>' not in messages[-1]['content'] and max_steps > 0:
-      resp = llm_agent(messages) # query your llm policy.
-      obs = await env.chat(resp) # query notte with llm response.
-      messages.append({"role": "assistant", "content": resp})
-      messages.append({"role": "user", "content": obs})
-      max_steps -= 1
-
-import asyncio
-asyncio.run(main())
+```bash
+$ python examples/agent.py --goal "subscribe to notte.cc newsletter with ap@agpinto.com"
 ```
 
 🌌 Use Notte as a backend environment for a web-based LLM agent. In this example, you integrate your own LLM policy, manage the interaction flow, handle errors, and define rewards, all while letting Notte handle webpages parsing/understanding and browser interactions.
