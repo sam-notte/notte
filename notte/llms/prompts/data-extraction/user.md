@@ -37,6 +37,7 @@ Grouped text elements into 8 main categories based on ...
 [Additional analysis...]
 </document-analysis>
 <data-extraction>
+```markdown
 # Google Flights: Paris to London search
 
 ## Navigation
@@ -66,6 +67,7 @@ They are ranked based on price and convenience
 - About Google Travel
 - Privacy
 - ...
+```
 </data-extraction>
 
 ### Notes:

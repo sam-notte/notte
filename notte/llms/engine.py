@@ -45,14 +45,14 @@ class StructuredContent:
             pattern = f"<{self.outer_tag}>(.*?)</{self.outer_tag}>"
             match = re.search(pattern, content, re.DOTALL)
             if not match:
-                raise ValueError(f"No content found within <{self.outer_tag}> tags")
+                raise ValueError(f"No content found within <{self.outer_tag}> tags in the response: {text}")
             content = match.group(1).strip()
 
         if self.inner_tag:
             pattern = f"```{self.inner_tag}(.*?)```"
             match = re.search(pattern, content, re.DOTALL)
             if not match:
-                raise ValueError(f"No content found within ```{self.inner_tag}``` blocks")
+                raise ValueError(f"No content found within ```{self.inner_tag}``` blocks in the response: {text}")
             content = match.group(1).strip()
 
         return content

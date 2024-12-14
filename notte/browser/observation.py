@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from PIL import Image
-from typing_extensions import override
 
 from notte.actions.space import ActionSpace
 from notte.utils import image
@@ -10,13 +9,9 @@ from notte.utils import image
 
 @dataclass
 class Observation:
-    _url: str
-    _space: ActionSpace
-    _screenshot: bytes | None = None
-
-    @property
-    def url(self) -> str:
-        return self._url
+    url: str
+    screenshot: bytes | None = None
+    _space: ActionSpace | None = None
 
     @property
     def clean_url(self) -> str:
@@ -25,11 +20,16 @@ class Observation:
 
     @property
     def space(self) -> ActionSpace:
+        if self._space is None:
+            raise ValueError("Space is not available for this observation")
         return self._space
 
-    @property
-    def screenshot(self) -> bytes | None:
-        return self._screenshot
+    @space.setter
+    def space(self, space: ActionSpace) -> None:
+        self._space = space
+
+    def has_space(self) -> bool:
+        return self._space is not None
 
     def display_screenshot(self) -> Image.Image | None:
         if self.screenshot is None:
@@ -46,17 +46,17 @@ class Observation:
         if not isinstance(space, dict):
             raise ValueError("space must be a dictionary")
         return Observation(
-            _url=url,
-            _screenshot=screenshot,
+            url=url,
+            screenshot=screenshot,
             _space=ActionSpace.from_json(space),
         )
 
 
-@dataclass
-class PreObservation(Observation):
-    _space: ActionSpace | None = None  # type: ignore
+# @dataclass
+# class PreObservation(Observation):
+#     _space: ActionSpace | None = None  # type: ignore
 
-    @override
-    @property
-    def space(self) -> ActionSpace:
-        raise ValueError("space is not available for pre-observations")
+#     @property
+#     @override
+#     def space(self) -> ActionSpace:
+#         raise ValueError("space is not available for pre-observations")
