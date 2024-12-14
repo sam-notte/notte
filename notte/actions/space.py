@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 from sentence_transformers import SentenceTransformer
 
-from notte.actions.base import Action, ActionStatus
+from notte.actions.base import Action, ActionRole, ActionStatus
 
 
 @dataclass
@@ -17,16 +17,25 @@ class ActionSpace:
     def actions(
         self,
         status: Literal[ActionStatus, "all"] = "valid",
+        role: Literal[ActionRole, "all"] = "all",
     ) -> list[Action]:
-        if status == "all":
-            return self._actions
-        return [action for action in self._actions if action.status == status]
+        match (status, role):
+            case ("all", "all"):
+                return self._actions
+            case ("all", _):
+                return [action for action in self._actions if action.role == role]
+            case (_, "all"):
+                return [action for action in self._actions if action.status == status]
+            case (_, _):
+                return [action for action in self._actions if action.status == status and action.role == role]
+        raise ValueError(f"Invalid status or role: {status} {role}")
 
     def sample(
         self,
         status: Literal[ActionStatus, "all"] = "valid",
+        role: Literal[ActionRole, "all"] = "all",
     ) -> Action:
-        action: Action = random.choice(self.actions(status))
+        action: Action = random.choice(self.actions(status, role))
         return Action(
             id=action.id,
             description=action.description,

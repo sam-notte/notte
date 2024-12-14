@@ -50,43 +50,40 @@ from notte.env import NotteEnv
 
 # setting fast language model provider keys
 os.environ['CEREBRAS_API_KEY'] = "your-api-key"
+# extract data and list actions on web pages
+notte_mode: str = "full"
 
-async with NotteEnv(headless=False) as env:
+async with NotteEnv(headless=False, mode=notte_mode) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
-  obs = await env.step(obs.space.sample().id)
+  obs = await env.step(obs.space.sample(role="link").id)
 ```
 
 The observation object contains all you need about the current state of a page;
 
 ```bash
 > obs = env.observe("https://www.google.com/travel/flights")
-> print(obs.actions.markdown())
+> print(obs.actions.markdown()) # list of available actions
+> print(obs.data) # data extracted from the page (if any)
+```
 
+
+```markdown
 # Flight Search
 * I1: Enters departure location (departureLocation: str = "San Francisco")
-* I2: Enters destination location (destinationLocation: str)
 * I3: Selects departure date (departureDate: date)
-* I4: Selects return date (returnDate: date)
-* I5: Selects seating class (seatClass: str = "Economy", allowed=["Economy", "Premium Economy", "Business", "First"])
 * I6: Selects trip type (tripType: str = "round-trip", allowed=["round-trip", "one-way", "multi-city"])
-* B1: Open menu to change number of passengers
-* B2: Swaps origin and destination locations
 * B3: Search flights options with current filters
+...
 
 # Website Navigation
 * B5: Opens Google apps menu
 * L28: Navigates to Google homepage
-* L29: Navigates to Hotels section
 
 # User Preferences
 * B26: Open menu to change language settings
-* B27: Open menu to change location settings
-* B28: Open menu to change currency settings
+...
 
-# Destination Exploration
-* L1: Shows flights from London to Tokyo
-* L2: Shows flights from New York to Rome
 [... More actions/categories ...]
 ```
 

@@ -1,7 +1,7 @@
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import ClassVar, Literal, Required, TypedDict
 
 import chevron
 from pydantic import BaseModel
@@ -19,10 +19,19 @@ class EnvStepParams(BaseModel):
     params: dict[str, str] | None
 
 
+class ActionJson(TypedDict):
+    action_id: Required[str]
+    params: dict[str, str] | None
+
+
 class Parser(ABC):
 
     @abstractmethod
     def which(self, text: str) -> Literal["observe", "step", "rules"]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_done(self, text: str) -> bool:
         raise NotImplementedError
 
     @abstractmethod
@@ -43,6 +52,10 @@ class Parser(ABC):
 
 
 class BaseNotteParser(Parser):
+    observe_tag: ClassVar[str] = "url"
+    step_tag: ClassVar[str] = "execute-action"
+    extracted_data_tag: ClassVar[str] = "data"
+    done_tag: ClassVar[str] = "done"
 
     INSTRUCTIONS: str = """
     Hi there! I am the Notte web environment, and will help you navigate the internet.
@@ -63,8 +76,8 @@ class BaseNotteParser(Parser):
 
     @override
     def which(self, text: str) -> Literal["observe", "step", "rules"]:
-        url = self.search_pattern(text, "url")
-        action = self.search_pattern(text, "action")
+        url = self.search_pattern(text, BaseNotteParser.observe_tag)
+        action = self.search_pattern(text, BaseNotteParser.step_tag)
         match (bool(url), bool(action)):
             case (True, False):
                 return "observe"
@@ -75,56 +88,81 @@ class BaseNotteParser(Parser):
 
     @override
     def observe(self, text: str) -> EnvObserveParams:
-        url = self.search_pattern(text, "url")
+        url = self.search_pattern(text, BaseNotteParser.observe_tag)
         if url is None:
             raise ValueError("No URL found")
         return EnvObserveParams(url=url)
 
     @override
     def step(self, text: str) -> EnvStepParams:
-        action = self.search_pattern(text, "action")
+        action = self.search_pattern(text, BaseNotteParser.step_tag)
         if action is None or not isinstance(action, str):
             raise ValueError("No action found")
-        d = json.loads(action)
-        if "action-id" not in d:
+        try:
+            action_dict: ActionJson = json.loads(action)
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON in action")
+        action_id = action_dict.get("action_id", None)
+        if action_id is None:
             raise ValueError("No action-id found in action")
-        action_id = d["action-id"]
-        params = d.get("params", None)
+        params = action_dict.get("params", None)
         return EnvStepParams(action_id=action_id, params=params)
 
     @override
     def rules(self) -> str:
         return self.INSTRUCTIONS
 
+    def done_rules(self) -> str:
+        return f"""
+\nIf you're done, just say <{BaseNotteParser.done_tag}/>. Nothing else!
+\nImportant rules:
+* You are not allowed to talk. Just provide the action you want to take or <{BaseNotteParser.done_tag}/>.
+* You are allowed to take only exactly ONE action from the list.
+* Your action should be inside the <{BaseNotteParser.step_tag}> tag.
+* If you're unable to pursue your goal, just say <{BaseNotteParser.done_tag}/>. Nothing else!
+* You are ONLY allowed to pick actions from the latest list of actions!
+* You are NOT allowed to pick actions from list of actions in previous messages!c
+\n You are allowed to use <url> to navigate to a different url.
+"""
+
     @override
     def textify(self, obs: Observation) -> str:
-        if obs.space is None:
+        if not obs.has_space():
             raise ValueError("No actions found")
 
-        s = """
-The current URL is: {{url}}
+        template_answer = """
+        The current URL is: {{url}}
+
 Here are the available actions:
+<actions>
 {{actions}}
+</actions>
+
+Here is some data that has been extracted from the web page (if any):
+<extracted-data>
+{{extracted_data}}
+</extracted-data>
+
 \n Now think about your current trajectory, and decide what action to take next.
 You might need to perform some intermediate actions so be very careful, dont jump to conclusions too quickly.
 \nProvide me with the ID of the action you want to take next.
 You are allowed to take only exactly ONE action from this list (not previous lists)!
 If the action is parameterized, provide the value for each parameter.
 Use the exact following format:
-<action>
+<execute-action>
 {
-"action-id": "<YOUR_ACTION_ID>",
+"action_id": "<YOUR_ACTION_ID>",
 "params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
 }
-</action>
-\nIf you're done, just say <done/>. Nothing else!
-\nImportant rules:
-* You are not allowed to talk. Just provide the action you want to take or <done/>.
-* You are allowed to take only exactly ONE action from the list.
-* Your action should be inside the <action> tag.
-* If you're unable to pursue your goal, just say <done/>. Nothing else!
-* You are ONLY allowed to pick actions from the latest list of actions!
-* You are NOT allowed to pick actions from list of actions in previous messages!c
-\n You are allowed to use <url> to navigate to a different url.
+</execute-action>
+
+
 """
-        return chevron.render(s, {"url": obs.url, "actions": obs.space.markdown("valid")})
+        return chevron.render(
+            template_answer,
+            {
+                "url": obs.url,
+                "actions": obs.space.markdown("valid"),
+                "extracted_data": obs.data,
+            },
+        )

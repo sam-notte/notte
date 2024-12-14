@@ -4,6 +4,7 @@ from typing import Any
 from PIL import Image
 
 from notte.actions.space import ActionSpace
+from notte.browser.snapshot import clean_url
 from notte.utils import image
 
 
@@ -12,11 +13,11 @@ class Observation:
     url: str
     screenshot: bytes | None = None
     _space: ActionSpace | None = None
+    data: str = ""
 
     @property
     def clean_url(self) -> str:
-        # remove anything after ? i.. ?tfs=CBwQARooEgoyMDI0LTEyLTAzagwIAh
-        return self.url.split("?")[0]
+        return clean_url(self.url)
 
     @property
     def space(self) -> ActionSpace:
@@ -30,6 +31,9 @@ class Observation:
 
     def has_space(self) -> bool:
         return self._space is not None
+
+    def has_data(self) -> bool:
+        return self.data != ""
 
     def display_screenshot(self) -> Image.Image | None:
         if self.screenshot is None:

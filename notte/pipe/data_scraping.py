@@ -10,7 +10,7 @@ from notte.pipe.preprocessing.a11y.tree import ProcessedA11yTree
 
 
 @final
-class DataExtractionPipe:
+class DataScrapingPipe:
 
     def __init__(self, llmserve: LLMService | None = None) -> None:
         self.llmserve: LLMService = llmserve or LLMService()
@@ -32,8 +32,15 @@ class DataExtractionPipe:
             document = Context.format(simple_node, include_ids=False)
         # make LLM call
         response = self.llmserve.completion(prompt_id="data-extraction", variables={"document": document})
-        sc = StructuredContent(outer_tag="data-extraction")
+        sc = StructuredContent(outer_tag="data-extraction", inner_tag="markdown")
         if response.choices[0].message.content is None:  # type: ignore
             raise ValueError("No content in response")
-        text = sc.extract(response.choices[0].message.content)  # type: ignore
+        text = sc.extract(
+            response.choices[0].message.content,  # type: ignore
+            fail_if_final_tag=False,
+            fail_if_inner_tag=False,
+        )
         return text
+
+    async def forward_async(self, context: Context) -> str:
+        return self.forward(context)

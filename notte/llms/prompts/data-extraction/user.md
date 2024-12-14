@@ -30,6 +30,10 @@ In this section, present the data you analysed in the `<document-analysis>` sect
 
 # Example output:
 
+Here is an example of how you should format the output based of a `Google Flights` search page.
+Remember that the output is different for all websites, don't use this as a reference for other websites, e.g.
+not not all websites have a navigation section, a footer section or a search results section.
+
 <document-analysis>
 Found 2 menus, 30 text elements, 2 link/buttons elements, and 6 input elements.
 Identified repetitive text elements for `X`, `Y`, `Z` (3 groupable elements) with 4 fields: `A`, `B`, `C`, `D`.

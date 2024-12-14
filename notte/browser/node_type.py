@@ -424,6 +424,7 @@ class NodeAttributesPre:
     checked: bool | None
     enabled: bool | None
     focused: bool | None
+    disabled: bool | None
     autocomplete: str | None
     haspopup: str | None
     # computed during the tree processing
@@ -440,6 +441,7 @@ class NodeAttributesPre:
             selected=None,
             checked=None,
             enabled=None,
+            disabled=None,
             focused=None,
             autocomplete=None,
             haspopup=None,
@@ -497,6 +499,7 @@ class NodeAttributesPre:
             checked=bool(get_attr("checked")),
             enabled=bool(get_attr("enabled")),
             focused=bool(get_attr("focused")),
+            disabled=bool(get_attr("disabled")),
             path=path,
         )
         for key in remaning_keys:
