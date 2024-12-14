@@ -27,11 +27,15 @@ class ActionJson(TypedDict):
 class Parser(ABC):
 
     @abstractmethod
-    def which(self, text: str) -> Literal["observe", "step", "rules"]:
+    def which(self, text: str) -> Literal["observe", "step", "scrape", "rules"]:
         raise NotImplementedError
 
     @abstractmethod
     def is_done(self, text: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_done_answer(self, text: str) -> str | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -54,18 +58,18 @@ class Parser(ABC):
 class BaseNotteParser(Parser):
     observe_tag: ClassVar[str] = "url"
     step_tag: ClassVar[str] = "execute-action"
-    extracted_data_tag: ClassVar[str] = "data"
+    scrape_data_tag: ClassVar[str] = "data"
     done_tag: ClassVar[str] = "done"
 
     INSTRUCTIONS: str = """
-    Hi there! I am the Notte web environment, and will help you navigate the internet.
-    How it works: Provide me with a URL. I will respond with the actions you can take on that page.
-    Important: Make sure to use the **exact format** below when sending me a URL:
-    <url>https://www.example.com</url>
-    > So, where would you like to go?
-    \nImportant rules:
-    * You are not allowed to talk. Just provide the url you want to go to.
-    * You are allowed to go to only exactly ONE url.
+Hi there! I am the Notte web environment, and will help you navigate the internet.
+How it works: Provide me with a URL. I will respond with the actions you can take on that page.
+Important: Make sure to use the **exact format** below when sending me a URL:
+<url>https://www.example.com</url>
+> So, where would you like to go?
+\nImportant rules:
+* You are not allowed to talk. Just provide the url you want to go to.
+* You are allowed to go to only exactly ONE url.
     """
 
     @staticmethod
@@ -75,16 +79,31 @@ class BaseNotteParser(Parser):
         return match.group(1).strip() if match else None
 
     @override
-    def which(self, text: str) -> Literal["observe", "step", "rules"]:
+    def which(self, text: str) -> Literal["observe", "step", "scrape", "rules"]:
         url = self.search_pattern(text, BaseNotteParser.observe_tag)
         action = self.search_pattern(text, BaseNotteParser.step_tag)
-        match (bool(url), bool(action)):
-            case (True, False):
+        scrape = self.search_pattern(text, BaseNotteParser.scrape_data_tag)
+        match (bool(url), bool(action), bool(scrape)):
+            case (True, False, False):
                 return "observe"
-            case (False, True):
+            case (False, True, False):
                 return "step"
+            case (False, False, True):
+                return "scrape"
             case _:
                 return "rules"
+
+    @override
+    def is_done(self, text: str) -> bool:
+        return (
+            f"<{BaseNotteParser.done_tag}/>" in text or self.search_pattern(text, BaseNotteParser.done_tag) is not None
+        )
+
+    @override
+    def get_done_answer(self, text: str) -> str | None:
+        if not self.is_done(text):
+            raise ValueError("Not done")
+        return self.search_pattern(text, BaseNotteParser.done_tag)
 
     @override
     def observe(self, text: str) -> EnvObserveParams:
@@ -112,40 +131,48 @@ class BaseNotteParser(Parser):
     def rules(self) -> str:
         return self.INSTRUCTIONS
 
-    def done_rules(self) -> str:
+    def final_rules(self) -> str:
         return f"""
-\nIf you're done, just say <{BaseNotteParser.done_tag}/>. Nothing else!
+\nIf you're done, include you final answer in <{BaseNotteParser.done_tag}> tags.
 \nImportant rules:
-* You are not allowed to talk. Just provide the action you want to take or <{BaseNotteParser.done_tag}/>.
+* You are not allowed to talk. Just provide the action you want to take or with <{BaseNotteParser.done_tag}/>.
 * You are allowed to take only exactly ONE action from the list.
 * Your action should be inside the <{BaseNotteParser.step_tag}> tag.
 * If you're unable to pursue your goal, just say <{BaseNotteParser.done_tag}/>. Nothing else!
 * You are ONLY allowed to pick actions from the latest list of actions!
-* You are NOT allowed to pick actions from list of actions in previous messages!c
-\n You are allowed to use <url> to navigate to a different url.
+* You are NOT allowed to pick actions from list of actions in previous messages!
+\n You are allowed to use <{BaseNotteParser.observe_tag}> to navigate to a different url.
 """
 
-    @override
-    def textify(self, obs: Observation) -> str:
+    def textify_scrape(self, obs: Observation) -> str:
+        if not obs.has_data():
+            raise ValueError("No scraping data found")
+        return f"""
+Here is some data that has been extracted from the web page:
+
+<{BaseNotteParser.scrape_data_tag}>
+{obs.data}
+</{BaseNotteParser.scrape_data_tag}>
+
+* You are allowed to use <{BaseNotteParser.observe_tag}> to navigate to a different url.
+* If you're done, include you final answer in <{BaseNotteParser.done_tag}>.
+"""
+
+    def textify_step(self, obs: Observation) -> str:
         if not obs.has_space():
             raise ValueError("No actions found")
 
         template_answer = """
-        The current URL is: {{url}}
-
 Here are the available actions:
+
 <actions>
 {{actions}}
 </actions>
 
-Here is some data that has been extracted from the web page (if any):
-<extracted-data>
-{{extracted_data}}
-</extracted-data>
-
-\n Now think about your current trajectory, and decide what action to take next.
+Now think about your current trajectory, and decide what action to take next.
 You might need to perform some intermediate actions so be very careful, dont jump to conclusions too quickly.
-\nProvide me with the ID of the action you want to take next.
+
+Provide me with the ID of the action you want to take next.
 You are allowed to take only exactly ONE action from this list (not previous lists)!
 If the action is parameterized, provide the value for each parameter.
 Use the exact following format:
@@ -155,14 +182,25 @@ Use the exact following format:
 "params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
 }
 </execute-action>
-
-
 """
         return chevron.render(
             template_answer,
             {
-                "url": obs.url,
                 "actions": obs.space.markdown("valid"),
                 "extracted_data": obs.data,
             },
         )
+
+    @override
+    def textify(self, obs: Observation) -> str:
+        if obs.has_data():
+            text = self.textify_scrape(obs)
+        elif obs.has_space():
+            text = self.textify_step(obs)
+        else:
+            raise ValueError("No data or actions found")
+        return f"""
+The current URL is: {obs.url}
+{text}
+{self.final_rules()}
+"""

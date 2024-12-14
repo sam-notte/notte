@@ -50,13 +50,13 @@ from notte.env import NotteEnv
 
 # setting fast language model provider keys
 os.environ['CEREBRAS_API_KEY'] = "your-api-key"
-# extract data and list actions on web pages
-notte_mode: str = "full"
 
-async with NotteEnv(headless=False, mode=notte_mode) as env:
+async with NotteEnv(headless=False) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
   obs = await env.step(obs.space.sample(role="link").id)
+  # scrape data from the page
+  obs = await env.scrape()
 ```
 
 The observation object contains all you need about the current state of a page;

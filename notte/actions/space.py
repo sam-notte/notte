@@ -6,13 +6,19 @@ import numpy as np
 import numpy.typing as npt
 from sentence_transformers import SentenceTransformer
 
-from notte.actions.base import Action, ActionRole, ActionStatus
+from notte.actions.base import Action, ActionRole, ActionStatus, SpecialAction
 
 
 @dataclass
 class ActionSpace:
     _actions: list[Action] = field(default_factory=list)
     _embeddings: npt.NDArray[np.float32] | None = None
+
+    def __post_init__(self):
+        # check no special actions are present
+        if any(SpecialAction.is_special(action.id) for action in self._actions):
+            action_ids = [action.id for action in self._actions]
+            raise ValueError(f"Special actions are not allowed in the action space: {action_ids}")
 
     def actions(
         self,
@@ -21,14 +27,15 @@ class ActionSpace:
     ) -> list[Action]:
         match (status, role):
             case ("all", "all"):
-                return self._actions
+                actions = self._actions
             case ("all", _):
-                return [action for action in self._actions if action.role == role]
+                actions = [action for action in self._actions if action.role == role]
             case (_, "all"):
-                return [action for action in self._actions if action.status == status]
+                actions = [action for action in self._actions if action.status == status]
             case (_, _):
-                return [action for action in self._actions if action.status == status and action.role == role]
-        raise ValueError(f"Invalid status or role: {status} {role}")
+                actions = [action for action in self._actions if action.status == status and action.role == role]
+
+        return actions + SpecialAction.list()  # type: ignore
 
     def sample(
         self,

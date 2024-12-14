@@ -82,10 +82,13 @@ class Agent:
                 logger.debug(f"Unknown provided endpoint: {notte_endpoint}")
                 return self.parser.rules()
 
+    def is_done(self, text: str) -> bool:
+        return self.parser.is_done(text)
+
     async def run(self) -> None:
         logger.info("🚀 starting")
         # Notte is run in full mode, which means that both data extraction and action listing are enabled
-        async with NotteEnv(headless=self.headless, mode="full") as env:
+        async with NotteEnv(headless=self.headless) as env:
             messages = [
                 {
                     "role": "system",
@@ -96,16 +99,20 @@ class Agent:
 
             for i in range(self.max_steps):
                 logger.info(f"> step {i}: looping in")
+                # Let the LLM Agent think about the next action
                 resp: str = self.think(messages)
                 messages.append({"role": "assistant", "content": resp})
                 logger.info(f"🤖 {resp}")
-                if "<done/>" in resp:
-                    logger.info("😎 task completed")
+                # Check if the task is done
+                if self.is_done(resp):
+                    done_answer = self.parser.get_done_answer(resp)
+                    logger.info(f"😎 task completed with answer: {done_answer}")
                     return
+                # Ask Notte to perform the selected action
                 obs: str = await self.ask_notte(env, resp)
                 messages.append({"role": "user", "content": obs})
                 logger.info(f"🌌 {obs}")
-
+            # If the task is not done, raise an error
             logger.info(f"👿 failed to solve task in {self.max_steps} steps")
 
 
