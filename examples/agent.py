@@ -16,7 +16,7 @@ parser.add_argument(
 parser.add_argument(
     "--model",
     type=str,
-    default="anthropic/claude-3-5-sonnet-20240620",
+    default="openai/gpt-4o",
 )
 args = parser.parse_args()
 
