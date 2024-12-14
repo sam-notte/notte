@@ -567,7 +567,7 @@ class NotteNode:
 
     def interaction_nodes(self) -> list["InteractionNode"]:
         inodes = self.flatten(only_interaction=True)
-        return [InteractionNode(**{k: v for k, v in inode.__dict__.items() if k != "subtree_ids"}) for inode in inodes]
+        return [inode.to_interaction_node() for inode in inodes]
 
     def subtree_filter(self, ft: Callable[["NotteNode"], bool]) -> "NotteNode | None":
         def inner(node: NotteNode) -> NotteNode | None:
@@ -586,6 +586,17 @@ class NotteNode:
 
         return inner(self)
 
+    def to_interaction_node(self) -> "InteractionNode":
+        return InteractionNode(
+            id=self.id,
+            role=self.role,
+            text=self.text,
+            attributes_pre=self.attributes_pre,
+            attributes_post=self.attributes_post,
+            # children are not allowed in interaction nodes
+            children=[],
+        )
+
 
 class InteractionNode(NotteNode):
     id: str  # type: ignore
@@ -593,15 +604,6 @@ class InteractionNode(NotteNode):
     def __post_init__(self) -> None:
         if self.id is None:
             raise ValueError("InteractionNode must have a valid non-None id")
+        if len(self.children) > 0:
+            raise ValueError("InteractionNode must have no children")
         super().__post_init__()
-
-    @staticmethod
-    def from_notte_node(node: NotteNode) -> "InteractionNode":
-        return InteractionNode(
-            id=node.id,
-            role=node.role,
-            text=node.text,
-            children=node.children,
-            attributes_pre=node.attributes_pre,
-            attributes_post=node.attributes_post,
-        )

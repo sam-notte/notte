@@ -63,11 +63,13 @@ def test_node_role_category():
 
 def test_notte_node():
     # Create a simple node hierarchy
+    pre = NodeAttributesPre.empty()
+    pre.visible = True
     child_node = NotteNode(
         id="child1",
         role=NodeRole.BUTTON,
         text="Click me",
-        attributes_pre=NodeAttributesPre(visible=True),
+        attributes_pre=pre,
     )
 
     parent_node = NotteNode(
@@ -141,6 +143,10 @@ def test_node_attributes():
         selected=False,
         checked=True,
         enabled=True,
+        value="test",
+        focused=True,
+        autocomplete="test",
+        haspopup="test",
         path="/path/to/node",
     )
     assert pre_attrs.modal is True

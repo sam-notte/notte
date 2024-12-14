@@ -25,12 +25,12 @@ def context_from_ids(ids: list[str]) -> Context:
                     role=NodeRole.LINK,
                     text="",
                     children=[],
-                    attributes_pre=NodeAttributesPre(),
+                    attributes_pre=NodeAttributesPre.empty(),
                     attributes_post=None,
                 )
                 for id in ids
             ],
-            attributes_pre=NodeAttributesPre(),
+            attributes_pre=NodeAttributesPre.empty(),
             attributes_post=None,
         ),
         snapshot=None,
