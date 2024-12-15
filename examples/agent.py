@@ -34,6 +34,28 @@ parser.add_argument(
 
 
 class Agent:
+    """
+    A base agent implementation that coordinates between an LLM and the Notte environment.
+
+    This class demonstrates how to build an agent that can:
+    1. Maintain a conversation with an LLM
+    2. Execute actions in the Notte environment
+    3. Parse and format responses between the LLM and Notte
+
+    To customize this agent:
+    1. Implement your own Parser class to format observations and actions
+    2. Modify the conversation flow in the run() method
+    3. Adjust the think() method to handle LLM interactions
+    4. Customize the ask_notte() method for your specific needs
+
+    Args:
+        goal (str): The task description for the agent
+        model (str): The LLM model identifier
+        max_steps (int): Maximum number of steps before terminating
+        headless (bool): Whether to run browser in headless mode
+        parser (Parser | None): Custom parser for formatting interactions
+    """
+
     def __init__(
         self,
         goal: str,
@@ -46,12 +68,25 @@ class Agent:
         self.model: str = model
         self.llm: LLMEngine = LLMEngine()
         _ = load_dotenv()
-        # You should tune this parser to your needs
         self.max_steps: int = max_steps
         self.headless: bool = headless
+        # Users should implement their own parser to customize how observations
+        # and actions are formatted for their specific LLM and use case
         self.parser: Parser = parser or BaseNotteParser()
 
     def think(self, messages: list[dict[str, str]]) -> str:
+        """
+        Processes the conversation history through the LLM to decide the next action.
+
+        Override this method to customize how your agent interacts with the LLM,
+        including prompt engineering and response processing.
+
+        Args:
+            messages: List of conversation messages in the format expected by your LLM
+
+        Returns:
+            str: The LLM's response indicating the next action
+        """
         response = self.llm.completion(
             messages=messages,
             model=self.model,
@@ -60,12 +95,24 @@ class Agent:
 
     async def ask_notte(self, env: NotteEnv, text: str) -> str:
         """
-        This function is used to ask the Notte environment to perform an action.
-        It is used to interact with the Notte environment in a conversational way.
+        Executes actions in the Notte environment based on LLM decisions.
 
-        We provided a parse parser to demonstrate how one could interact with the Notte environment
-        in a conversational way.
-        However, users should implement their own parser to fit their needs.
+        This method demonstrates how to:
+        1. Parse LLM output into Notte commands
+        2. Execute those commands in the environment
+        3. Format the results back into text for the LLM
+
+        Users should customize this method to:
+        - Handle additional Notte endpoints
+        - Implement custom error handling
+        - Format observations specifically for their LLM
+
+        Args:
+            env: The Notte environment instance
+            text: The LLM's response containing the desired action
+
+        Returns:
+            str: Formatted observation from the environment
         """
         notte_endpoint = self.parser.which(text)
         logger.debug(f"Picking {notte_endpoint} endpoint")
@@ -86,6 +133,15 @@ class Agent:
         return self.parser.is_done(text)
 
     async def run(self) -> None:
+        """
+        Main execution loop that coordinates between the LLM and Notte environment.
+
+        This method shows a basic conversation flow. Consider customizing:
+        1. The initial system prompt
+        2. How observations are added to the conversation
+        3. When and how to determine task completion
+        4. Error handling and recovery strategies
+        """
         logger.info("🚀 starting")
         # Notte is run in full mode, which means that both data extraction and action listing are enabled
         async with NotteEnv(headless=self.headless) as env:

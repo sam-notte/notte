@@ -55,8 +55,6 @@ async with NotteEnv(headless=False) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
   obs = await env.step(obs.space.sample(role="link").id)
-  # scrape data from the page
-  obs = await env.scrape()
 ```
 
 The observation object contains all you need about the current state of a page;
@@ -64,7 +62,6 @@ The observation object contains all you need about the current state of a page;
 ```bash
 > obs = env.observe("https://www.google.com/travel/flights")
 > print(obs.actions.markdown()) # list of available actions
-> print(obs.data) # data extracted from the page (if any)
 ```
 
 
@@ -87,7 +84,33 @@ The observation object contains all you need about the current state of a page;
 [... More actions/categories ...]
 ```
 
-## As a backend for LLM web agents
+You can also scrape data from the page using the `scrape` function;
+```python
+...
+async with NotteEnv(headless=False) as env:
+  ...
+  obs = await env.scrape()
+print(obs.data) # data extracted from the page (if any)
+```
+
+```markdown
+# Flight Search inputs
+- Where from?: Paris
+- Where to?: London
+- Departure: Tue, Jan 14
+- [... other inputs ...]
+
+# Flight Search Results
+20 of 284 results returned.
+They are ranked based on price and convenience
+
+| Airline       | Departure  | Arrival  | Duration   | Stops     | Price |
+|---------------|------------|----------|------------|-----------|-------|
+| easyJet       | 10:15 AM   | 10:35 AM | 1 hr 20 min| Nonstop   | $62   |
+| Air France    | 4:10 PM    | 4:35 PM  | 1 hr 25 min| Nonstop   | $120  |
+[... rest of table ...]
+```
+
 
 Or alternatively, you can use Notte conversationally with an LLM agent:
 
