@@ -148,6 +148,7 @@ def test_node_attributes():
         autocomplete="test",
         haspopup="test",
         path="/path/to/node",
+        disabled=False,
     )
     assert pre_attrs.modal is True
     assert pre_attrs.required is True

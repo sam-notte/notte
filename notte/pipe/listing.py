@@ -141,7 +141,9 @@ class MarkdownTableActionListingPipe(BaseSimpleActionListingPipe):
     ) -> dict[str, Any]:
         vars = {"document": context.markdown_description()}
         if previous_action_list is not None:
-            vars["previous_action_list"] = ActionSpace(_actions=previous_action_list).markdown("all")
+            vars["previous_action_list"] = ActionSpace(_actions=previous_action_list).markdown(
+                "all", include_special=False
+            )
         return vars
 
 

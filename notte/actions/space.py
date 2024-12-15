@@ -24,6 +24,7 @@ class ActionSpace:
         self,
         status: Literal[ActionStatus, "all"] = "valid",
         role: Literal[ActionRole, "all"] = "all",
+        include_special: bool = False,
     ) -> list[Action]:
         match (status, role):
             case ("all", "all"):
@@ -35,7 +36,9 @@ class ActionSpace:
             case (_, _):
                 actions = [action for action in self._actions if action.status == status and action.role == role]
 
-        return actions + SpecialAction.list()  # type: ignore
+        if include_special:
+            actions += SpecialAction.list()  # type: ignore
+        return actions
 
     def sample(
         self,
@@ -77,9 +80,10 @@ class ActionSpace:
     def markdown(
         self,
         status: Literal[ActionStatus, "all"] = "valid",
+        include_special: bool = True,
     ) -> str:
         # Get actions with requested status
-        actions_to_format = self.actions(status)
+        actions_to_format = self.actions(status, include_special=include_special)
 
         # Group actions by category
         grouped_actions: dict[str, list[Action]] = {}
