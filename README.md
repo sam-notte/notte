@@ -49,7 +49,7 @@ As a reinforcement learning environment to get full control;
 from notte.env import NotteEnv
 
 # setting fast language model provider keys
-os.environ['CEREBRAS_API_KEY'] = "your-api-key"
+os.environ['ANTHROPIC_API_KEY'] = "your-api-key"
 
 async with NotteEnv(headless=False) as env:
   # observe a webpage, and take a random action
