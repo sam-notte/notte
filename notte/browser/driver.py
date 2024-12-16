@@ -41,14 +41,17 @@ class PlaywrightResource:
         self._page.set_default_timeout(self.timeout)
 
     async def close(self) -> None:
-        await self.page.close()
-        if self.playwright:
-            await self.playwright.stop()
+        if self._page is not None:
+            await self._page.close()
+            self._page = None
+        if self._playwright is not None:
+            await self._playwright.stop()
+            self._playwright = None
 
     @property
     def page(self) -> Page:
         if self._page is None:
-            raise RuntimeError("Page not initialized. Call `start` first.")
+            raise RuntimeError("Browser not initialized. Call `start` first.")
         return self._page
 
 
@@ -66,7 +69,30 @@ class BrowserDriver(AsyncResource):
     def page(self) -> Page:
         return self._playwright.page
 
-    async def snapshot(self, retries: int = 5) -> BrowserSnapshot:
+    async def long_wait(self) -> None:
+        try:
+            await self.page.wait_for_load_state("networkidle", timeout=self._playwright.timeout)
+        except PlaywrightTimeoutError:
+            logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
+        await self.short_wait()
+
+    async def short_wait(self) -> None:
+        await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+
+    async def wait(self, seconds: int) -> None:
+        await self.page.wait_for_timeout(seconds * 1000)
+
+    async def back(self) -> BrowserSnapshot:
+        _ = await self.page.go_back()
+        await self.short_wait()
+        return await self.snapshot()
+
+    async def forward(self) -> BrowserSnapshot:
+        _ = await self.page.go_forward()
+        await self.short_wait()
+        return await self.snapshot()
+
+    async def snapshot(self, screenshot: bool | None = None, retries: int = 5) -> BrowserSnapshot:
         if not self.page:
             raise RuntimeError("Browser not started. Call `start` first.")
         if retries <= 0:
@@ -78,15 +104,15 @@ class BrowserDriver(AsyncResource):
         )
         if len(a11y_tree.simple.get("children", [])) == 0:
             logger.warning(f"Simple tree is empty for page {self.page.url}. Retry in {DEFAULT_WAITING_TIMEOUT}ms")
-            await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
-            return await self.snapshot(retries=retries - 1)
-
-        screenshot = await self.page.screenshot() if self._screenshot else None
+            await self.short_wait()
+            return await self.snapshot(screenshot=screenshot, retries=retries - 1)
+        take_screenshot = screenshot if screenshot is not None else self._screenshot
+        snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
         return BrowserSnapshot(
             url=self.page.url,
             html_content=html_content,
             a11y_tree=a11y_tree,
-            screenshot=screenshot,
+            screenshot=snapshot_screenshot,
         )
 
     async def press(self, key: str = "Enter") -> BrowserSnapshot:
@@ -94,22 +120,20 @@ class BrowserDriver(AsyncResource):
             raise RuntimeError("Browser not started. Call `start` first.")
         await self.page.keyboard.press(key)
         # update context
-        await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+        await self.short_wait()
         return await self.snapshot()
 
     async def goto(
         self,
-        url: str,
+        url: str | None = None,
         wait_for: Literal["domcontentloaded", "load", "networkidle"] = "networkidle",
     ) -> BrowserSnapshot:
         if not self.page:
             raise RuntimeError("Browser not started. Call `start` first.")
+        if url is None or url == self.page.url:
+            return await self.snapshot()
         _ = await self.page.goto(url)
-        try:
-            await self.page.wait_for_load_state(wait_for, timeout=self._playwright.timeout)
-        except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while waiting for {wait_for} state for '{url}'")
-        await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+        await self.long_wait()
         return await self.snapshot()
 
     async def execute_action(
@@ -126,8 +150,7 @@ class BrowserDriver(AsyncResource):
         action_executor = get_executor(action)
         await action_executor(self.page)
         # TODO: find a better way to wait for the page to be updated
-        await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+        await self.short_wait()
         if enter:
-            _ = await self.press("Enter")
-            await self.page.wait_for_timeout(DEFAULT_WAITING_TIMEOUT)
+            return await self.press("Enter")
         return await self.snapshot()

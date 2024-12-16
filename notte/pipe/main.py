@@ -46,3 +46,12 @@ class ContextToActionSpacePipe:
 
         actions = ActionFilteringPipe.forward(context, actions)
         return ActionSpace(_actions=actions)
+
+    async def forward_async(
+        self,
+        context: Context,
+        previous_action_list: list[Action] | None = None,
+        n_trials: int = 2,
+        tresh_complete: float = 0.95,
+    ) -> ActionSpace:
+        return self.forward(context, previous_action_list, n_trials, tresh_complete)

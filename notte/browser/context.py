@@ -13,10 +13,11 @@ class Context:
     def interaction_nodes(self) -> list[InteractionNode]:
         return self.node.interaction_nodes()
 
-    def markdown_description(self) -> str:
-        return self.format(self.node, indent_level=0)
+    def markdown_description(self, include_ids: bool = True) -> str:
+        return Context.format(self.node, indent_level=0, include_ids=include_ids)
 
-    def format(self, node: NotteNode, indent_level: int = 0) -> str:
+    @staticmethod
+    def format(node: NotteNode, indent_level: int = 0, include_ids: bool = True) -> str:
         indent = "  " * indent_level
 
         # Start with role and optional text
@@ -25,24 +26,23 @@ class Context:
             result += f' "{node.text}"'
 
         # Add attributes
-        attrs = []
-        if node.id is not None:
+        attrs: list[str] = []
+        if node.id is not None and include_ids:
             attrs.append(node.id)
-        if node.attributes_pre.modal is not None:
-            attrs.append("modal")
-        if node.attributes_pre.required is not None:
-            attrs.append("required")
-        if node.attributes_pre.description is not None:
-            attrs.append(f'desc="{node.attributes_pre.description}"')
+
+        # iterate pre-over attributes
+        attrs.extend(node.attributes_pre.relevant_attrs())
 
         if attrs:
+            # TODO: prompt engineering to select the most readable format
+            # for the LLM to understand this information
             result += " " + " ".join(attrs)
 
         # Recursively format children
         if len(node.children) > 0:
             result += " {\n"
             for child in node.children:
-                result += self.format(child, indent_level + 1)
+                result += Context.format(child, indent_level + 1, include_ids=include_ids)
             result += indent + "}\n"
         else:
             result += "\n"

@@ -1,7 +1,40 @@
 import copy
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Callable, Required, TypedDict
+
+from loguru import logger
+
+
+class A11yNode(TypedDict, total=False):
+    # from the a11y tree
+    role: Required[str]
+    name: Required[str]
+    children: list["A11yNode"]
+    url: str
+    # added by the tree processing
+    nb_pruned_children: int
+    children_roles_count: dict[str, int]
+    group_role: str
+    group_roles: list[str]
+    markdown: str
+    # added by the notte processing
+    id: str
+    path: str  # url:parent-path:role:name
+    # stuff for the action listing
+    modal: bool
+    required: bool
+    description: str
+    visible: bool
+    selected: bool
+    checked: bool
+    enabled: bool
+
+
+@dataclass
+class A11yTree:
+    raw: A11yNode
+    simple: A11yNode
 
 
 class NodeCategory(Enum):
@@ -382,14 +415,96 @@ class HtmlSelector:
 
 @dataclass
 class NodeAttributesPre:
-    modal: bool | None = None
-    required: bool | None = None
-    description: str | None = None
-    visible: bool | None = None
-    selected: bool | None = None
-    checked: bool | None = None
-    enabled: bool | None = None
-    path: str | None = None
+    modal: bool | None
+    required: bool | None
+    description: str | None
+    value: str | None
+    visible: bool | None
+    selected: bool | None
+    checked: bool | None
+    enabled: bool | None
+    focused: bool | None
+    disabled: bool | None
+    autocomplete: str | None
+    haspopup: str | None
+    # computed during the tree processing
+    path: str | None
+
+    @staticmethod
+    def empty() -> "NodeAttributesPre":
+        return NodeAttributesPre(
+            modal=None,
+            required=None,
+            description=None,
+            value=None,
+            visible=None,
+            selected=None,
+            checked=None,
+            enabled=None,
+            disabled=None,
+            focused=None,
+            autocomplete=None,
+            haspopup=None,
+            path=None,
+        )
+
+    def relevant_attrs(self) -> list[str]:
+        disabled_attrs = ["path"]
+        dict_attrs = asdict(self)
+        attrs: list[str] = []
+        for key, value in dict_attrs.items():
+            if key not in disabled_attrs and value is not None:
+                if isinstance(value, bool):
+                    if value:
+                        attrs.append(key)
+                else:
+                    attrs.append(f"{key}={value}")
+        return attrs
+
+    @staticmethod
+    def from_a11y_node(node: A11yNode, path: str | None = None) -> "NodeAttributesPre":
+        remaning_keys = set(node.keys()).difference(
+            [
+                "children",
+                "children_roles_count",
+                "nb_pruned_children",
+                "group_role",
+                "group_roles",
+                "markdown",
+                "id",
+                "path",
+                "role",
+                "name",
+                "level",
+                # Add any other irrelevant keys here
+            ]
+        )
+
+        def get_attr(key: str) -> str | None:
+            if key in remaning_keys:
+                attr: str = str(node[key])  # type: ignore
+                remaning_keys.remove(key)
+                return attr
+            return None
+
+        attrs = NodeAttributesPre(
+            modal=bool(get_attr("modal")),
+            required=bool(get_attr("required")),
+            description=get_attr("description"),
+            value=get_attr("value"),
+            autocomplete=get_attr("autocomplete"),
+            haspopup=get_attr("haspopup"),
+            visible=bool(get_attr("visible")),
+            selected=bool(get_attr("selected")),
+            checked=bool(get_attr("checked")),
+            enabled=bool(get_attr("enabled")),
+            focused=bool(get_attr("focused")),
+            disabled=bool(get_attr("disabled")),
+            path=path,
+        )
+        for key in remaning_keys:
+            logger.error(f"Pre-Attribute {key} should be added to the node attributes. Fix this ASAP.")
+        return attrs
 
 
 @dataclass
@@ -407,7 +522,7 @@ class NotteNode:
     text: str
     subtree_ids: list[str] = field(init=False, default_factory=list)
     children: list["NotteNode"] = field(default_factory=list)
-    attributes_pre: NodeAttributesPre = field(default_factory=NodeAttributesPre)
+    attributes_pre: NodeAttributesPre = field(default_factory=NodeAttributesPre.empty)
     attributes_post: NotteAttributesPost | None = None
 
     def __post_init__(self) -> None:
@@ -415,6 +530,18 @@ class NotteNode:
         for child in self.children:
             subtree_ids.extend(child.subtree_ids)
         self.subtree_ids = subtree_ids
+
+    @staticmethod
+    def from_a11y_node(node: A11yNode, path: str = "") -> "NotteNode":
+        node_path = ":".join([path, node["role"], node["name"]])
+        children = [NotteNode.from_a11y_node(child, node_path) for child in node.get("children", [])]
+        return NotteNode(
+            id=node.get("id"),
+            role=NodeRole.from_value(node["role"]),
+            text=node["name"],
+            children=children,
+            attributes_pre=NodeAttributesPre.from_a11y_node(node, node_path),
+        )
 
     def get_role_str(self) -> str:
         if isinstance(self.role, str):
@@ -443,7 +570,7 @@ class NotteNode:
 
     def interaction_nodes(self) -> list["InteractionNode"]:
         inodes = self.flatten(only_interaction=True)
-        return [InteractionNode(**{k: v for k, v in inode.__dict__.items() if k != "subtree_ids"}) for inode in inodes]
+        return [inode.to_interaction_node() for inode in inodes]
 
     def subtree_filter(self, ft: Callable[["NotteNode"], bool]) -> "NotteNode | None":
         def inner(node: NotteNode) -> NotteNode | None:
@@ -462,6 +589,17 @@ class NotteNode:
 
         return inner(self)
 
+    def to_interaction_node(self) -> "InteractionNode":
+        return InteractionNode(
+            id=self.id,
+            role=self.role,
+            text=self.text,
+            attributes_pre=self.attributes_pre,
+            attributes_post=self.attributes_post,
+            # children are not allowed in interaction nodes
+            children=[],
+        )
+
 
 class InteractionNode(NotteNode):
     id: str  # type: ignore
@@ -469,35 +607,6 @@ class InteractionNode(NotteNode):
     def __post_init__(self) -> None:
         if self.id is None:
             raise ValueError("InteractionNode must have a valid non-None id")
+        if len(self.children) > 0:
+            raise ValueError("InteractionNode must have no children")
         super().__post_init__()
-
-
-class A11yNode(TypedDict, total=False):
-    # from the a11y tree
-    role: Required[str]
-    name: Required[str]
-    children: list["A11yNode"]
-    url: str
-    # added by the tree processing
-    nb_pruned_children: int
-    children_roles_count: dict[str, int]
-    group_role: str
-    group_roles: list[str]
-    markdown: str
-    # added by the notte processing
-    id: str
-    path: str  # url:parent-path:role:name
-    # stuff for the action listing
-    modal: bool
-    required: bool
-    description: str
-    visible: bool
-    selected: bool
-    checked: bool
-    enabled: bool
-
-
-@dataclass
-class A11yTree:
-    raw: A11yNode
-    simple: A11yNode

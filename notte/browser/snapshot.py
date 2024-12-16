@@ -3,6 +3,18 @@ from dataclasses import dataclass
 from notte.browser.node_type import A11yTree
 
 
+def clean_url(url: str) -> str:
+    # remove anything after ? i.. ?tfs=CBwQARooEgoyMDI0LTEyLTAzagwIAh
+    # remove trailing slash
+    # remove https://, http://, www.
+    base = url.split("?")[0]
+    if base.endswith("/"):
+        base = base[:-1]
+    base = base.replace("https://", "").replace("http://", "")
+    base = base.replace("www.", "")
+    return base
+
+
 @dataclass
 class BrowserSnapshot:
     url: str
@@ -12,5 +24,4 @@ class BrowserSnapshot:
 
     @property
     def clean_url(self) -> str:
-        # remove anything after ? i.. ?tfs=CBwQARooEgoyMDI0LTEyLTAzagwIAh
-        return self.url.split("?")[0]
+        return clean_url(self.url)

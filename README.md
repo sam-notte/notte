@@ -43,7 +43,7 @@ By default, Notte supports the following providers:
 
 # Usage
 
-As a reinforcement learning environment to get full control;
+As a reinforcement learning environment to get full navigation control;
 
 ```python
 from notte.env import NotteEnv
@@ -54,43 +54,56 @@ os.environ['ANTHROPIC_API_KEY'] = "your-api-key"
 async with NotteEnv(headless=False) as env:
   # observe a webpage, and take a random action
   obs = await env.observe("https://www.google.com/travel/flights")
-  obs = await env.step(obs.space.sample().id)
+  obs = await env.step(obs.space.sample(role="link").id)
 ```
 
-The observation object contains all you need about the current state of a page;
+The observation object contains all you need about the current state of a page (url, screenshot, list of available actions, etc.);
 
 ```bash
 > obs = env.observe("https://www.google.com/travel/flights")
-> print(obs.actions.markdown())
+> print(obs.actions.markdown()) # list of available actions
+```
 
+```
 # Flight Search
 * I1: Enters departure location (departureLocation: str = "San Francisco")
-* I2: Enters destination location (destinationLocation: str)
 * I3: Selects departure date (departureDate: date)
-* I4: Selects return date (returnDate: date)
-* I5: Selects seating class (seatClass: str = "Economy", allowed=["Economy", "Premium Economy", "Business", "First"])
 * I6: Selects trip type (tripType: str = "round-trip", allowed=["round-trip", "one-way", "multi-city"])
-* B1: Open menu to change number of passengers
-* B2: Swaps origin and destination locations
 * B3: Search flights options with current filters
 
 # Website Navigation
 * B5: Opens Google apps menu
 * L28: Navigates to Google homepage
-* L29: Navigates to Hotels section
 
 # User Preferences
 * B26: Open menu to change language settings
-* B27: Open menu to change location settings
-* B28: Open menu to change currency settings
-
-# Destination Exploration
-* L1: Shows flights from London to Tokyo
-* L2: Shows flights from New York to Rome
-[... More actions/categories ...]
+...
 ```
 
-## As a backend for LLM web agents
+You can also scrape data from the page using the `scrape` function;
+```python
+...
+async with NotteEnv(headless=False) as env:
+  ...
+  obs = await env.scrape()
+print(obs.data) # data extracted from the page (if any)
+```
+
+```
+# Flight Search inputs
+- Where from?: Paris
+- Where to?: London
+- Departure: Tue, Jan 14
+
+# Flight Search Results
+20 of 284 results returned.
+They are ranked based on price and convenience
+
+| Airline       | Departure  | Arrival  | Duration   | Stops     | Price |
+|---------------|------------|----------|------------|-----------|-------|
+| easyJet       | 10:15 AM   | 10:35 AM | 1 hr 20 min| Nonstop   | $62   |
+| Air France    | 4:10 PM    | 4:35 PM  | 1 hr 25 min| Nonstop   | $120  |
+```
 
 Or alternatively, you can use Notte conversationally with an LLM agent:
 

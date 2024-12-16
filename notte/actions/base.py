@@ -34,6 +34,7 @@ class ActionParameterValue:
 
 
 ActionStatus = Literal["valid", "failed", "excluded"]
+ActionRole = Literal["link", "button", "input", "other"]
 
 
 @dataclass
@@ -60,7 +61,8 @@ class Action(PossibleAction):
     def markdown(self) -> str:
         return self.description
 
-    def get_role(self) -> str:
+    @property
+    def role(self) -> ActionRole:
         match self.id[0]:
             case "L":
                 return "link"
@@ -72,7 +74,7 @@ class Action(PossibleAction):
                 return "other"
 
     def embedding_description(self) -> str:
-        return self.get_role() + " " + self.description
+        return self.role + " " + self.description
 
     @staticmethod
     def from_json(json: dict[str, Any]) -> "Action":
@@ -90,3 +92,73 @@ class ExecutableAction(Action):
     node: NotteNode | None = None
     params_values: list[ActionParameterValue] = field(default_factory=list)
     code: str | None = None
+
+
+@dataclass
+class SpecialAction(Action):
+    """
+    Special actions are actions that are always available and are not related to the current page.
+
+    - "S1": Go to a specific URL
+    - "S2": Extract Data page data
+    - "S3": Take a screenshot of the current page
+    - "S4": Go to the previous page
+    - "S5": Go to the next page
+    - "S6": Wait for a specific amount of time (in seconds)
+    - "S7": Terminate the current session
+    """
+
+    id: Literal["S1", "S2", "S3", "S4", "S5", "S6", "S7"]
+    description: str = "Special action"
+    category: str = "Special Browser Actions"
+
+    @staticmethod
+    def is_special(action_id: str) -> bool:
+        return action_id in ["S1", "S2", "S3", "S4", "S5", "S6", "S7"]
+
+    def __post_init__(self):
+        if not SpecialAction.is_special(self.id):
+            raise ValueError(f"Invalid special action ID: {self.id}")
+
+    @staticmethod
+    def list() -> list["SpecialAction"]:
+        return [
+            SpecialAction(
+                id="S1",
+                description="Go to a specific URL",
+                category="Special Browser Actions",
+                params=[
+                    ActionParameter(name="url", type="string", default=None),
+                ],
+            ),
+            SpecialAction(
+                id="S2",
+                description="Scrape data from the current page",
+                category="Special Browser Actions",
+            ),
+            SpecialAction(
+                id="S3",
+                description="Take a screenshot of the current page",
+                category="Special Browser Actions",
+            ),
+            SpecialAction(
+                id="S4",
+                description="Go to the previous page",
+                category="Special Browser Actions",
+            ),
+            SpecialAction(
+                id="S5",
+                description="Go to the next page",
+                category="Special Browser Actions",
+            ),
+            SpecialAction(
+                id="S6",
+                description="Wait for a specific amount of time (in seconds)",
+                category="Special Browser Actions",
+            ),
+            SpecialAction(
+                id="S7",
+                description="Terminate the current session",
+                category="Special Browser Actions",
+            ),
+        ]

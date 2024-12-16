@@ -4,7 +4,6 @@ import pytest
 
 from notte.actions.base import Action
 from notte.browser.context import Context
-from notte.browser.observation import PreObservation
 from notte.env import NotteEnv
 from tests.mock.mock_browser import MockBrowserDriver
 from tests.mock.mock_service import MockLLMService
@@ -115,7 +114,7 @@ async def test_valid_observation_after_reset(aenv: Awaitable[NotteEnv]) -> None:
     obs = await env.reset("https://example.com")
 
     # Verify new observation is correct
-    assert isinstance(obs, PreObservation)
+    assert not obs.has_space()
     assert obs.url == "https://example.com"
 
     # Verify the state was effectively reset
