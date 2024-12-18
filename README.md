@@ -5,7 +5,7 @@
 
 # Notte 🌌
 
-**Notte is a web browser for LLM agents.** It transforms the internet into an agent-friendly environment, turning websites into structured, navigable maps described in natural language. By using natural language commands, Notte minimizes hallucinations, reduces token usage, and lowers costs and latency. It handles the browser complexity so your LLM policies can focus on what they do best: conversational reasoning and planning.
+**[Notte](https://www.notte.cc/?ref=github) is a web browser for LLM agents.** It transforms the internet into an agent-friendly environment, turning websites into structured, navigable maps described in natural language. By using natural language commands, Notte minimizes hallucinations, reduces token usage, and lowers costs and latency. It handles the browser complexity so your LLM policies can focus on what they do best: conversational reasoning and planning.
 
 ## A new paradigm for web agent navigation:
 
@@ -120,7 +120,7 @@ We offer managed cloud browser sessions with the following premium add-ons:
 - **Caching:** Fast responses with intelligent caching.
 - **Action Permissions:** Control over sensitive actions.
 
-Request access to a set of API keys on [notte.cc](https://notte.cc)
+Request access to a set of API keys on [notte.cc](https://www.notte.cc/?ref=github)
 
 Then integrate with a single line drop-in;
 
