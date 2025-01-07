@@ -61,6 +61,7 @@ class NodeCategory(Enum):
     CODE = "code"
     TREE = "tree"
     PARAMETERS = "parameters"
+    IMAGE = "image"
 
     def roles(self, add_group_role: bool = False) -> set[str]:
         roles: set[str] = set()
@@ -125,8 +126,6 @@ class NodeCategory(Enum):
                 roles = {
                     "complementary",
                     "deletion",
-                    "figure",
-                    "img",
                     "insertion",
                     "marquee",
                     "meter",
@@ -138,6 +137,8 @@ class NodeCategory(Enum):
                     "timer",
                     "Iframe",
                 }
+            case NodeCategory.IMAGE.value:
+                roles = {"image", "img", "figure"}
             case NodeCategory.STRUCTURAL.value:
                 roles = {
                     "group",
@@ -168,6 +169,7 @@ class NodeCategory(Enum):
                     "tooltip",
                     "form",
                     "menu",
+                    "MenuListPopup",
                 }
             case NodeCategory.CODE.value:
                 roles = {"code", "math"}
@@ -211,6 +213,7 @@ class NodeRole(Enum):
     TOOLTIP = "tooltip"
     FORM = "form"
     MENU = "menu"
+    MENULISTPOPUP = "MenuListPopup"
 
     # text
     TEXT = "text"
@@ -270,12 +273,15 @@ class NodeRole(Enum):
     CODE = "code"
     MATH = "math"
 
+    # IMAGE
+    FIGURE = "figure"
+    IMG = "img"
+    IMAGE = "image"
+
     # OTHER
     IFRAME = "Iframe"
     COMPLEMENTARY = "complementary"
     DELETION = "deletion"
-    FIGURE = "figure"
-    IMG = "img"
     INSERTION = "insertion"
     MARQUEE = "marquee"
     METER = "meter"
@@ -322,6 +328,8 @@ class NodeRole(Enum):
                 | NodeRole.SLIDER.value
             ):
                 return "I"
+            case NodeRole.IMAGE.value | NodeRole.IMG.value:
+                return "F"
             case _:
                 return None
 
@@ -378,6 +386,7 @@ class NodeRole(Enum):
                 | NodeRole.TOOLTIP.value
                 | NodeRole.FORM.value
                 | NodeRole.MENU.value
+                | NodeRole.MENULISTPOPUP.value
             ):
                 return NodeCategory.DATA_DISPLAY
             case NodeRole.LIST.value | NodeRole.LISTITEM.value | NodeRole.LISTMARKER.value:
@@ -415,6 +424,8 @@ class NodeRole(Enum):
                 return NodeCategory.CODE
             case NodeRole.TREE.value | NodeRole.TREEGRID.value | NodeRole.TREEITEM.value:
                 return NodeCategory.TREE
+            case NodeRole.IMAGE.value | NodeRole.FIGURE.value | NodeRole.IMG.value:
+                return NodeCategory.IMAGE
             case _:
                 return NodeCategory.OTHER
 
@@ -590,6 +601,13 @@ class NotteNode:
             return False
         return self.role.category().value == NodeCategory.INTERACTION.value
 
+    def is_image(self) -> bool:
+        if isinstance(self.role, str):
+            return False
+        if self.id is None:
+            return False
+        return self.role.category().value == NodeCategory.IMAGE.value
+
     def flatten(self, only_interaction: bool = False) -> list["NotteNode"]:
         base: list["NotteNode"] = [] if only_interaction and not self.is_interaction() else [self]
         return base + [node for child in self.children for node in child.flatten(only_interaction)]
@@ -597,6 +615,9 @@ class NotteNode:
     def interaction_nodes(self) -> list["InteractionNode"]:
         inodes = self.flatten(only_interaction=True)
         return [inode.to_interaction_node() for inode in inodes]
+
+    def image_nodes(self) -> list["NotteNode"]:
+        return [node for node in self.flatten() if node.is_image()]
 
     def subtree_filter(self, ft: Callable[["NotteNode"], bool]) -> "NotteNode | None":
         def inner(node: NotteNode) -> NotteNode | None:
@@ -614,6 +635,20 @@ class NotteNode:
             return updated_node
 
         return inner(self)
+
+    def subtree_without(self, roles: set[str]) -> "NotteNode":
+
+        def only_roles(node: NotteNode) -> bool:
+            if isinstance(node.role, str):
+                return True
+            if node.role.value in roles:
+                logger.warning(f"Node {node.role.value} is in the list of roles to remove")
+            return node.role.value not in roles
+
+        filtered = self.subtree_filter(only_roles)
+        if filtered is None:
+            raise ValueError(f"No nodes found in subtree without roles {roles}")
+        return filtered
 
     def to_interaction_node(self) -> "InteractionNode":
         return InteractionNode(

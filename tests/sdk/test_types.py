@@ -3,7 +3,7 @@ from dataclasses import fields
 
 from notte.actions.base import Action
 from notte.actions.space import ActionSpace, SpaceCategory
-from notte.browser.observation import Observation
+from notte.browser.observation import DataSpace, ImageData, Observation
 from notte.sdk.types import ActionSpaceResponse, ObserveResponse
 
 
@@ -24,7 +24,9 @@ def test_observation_fields_match_response_types():
         "title": "Test Page",
         "timestamp": dt.datetime.now(),
         "screenshot": b"fake_screenshot",
-        "data": "test data",
+        "data": {
+            "markdown": "test data",
+        },
     }
 
     # Try to create ObserveResponseDict with these fields
@@ -79,7 +81,14 @@ def test_observe_response_from_observation():
         title="Google",
         timestamp=dt.datetime.now(),
         screenshot=b"fake_screenshot",
-        data="test data",
+        data=DataSpace(
+            markdown="test data",
+            images=[
+                ImageData(id="F1", url="https://www.google.com/image1.jpg"),
+                ImageData(id="F2", url="https://www.google.com/image2.jpg"),
+            ],
+            structured=[{"key": "value"}],
+        ),
         _space=ActionSpace(
             description="test space",
             category=SpaceCategory.OTHER,
@@ -106,7 +115,7 @@ def test_observe_response_from_observation():
     assert response.title == "Google"
     assert response.url == "https://www.google.com"
     assert response.screenshot == b"fake_screenshot"
-    assert response.data == "test data"
+    assert response.data.markdown == "test data"
     assert response.space is not None
     assert response.space.description == "test space"
     assert response.space.category == "other"
