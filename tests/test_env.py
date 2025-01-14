@@ -63,7 +63,7 @@ async def test_context_property_after_observation(aenv: Awaitable[NotteEnv]) -> 
 
     # Verify context exists and has expected properties
     assert isinstance(env.context, Context)
-    assert env.context.snapshot.url == "https://example.com"
+    assert env.context.snapshot.metadata.url == "https://example.com"
     assert env.context.snapshot.a11y_tree is not None
     assert env.context.node is not None
 
@@ -122,7 +122,7 @@ async def test_valid_observation_after_reset(aenv: Awaitable[NotteEnv]) -> None:
 
     # Verify new observation is correct
     assert obs.has_space()
-    assert obs.url == "https://example.com"
+    assert obs.metadata.url == "https://example.com"
 
     # Verify the state was effectively reset
     assert env.context.snapshot.screenshot == obs.screenshot  # poor proxy but ok
