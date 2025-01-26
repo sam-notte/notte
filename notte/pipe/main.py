@@ -6,6 +6,8 @@ from typing_extensions import override
 from notte.actions.base import Action, PossibleAction
 from notte.actions.space import ActionSpace
 from notte.browser.context import Context
+from notte.errors.actions import NotEnoughActionsListedError
+from notte.errors.base import UnexpectedBehaviorError
 from notte.llms.service import LLMService
 from notte.pipe.document_category import DocumentCategoryPipe
 from notte.pipe.filtering import ActionFilteringPipe
@@ -54,16 +56,29 @@ class ContextToActionSpacePipe(BaseContextToActionSpacePipe):
             DocumentCategoryPipe(llmserve) if categorise_document else None
         )
         if tresh_complete > 1.0 or tresh_complete < 0.0:
-            raise ValueError("tresh_complete must be between 0.0 and 1.0")
+            raise UnexpectedBehaviorError(
+                "tresh_complete must be between 0.0 and 1.0",
+                advice="Check the `tresh_complete` parameter in the `ContextToActionSpacePipe` class.",
+            )
         if n_trials < 0:
-            raise ValueError("n_trials must be positive")
+            raise UnexpectedBehaviorError(
+                "n_trials must be positive",
+                advice="Check the `n_trials` parameter in the `ContextToActionSpacePipe` class.",
+            )
         self.tresh_complete: float = tresh_complete
         self.n_trials: int = n_trials
 
-    def get_n_trials(self, n_trials: int | None = None, nb_nodes: int = 0) -> int:
+    def get_n_trials(
+        self,
+        n_trials: int | None = None,
+        nb_nodes: int = 0,
+        max_nb_actions: int | None = None,
+    ) -> int:
         if n_trials is not None:
             return n_trials
         effective_n = nb_nodes // 50
+        if max_nb_actions is not None:
+            effective_n = min(effective_n, (max_nb_actions // 50) + 1)
         return max(self.n_trials, effective_n)
 
     def check_enough_actions(
@@ -121,7 +136,7 @@ class ContextToActionSpacePipe(BaseContextToActionSpacePipe):
         # this function assumes tld(previous_actions_list) == tld(context)!
         inodes_ids = [inode.id for inode in context.interaction_nodes()]
         previous_action_list = previous_action_list or []
-        n_trials = self.get_n_trials(n_trials, nb_nodes=len(inodes_ids))
+        n_trials = self.get_n_trials(n_trials, nb_nodes=len(inodes_ids), max_nb_actions=max_nb_actions)
 
         # we keep only intersection of current context inodes and previous actions!
         previous_action_list = [action for action in previous_action_list if action.id in inodes_ids]
@@ -133,15 +148,14 @@ class ContextToActionSpacePipe(BaseContextToActionSpacePipe):
             inodes_ids, merged_actions, min_nb_actions=min_nb_actions, max_nb_actions=max_nb_actions
         )
         if not completed and n_trials == 0:
-            raise Exception(
-                (
-                    "LLM failed to list enough actions after "
-                    f"{self.get_n_trials(None, nb_nodes=len(inodes_ids))} trials. "
-                    "Please retry or reduce `min_nb_actions` or `max_nb_actions`"
-                )
+            raise NotEnoughActionsListedError(
+                n_trials=self.get_n_trials(None, nb_nodes=len(inodes_ids), max_nb_actions=max_nb_actions),
+                n_actions=len(inodes_ids),
+                threshold=self.tresh_complete,
             )
 
         if not completed and n_trials > 0:
+            logger.info(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
             return self.forward_unfiltered(
                 context,
                 merged_actions,

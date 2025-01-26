@@ -14,6 +14,12 @@ from playwright.async_api import (
     async_playwright,
 )
 
+from notte.errors.browser import (
+    BrowserNotStartedError,
+    BrowserResourceLimitError,
+    BrowserResourceNotFoundError,
+)
+
 
 @dataclass
 class BrowserResource:
@@ -163,12 +169,12 @@ class BrowserPool:
         # Check if we can create more browsers
         if len(self.available_browsers()) >= self.max_browsers:
             # Could implement browser reuse strategy here
-            raise RuntimeError(f"Maximum number of browsers ({self.max_browsers}) reached")
+            raise BrowserResourceLimitError(f"Maximum number of browsers ({self.max_browsers}) reached")
 
         # Calculate unique debug port for this browser
         # current_debug_port = self.base_debug_port + len(self.available_browsers())
         if self._playwright is None:
-            raise RuntimeError("Playwright not initialized. Call `start` first.")
+            raise BrowserNotStartedError()
         browser = await self._playwright.chromium.launch(
             headless=headless,
             timeout=self.BROWSER_CREATION_TIMEOUT_SECONDS * 1000,
@@ -238,10 +244,17 @@ class BrowserPool:
     async def release_browser_resource(self, resource: BrowserResource) -> None:
         browsers = self.available_browsers(resource.headless)
         if resource.browser_id not in browsers:
-            raise RuntimeError(f"Browser {resource.browser_id} not found in available browsers.")
+            raise BrowserResourceNotFoundError(
+                f"Browser '{resource.browser_id}' not found in available browsers (i.e {list(browsers.keys())})"
+            )
         resource_browser = browsers[resource.browser_id]
         if resource.context_id not in resource_browser.contexts:
-            raise RuntimeError(f"Context {resource.context_id} not found in available contexts.")
+            raise BrowserResourceNotFoundError(
+                (
+                    f"Context '{resource.context_id}' not found in available "
+                    f"contexts (i.e {list(resource_browser.contexts.keys())})"
+                )
+            )
         try:
             async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
                 await resource_browser.contexts[resource.context_id].context.close()
