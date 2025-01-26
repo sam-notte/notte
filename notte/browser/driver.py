@@ -1,20 +1,21 @@
 from typing import Literal, NotRequired, TypedDict, Unpack
 
 from loguru import logger
-from playwright.async_api import Page, Playwright
+from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-from playwright.async_api import async_playwright
 
 from notte.actions.base import ExecutableAction
 from notte.actions.executor import get_executor
 from notte.browser.context import Context
 from notte.browser.node_type import A11yTree
+from notte.browser.pool import BrowserPool, BrowserResource
 from notte.browser.snapshot import BrowserSnapshot, SnapshotMetadata
 from notte.common.resource import AsyncResource
 from notte.utils.url import is_valid_url
 
 
 class BrowserArgs(TypedDict):
+    pool: NotRequired[BrowserPool | None]
     headless: NotRequired[bool]
     timeout: NotRequired[int]
     screenshot: NotRequired[bool | None]
@@ -27,33 +28,41 @@ DEFAULT_WAITING_TIMEOUT = 1000
 class PlaywrightResource:
 
     def __init__(self, **kwargs: Unpack[BrowserArgs]) -> None:
-        self.playwright: Playwright | None = None
+        self.shared_pool: bool = kwargs.get("pool") is not None
+        if not self.shared_pool:
+            logger.info(
+                (
+                    "Using local browser pool. Consider using a shared pool for better "
+                    "resource management and performance by setting `browser_pool=BrowserPool(verbose=True)`"
+                )
+            )
+        self.browser_pool: BrowserPool = kwargs.get("pool") or BrowserPool()
         self.args: BrowserArgs = kwargs
         self._page: Page | None = None
-        self._playwright: Playwright | None = None
         self.timeout: int = kwargs.get("timeout", DEFAULT_LOADING_TIMEOUT)
         self.headless: bool = kwargs.get("headless", False)
+        self._resource: BrowserResource | None = None
 
     async def start(self) -> None:
-        self.playwright = await async_playwright().start()
-        browser = await self.playwright.chromium.launch(headless=self.headless)
-        context = await browser.new_context()
-        self._page = await context.new_page()
-        self._page.set_default_timeout(self.timeout)
+        # Get or create a browser from the pool
+        self._resource = await self.browser_pool.get_browser_resource(self.headless)
+        # Create and track a new context
+        self._resource.page.set_default_timeout(self.timeout)
 
     async def close(self) -> None:
-        if self._page is not None:
-            await self._page.close()
-            self._page = None
-        if self._playwright is not None:
-            await self._playwright.stop()
-            self._playwright = None
+        if self._resource is not None:
+            # Remove context from tracking
+            await self.browser_pool.release_browser_resource(self._resource)
+            self._resource = None
+        if not self.shared_pool:
+            await self.browser_pool.cleanup(force=True)
+            await self.browser_pool.stop()
 
     @property
     def page(self) -> Page:
-        if self._page is None:
+        if self._resource is None:
             raise RuntimeError("Browser not initialized. Call `start` first.")
-        return self._page
+        return self._resource.page
 
 
 class BrowserDriver(AsyncResource):
