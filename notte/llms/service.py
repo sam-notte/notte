@@ -33,13 +33,15 @@ class LLMService:
 
     def get_base_model(self, messages: list[dict[str, Any]]) -> tuple[str, str | None]:
         eid: str | None = None
+        router = "fixed"
         if self.base_model is None:
+            router = "llamux"
             provider, model, eid, _ = self.router.query(messages=messages)
             base_model = f"{provider}/{model}"
         else:
             base_model = self.base_model
         token_len = self.estimate_tokens(text="\n".join([m["content"] for m in messages]))
-        logger.debug(f"using '{base_model}' for approx {token_len} tokens")
+        logger.debug(f"llm router '{router}' selected '{base_model}' for approx {token_len} tokens")
         return base_model, eid
 
     def estimate_tokens(
