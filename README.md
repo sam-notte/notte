@@ -139,8 +139,6 @@ with NotteClient(api_key="your-api-key") as env:
     # Print the current state of the page
 ```
 
-
-
 # Main features
 
 - **Web Driver Support:** Compatible with any web driver. Defaults to Playwright.
