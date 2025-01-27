@@ -11,7 +11,7 @@ class PageLoadingError(BrowserError):
 
     def __init__(self, url: str) -> None:
         super().__init__(
-            dev_message=f"Failed to load page from {url}",
+            dev_message=f"Failed to load page from {url}. Check if the URL is reachable.",
             user_message="Failed to load page from the given URL. Check if the URL is reachable.",
             should_retry_later=True,
         )
