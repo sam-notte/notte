@@ -9,6 +9,8 @@ from notte.common.agent import AgentOutput, BaseAgent
 from notte.common.parser import BaseNotteParser, Parser
 from notte.env import NotteEnv
 from notte.llms.engine import LLMEngine
+from examples.credentials import get_credentials_for_domain
+from notte.utils.url import clean_url
 
 _ = load_dotenv()
 
@@ -145,7 +147,7 @@ class SimpleNotteAgent(BaseAgent):
         self.step_count = 0
 
     @override
-    async def run(self, task: str, url: str | None = None, credentials: str | None = None, password: str | None = None) -> AgentOutput:
+    async def run(self, task: str, url: str | None = None) -> AgentOutput:
         """
         Main execution loop that coordinates between the LLM and Notte environment.
 
@@ -155,6 +157,12 @@ class SimpleNotteAgent(BaseAgent):
         3. When and how to determine task completion
         4. Error handling and recovery strategies
         """
+        credentials, password = get_credentials_for_domain(clean_url(url) if url else None)
+        if credentials and password:
+            logger.info(f"🔑 Using credentials for {url}: {credentials} / {password}")
+        else:
+            logger.info(f"🔑 No credentials found for {url}")
+            
         logger.info(f"🚀 starting agent with task: {task} and url: {url}")
         async with self.env:
             messages = [
@@ -169,6 +177,7 @@ Instructions:
 - If you are asked to accept cookies to continue, please accept them. Accepting cookies is MANDATORY.
 - If you see one action about cookie management, you should stop thinking about the goal and accept cookies DIRECTLY.
 - If you are asked to signin / signup to continue browsing, signin with those credentials: {credentials}, {password}
+- If credentials are required but not provided, respond with "Error: Login required but no credentials provided for this domain"
 """,
                 },
                 {
