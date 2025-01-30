@@ -20,12 +20,12 @@ from notte.common.resource import AsyncResource
 from notte.errors.actions import InvalidActionError
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.llms.service import LLMService
+from notte.password.vault import Vault
 from notte.pipe.data_scraping import DataScrapingPipe
 from notte.pipe.main import BaseContextToActionSpacePipe, ContextToActionSpacePipe
 from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
 from notte.sdk.types import DEFAULT_MAX_NB_ACTIONS, DEFAULT_MAX_NB_STEPS
-from notte.password.vault import Vault
 from notte.utils.url import get_domain
 
 
@@ -146,22 +146,24 @@ class NotteEnv(AsyncResource):
         logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
         return await self._obslisting(min_nb_actions, max_nb_actions)
 
-    def _replace_placeholder_credentials(self, action_id: str, params: dict[str, str] | str | None) -> dict[str, str] | str | None:
+    def _replace_placeholder_credentials(
+        self, action_id: str, params: dict[str, str] | str | None
+    ) -> dict[str, str] | str | None:
         """Replace placeholder credentials with actual credentials from vault if available."""
         if not params or not isinstance(params, dict):
             return params
-        
+
         # Get current URL from context
         current_url = self.context.snapshot.metadata.url if self.context and self.context.snapshot else None
         url = get_domain(current_url) if current_url else None
         if not url:
             return params
-        
+
         # Get credentials for current domain
         creds = self._vault.get_credentials(url)
         if not creds:
             return params
-        
+
         # Replace placeholder values with actual credentials
         print("params", params)
         new_params = params.copy()
@@ -170,7 +172,7 @@ class NotteEnv(AsyncResource):
                 new_params[key] = creds.username
             elif value == "login_password":
                 new_params[key] = creds.password
-            
+
         return new_params
 
     @timeit("execute")
@@ -182,7 +184,7 @@ class NotteEnv(AsyncResource):
     ) -> Observation:
         # Replace placeholder credentials if present
         params = self._replace_placeholder_credentials(action_id, params)
-        
+
         if SpecialAction.is_special(action_id):
             return await self._execute_special(action_id, params)  # type: ignore
         if action_id not in [inode.id for inode in self.context.interaction_nodes()]:

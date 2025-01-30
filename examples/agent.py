@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 from loguru import logger
 from typing_extensions import override
 
+from examples.credentials import get_credentials_for_domain
 from notte.common.agent import AgentOutput, BaseAgent
 from notte.common.parser import BaseNotteParser, Parser
 from notte.env import NotteEnv
 from notte.llms.engine import LLMEngine
-from examples.credentials import get_credentials_for_domain
 from notte.utils.url import clean_url
 
 _ = load_dotenv()
@@ -162,7 +162,7 @@ class SimpleNotteAgent(BaseAgent):
             logger.info(f"🔑 Using credentials for {url}: {credentials} / {password}")
         else:
             logger.info(f"🔑 No credentials found for {url}")
-            
+
         logger.info(f"🚀 starting agent with task: {task} and url: {url}")
         async with self.env:
             messages = [

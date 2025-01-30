@@ -15,6 +15,7 @@ def clean_url(url: str) -> str:
     base = base.replace("www.", "")
     return base
 
+
 def get_domain(url: str) -> str:
     return urlparse(url).netloc
 
