@@ -15,6 +15,9 @@ def clean_url(url: str) -> str:
     base = base.replace("www.", "")
     return base
 
+def get_domain(url: str) -> str:
+    return urlparse(url).netloc
+
 
 def resolve_domain_to_url(domain: str) -> str | None:
     """Resolve a domain to its corresponding URL.

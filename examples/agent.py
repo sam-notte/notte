@@ -176,8 +176,7 @@ Instructions:
 - At every step, you will be provided with a list of actions you can take.
 - If you are asked to accept cookies to continue, please accept them. Accepting cookies is MANDATORY.
 - If you see one action about cookie management, you should stop thinking about the goal and accept cookies DIRECTLY.
-- If you are asked to signin / signup to continue browsing, signin with those credentials: {credentials}, {password}
-- If credentials are required but not provided, respond with "Error: Login required but no credentials provided for this domain"
+- If you are asked to signin / signup to continue browsing, fill the parameters with login@login_page.com / login_password
 """,
                 },
                 {
