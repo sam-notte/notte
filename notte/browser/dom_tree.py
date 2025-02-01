@@ -145,6 +145,11 @@ class DomAttributes:
     aria_valuemin: int | None
     aria_level: int | None
     aria_owns: str | None
+    aria_multiselectable: bool | None
+    aria_colindex: int | None
+    aria_colspan: int | None
+    aria_rowindex: int | None
+    aria_rowspan: int | None
     hidden: bool | None
     expanded: bool | None
 
@@ -196,7 +201,11 @@ class DomAttributes:
             )
         return DomAttributes(**{key: kwargs.get(key, None) for key in keys})
 
-    def relevant_attrs(self, include_attributes: frozenset[str] | None = None) -> dict[str, str | bool | int]:
+    def relevant_attrs(
+        self,
+        include_attributes: frozenset[str] | None = None,
+        max_len_per_attribute: int | None = None,
+    ) -> dict[str, str | bool | int]:
         disabled_attrs = set(
             [
                 "tag_name",
@@ -220,6 +229,8 @@ class DomAttributes:
                 and (include_attributes is None or key in include_attributes)
                 and value is not None
             ):
+                if max_len_per_attribute is not None and isinstance(value, str) and len(value) > max_len_per_attribute:
+                    value = value[:max_len_per_attribute] + "..."
                 attrs[key] = value
         return attrs
 

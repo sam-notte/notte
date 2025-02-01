@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 from collections.abc import Sequence
 from typing import Unpack
 
@@ -63,6 +64,7 @@ class NotteEnvConfig(BaseModel):
     scraping: ScrapingConfig = ScrapingConfig()
     action: MainActionSpaceConfig = MainActionSpaceConfig()
     observe_max_retry_after_snapshot_update: int = 2
+    nb_seconds_between_snapshots_check: int = 10
     auto_scrape: bool = True
 
 
@@ -142,6 +144,7 @@ class NotteEnv(AsyncResource):
         pagination: PaginationParams,
         retry: int,
     ) -> Observation:
+        logger.info(f"🔍 observing page {self.context.snapshot.metadata.url}")
         self.obs.space = self._action_space_pipe.forward(
             self.context,
             self.previous_actions,
@@ -150,11 +153,19 @@ class NotteEnv(AsyncResource):
         # TODO: improve this
         # Check if the snapshot has changed since the beginning of the trajectory
         # if it has, it means that the page was not fully loaded and that we should restart the oblisting
-        check_snapshot = await self._browser.snapshot()
-        if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
-            logger.warning("Snapshot changed since the beginning of the action listing, retrying to observe again")
-            _ = self._preobserve(check_snapshot)
-            return await self._observe(retry=retry - 1, pagination=pagination)
+        time_diff = dt.datetime.now() - self.context.snapshot.metadata.timestamp
+        if time_diff.total_seconds() > self.config.nb_seconds_between_snapshots_check:
+            logger.warning(
+                (
+                    f"{time_diff.total_seconds()} seconds since the beginning of the action listing."
+                    f"Check if page content has changed..."
+                )
+            )
+            check_snapshot = await self._browser.snapshot(screenshot=False)
+            if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
+                logger.warning("Snapshot changed since the beginning of the action listing, retrying to observe again")
+                _ = self._preobserve(check_snapshot)
+                return await self._observe(retry=retry - 1, pagination=pagination)
 
         if (
             self.config.auto_scrape
@@ -203,7 +214,6 @@ class NotteEnv(AsyncResource):
         exec_action = await ActionNodeResolutionPipe(self._browser).forward(action, _params, self.context)
         browser_action = NotteActionProxy.forward(exec_action, enter=enter)
         snapshot = await self.controller.execute(browser_action)
-        logger.info(f"🌌 action {action_id} executed in browser")
         obs = self._preobserve(snapshot, action=browser_action)
         return obs
 
@@ -211,6 +221,7 @@ class NotteEnv(AsyncResource):
         self,
         action: BaseAction,
     ) -> Observation:
+        logger.info(f"🌌 starting execution of action {action.id}...")
         if BrowserAction.is_special(action.id):
             # Scrape action is a special case
             if action.id == BrowserActionId.SCRAPE:
@@ -218,7 +229,7 @@ class NotteEnv(AsyncResource):
                 return await self.god()
         action = SimpleActionResolutionPipe.forward(action, self._context)
         snapshot = await self.controller.execute(action)
-        logger.info(f"🌌 action {action.id} executed in browser")
+        logger.info(f"🌌 action {action.id} executed in browser. Observing page...")
         _ = self._preobserve(snapshot, action=action)
         return await self._observe(
             pagination=PaginationParams(),

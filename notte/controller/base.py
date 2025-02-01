@@ -39,7 +39,7 @@ class BrowserController:
         _press_enter = False
         match action:
             case GotoAction(url=url):
-                _ = await self.driver.goto(url)
+                return await self.driver.goto(url)
             case WaitAction(time_ms=time_ms):
                 await self.page.wait_for_timeout(time_ms)
             case GoBackAction():
@@ -74,20 +74,20 @@ class BrowserController:
                     _press_enter = press_enter
                 if selector is None:
                     raise ValueError("Selector is required for ClickAction")
-                await self.page.click(selector)
+                await self.page.click(f"xpath={selector}")
             case FillAction(selector=selector, value=value, press_enter=press_enter):
                 if press_enter is not None:
                     _press_enter = press_enter
                 if selector is None:
                     raise ValueError("Selector is required for FillAction")
-                await self.page.fill(selector, value)
+                await self.page.fill(f"xpath={selector}", value)
             case CheckAction(selector=selector, value=value, press_enter=press_enter):
                 if press_enter is not None:
                     _press_enter = press_enter
                 if selector is None:
                     raise ValueError("Selector is required for CheckAction")
                 if value:
-                    await self.page.check(selector)
+                    await self.page.check(f"xpath={selector}")
                 else:
                     await self.page.uncheck(selector)
             case SelectAction(selector=selector, value=value, press_enter=press_enter):
@@ -95,7 +95,7 @@ class BrowserController:
                     _press_enter = press_enter
                 if selector is None:
                     raise ValueError("Selector is required for SelectAction")
-                _ = await self.page.select_option(selector, value)
+                _ = await self.page.select_option(f"xpath={selector}", value)
             case ListDropdownOptionsAction(selector=selector):
                 if selector is None:
                     raise ValueError("Selector is required for ListDropdownOptionsAction")
@@ -105,6 +105,8 @@ class BrowserController:
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
         if _press_enter:
+            logger.info(f"🪦 Pressing enter for action {action.id}")
+            await self.driver.short_wait()
             await self.page.keyboard.press("Enter")
         await self.driver.short_wait()
         return await self.driver.snapshot()

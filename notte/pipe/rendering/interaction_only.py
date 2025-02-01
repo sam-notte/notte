@@ -11,6 +11,7 @@ class InteractionOnlyDomNodeRenderingPipe:
     def render_node(
         node: DomNode,
         include_attributes: frozenset[str] | None = None,
+        max_len_per_attribute: int | None = None,
     ) -> str:
         if node.id is None:
             raise InvalidInternalCheckError(
@@ -22,9 +23,9 @@ class InteractionOnlyDomNodeRenderingPipe:
         if attrs is None:
             raise ValueError(f"Attributes are None for node: {node}")
         attrs_str = ""
-        attrs_relevant = attrs.relevant_attrs(include_attributes)
+        attrs_relevant = attrs.relevant_attrs(include_attributes, max_len_per_attribute)
         if len(attrs_relevant) > 0:
-            attrs_str = " " + " ".join(f'{key}="{value}"' for key, value in attrs.relevant_attrs().items())
+            attrs_str = " " + " ".join([f'{key}="{value}"' for key, value in attrs_relevant.items()])
         children_texts = InteractionOnlyDomNodeRenderingPipe.children_texts(node)
         children_str = "\n".join(children_texts).strip()
         return f"<{attrs.tag_name}{attrs_str}>{children_str}</{attrs.tag_name}>"
@@ -35,6 +36,7 @@ class InteractionOnlyDomNodeRenderingPipe:
         depth: int,
         node_texts: list[str],
         include_attributes: frozenset[str] | None,
+        max_len_per_attribute: int | None,
         is_parent_interaction: bool = False,
     ) -> list[str]:
         if node.type.value == NodeType.TEXT.value:
@@ -51,7 +53,9 @@ class InteractionOnlyDomNodeRenderingPipe:
             is_parent_interaction = False
             # Add element with highlight_index
             if node.id is not None:
-                html_description = InteractionOnlyDomNodeRenderingPipe.render_node(node, include_attributes)
+                html_description = InteractionOnlyDomNodeRenderingPipe.render_node(
+                    node, include_attributes, max_len_per_attribute
+                )
                 node_texts.append(f"{node.id}[:]{html_description}")
 
             # Process children regardless
@@ -61,6 +65,7 @@ class InteractionOnlyDomNodeRenderingPipe:
                     depth=depth + 1,
                     node_texts=node_texts,
                     include_attributes=include_attributes,
+                    max_len_per_attribute=max_len_per_attribute,
                     is_parent_interaction=is_parent_interaction,
                 )
         return node_texts
@@ -87,15 +92,20 @@ class InteractionOnlyDomNodeRenderingPipe:
         return texts
 
     @staticmethod
-    def forward(node: DomNode, include_attributes: frozenset[str] | None = None) -> str:
+    def forward(
+        node: DomNode,
+        include_attributes: frozenset[str] | None = None,
+        max_len_per_attribute: int | None = None,
+    ) -> str:
         """Convert the processed DOM content to HTML."""
-        inodes = "\n".join([str(inode) for inode in node.interaction_nodes()])
-        logger.info(f"📄 Rendering interaction only node: \n{inodes}")
+        # inodes = "\n".join([str(inode) for inode in node.interaction_nodes()])
+        # logger.info(f"📄 Rendering interaction only node: \n{inodes}")
         formatted_text: list[str] = InteractionOnlyDomNodeRenderingPipe.format(
             node=node,
             depth=0,
             node_texts=[],
             include_attributes=include_attributes,
+            max_len_per_attribute=max_len_per_attribute,
         )
 
         f_text = "\n".join(formatted_text).strip()

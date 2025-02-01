@@ -86,14 +86,14 @@ def simple_generate_sequential_ids(root: DOMBaseNode) -> DOMBaseNode:
                 f"Unsupported role to convert to ID: {node}. Please add this role to the NodeRole e logic ASAP."
             )
         elif node.highlight_index is not None:
-            id = role.short_id()
+            id = role.short_id(force_id=True)
             if id is not None:
                 node.notte_id = f"{id}{id_counter[id]}"
                 id_counter[id] += 1
             else:
                 raise ValueError(
                     (
-                        f"Role {role} was incorrectly from raw Dom Node."
+                        f"Role {role} was incorrectly converted from raw Dom Node."
                         " It is an interaction node. It should have a short ID but is currently None"
                     )
                 )

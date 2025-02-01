@@ -12,6 +12,27 @@ from notte.browser.node_type import NodeRole, NodeType
 VERBOSE = False
 
 
+# clean up aria attributes
+def cleanup_aria_attributes(attrs: dict[str, str]) -> dict[str, str]:
+    to_add: dict[str, str] = {}
+    to_remove: list[str] = []
+    pattern = "aria-"
+    for attr, value in attrs.items():
+        if pattern in attr:
+            # remove anything before aria_
+            new_attr_split = attr.split(pattern)[1:]
+            new_attr = pattern + (pattern.join(new_attr_split))
+            if new_attr in attrs and attrs[new_attr] != value:
+                raise ValueError(f"Key {new_attr} already in attributes")
+            to_add[new_attr] = value
+            to_remove.append(attr)
+    for attr in to_remove:
+        del attrs[attr]
+    for attr, value in to_add.items():
+        attrs[attr] = value
+    return attrs
+
+
 @dataclass(frozen=False)
 class DOMBaseNode:
     parent: "DOMElementNode | None"
@@ -103,6 +124,13 @@ class DOMElementNode(DOMBaseNode):
     is_top_element: bool = False
     shadow_root: bool = False
 
+    @override
+    def __post_init__(self) -> None:
+        if self.tag_name.startswith("wiz_"):
+            self.tag_name = self.tag_name[len("wiz_") :].replace("_", "-")
+        # replace also in the attributes
+        self.attributes = cleanup_aria_attributes(self.attributes)
+
     def __repr__(self) -> str:
         tag_str = f"<{self.tag_name}"
 
@@ -133,7 +161,7 @@ class DOMElementNode(DOMBaseNode):
         # transform to axt role
         if self.attributes.get("role"):
             return self.attributes["role"]
-        if len(self.tag_name) == 0:
+        if self.tag_name is None or len(self.tag_name) == 0:
             if len(self.attributes) == 0 and len(self.children) == 0:
                 return "none"
             raise ValueError(f"No tag_name found for element: {self} with attributes: {self.attributes}")

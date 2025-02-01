@@ -1,5 +1,7 @@
 from enum import Enum
 
+from loguru import logger
+
 from notte.errors.processing import InvalidInternalCheckError
 
 
@@ -274,7 +276,7 @@ class NodeRole(Enum):
             return NodeRole[value.upper()]
         return value
 
-    def short_id(self) -> str | None:
+    def short_id(self, force_id: bool = False) -> str | None:
         match self.value:
             case NodeRole.LINK.value:
                 return "L"
@@ -302,6 +304,9 @@ class NodeRole(Enum):
             case NodeRole.IMAGE.value | NodeRole.IMG.value:
                 return "F"
             case _:
+                if force_id:
+                    logger.warning(f"No short id for role {self}. Returning 'M' (forced).")
+                    return "M"
                 return None
 
     def category(self) -> NodeCategory:

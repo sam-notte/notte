@@ -106,6 +106,7 @@ class BrowserDriver(AsyncResource):
         await self.page.wait_for_timeout(self._playwright.config.step_timeout)
 
     async def snapshot(self, screenshot: bool | None = None, retries: int | None = None) -> BrowserSnapshot:
+        # logger.error(f"Taking snapshot of {self.page.url}")
         if not self.page:
             raise BrowserNotStartedError()
         if retries is None:

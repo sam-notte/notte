@@ -39,6 +39,7 @@ class DomNodeRenderingConfig(BaseModel):
     include_ids: bool = True
     include_images: bool = False
     include_attributes: frozenset[str] = DEFAULT_INCLUDE_ATTRIBUTES
+    max_len_per_attribute: int | None = 60
     include_text: bool = True
     include_links: bool = True
 
@@ -54,7 +55,11 @@ class DomNodeRenderingPipe:
 
         match config.type:
             case DomNodeRenderingType.INTERACTION_ONLY:
-                return InteractionOnlyDomNodeRenderingPipe.forward(node, include_attributes=config.include_attributes)
+                return InteractionOnlyDomNodeRenderingPipe.forward(
+                    node,
+                    include_attributes=config.include_attributes,
+                    max_len_per_attribute=config.max_len_per_attribute,
+                )
             case DomNodeRenderingType.JSON:
                 return JsonDomNodeRenderingPipe.forward(
                     node,
