@@ -1,0 +1,435 @@
+import copy
+from dataclasses import asdict, dataclass, field
+from typing import Callable, Required, TypedDict
+
+from loguru import logger
+
+from notte.browser.node_type import NodeCategory, NodeRole, NodeType
+from notte.errors.processing import (
+    InvalidInternalCheckError,
+    NodeFilteringResultsInEmptyGraph,
+)
+
+
+class A11yNode(TypedDict, total=False):
+    # from the a11y tree
+    role: Required[str]
+    name: Required[str]
+    children: list["A11yNode"]
+    url: str
+    # added by the tree processing
+    only_text_roles: bool
+    nb_pruned_children: int
+    children_roles_count: dict[str, int]
+    group_role: str
+    group_roles: list[str]
+    markdown: str
+    # added by the notte processing
+    id: str
+    path: str  # url:parent-path:role:name
+    # stuff for the action listing
+    modal: bool
+    required: bool
+    description: str
+    visible: bool
+    selected: bool
+    checked: bool
+    enabled: bool
+
+    is_interactive: bool
+
+
+@dataclass
+class A11yTree:
+    raw: A11yNode
+    simple: A11yNode
+
+
+@dataclass
+class HtmlSelector:
+    playwright_selector: str | None = None
+    css_selector: str | None = None
+    xpath_selector: str | None = None
+    notte_selector: str | None = None
+
+    def is_valid(self) -> bool:
+        return self.playwright_selector is not None or self.css_selector is not None or self.xpath_selector is not None
+
+    def selectors(self) -> list[str]:
+        l: list[str] = []
+        if self.playwright_selector is not None:
+            l.append(self.playwright_selector)
+        if self.css_selector is not None:
+            l.append(self.css_selector)
+        if self.xpath_selector is not None:
+            l.append(self.xpath_selector)
+        return l
+
+
+@dataclass
+class DomAttributes:
+    # State attributes
+    modal: bool | None
+    required: bool | None
+    visible: bool | None
+    selected: bool | None
+    checked: bool | None
+    enabled: bool | None
+    focused: bool | None
+    disabled: bool | None
+    pressed: bool | None
+    type: str | None
+
+    # Value attributes
+    value: str | None
+    valuemin: str | None
+    valuemax: str | None
+    description: str | None
+    autocomplete: str | None
+    haspopup: bool | None
+    accesskey: str | None
+    autofocus: bool | None
+    tabindex: int | None
+    multiselectable: bool | None
+
+    # HTML element attributes
+    tag_name: str
+    class_name: str | None
+
+    # Resource attributes
+    href: str | None
+    src: str | None
+    srcset: str | None
+    target: str | None
+    ping: str | None
+
+    # Text attributes
+    placeholder: str | None
+    title: str | None
+    alt: str | None
+    name: str | None
+    autocorrect: str | None
+    autocapitalize: str | None
+    spellcheck: bool | None
+    maxlength: int | None
+
+    # Layout attributes
+    width: int | None
+    height: int | None
+    size: int | None
+    rows: int | None
+
+    # Internationalization attributes
+    lang: str | None
+    dir: str | None
+
+    # aria attributes
+    action: str | None
+    role: str | None
+    aria_label: str | None
+    aria_labelledby: str | None
+    aria_describedby: str | None
+    aria_hidden: bool | None
+    aria_expanded: bool | None
+    aria_controls: str | None
+    aria_haspopup: bool | None
+    aria_current: str | None
+    aria_autocomplete: str | None
+    aria_selected: bool | None
+    aria_modal: bool | None
+    aria_disabled: bool | None
+    aria_valuenow: int | None
+    aria_live: str | None
+    aria_atomic: bool | None
+    aria_valuemax: int | None
+    aria_valuemin: int | None
+    aria_level: int | None
+    aria_owns: str | None
+    hidden: bool | None
+    expanded: bool | None
+
+    @staticmethod
+    def init(**kwargs) -> "DomAttributes":
+        # compute additional attributes
+        if "class" in kwargs:
+            kwargs["class_name"] = kwargs["class"]
+            del kwargs["class"]
+        # replace '-' with '_' in keys
+        kwargs = {
+            k.replace("-", "_"): v
+            for k, v in kwargs.items()
+            if (
+                not k.startswith("data-")
+                and not k.startswith("js")
+                and not k.startswith("__")
+                and not k.startswith("g-")
+            )
+        }
+        keys = set(DomAttributes.__dataclass_fields__.keys())
+        excluded_keys = set(
+            [
+                "browser_user_highlight_id",
+                "class",
+                "style",
+                "id",
+                "data_jsl10n",
+                "keyshortcuts",
+                "for",
+                "rel",
+                "ng_non_bindable",
+                "c_wiz",
+                "ssk",
+                "soy_skip",
+                "key",
+                "method",
+                "eid",
+                "view",
+            ]
+        )
+        extra_keys = set(kwargs.keys()).difference(keys).difference(excluded_keys)
+        if len(extra_keys) > 0:
+            logger.error(
+                (
+                    f"Extra DOM attributes found: {extra_keys} with values {kwargs}. "
+                    "They should be added to the DomAttributes class. Fix this ASAP."
+                )
+            )
+        return DomAttributes(**{key: kwargs.get(key, None) for key in keys})
+
+    def relevant_attrs(self, include_attributes: frozenset[str] | None = None) -> dict[str, str | bool | int]:
+        disabled_attrs = set(
+            [
+                "tag_name",
+                "class_name",
+                "width",
+                "height",
+                "size",
+                "lang",
+                "dir",
+                "action",
+                "role",
+                "aria_label",
+                "name",
+            ]
+        ).difference(include_attributes or frozenset())
+        dict_attrs = asdict(self)
+        attrs: dict[str, str | bool | int] = {}
+        for key, value in dict_attrs.items():
+            if (
+                key not in disabled_attrs
+                and (include_attributes is None or key in include_attributes)
+                and value is not None
+            ):
+                attrs[key] = value
+        return attrs
+
+    @staticmethod
+    def from_a11y_node(node: A11yNode) -> "DomAttributes":
+        remaning_keys = set(node.keys()).difference(
+            [
+                "children",
+                "children_roles_count",
+                "nb_pruned_children",
+                "group_role",
+                "group_roles",
+                "markdown",
+                "id",
+                "path",
+                "role",
+                "name",
+                "level",
+                "only_text_roles",
+                # Add any other irrelevant keys here
+                "orientation",
+                "eid",
+                "method",
+            ]
+        )
+        return DomAttributes.init(**{key: node[key] for key in remaning_keys})  # type: ignore
+
+
+@dataclass
+class ComputedDomAttributes:
+    in_viewport: bool = False
+    is_interactive: bool = False
+    is_top_element: bool = False
+    shadow_root: bool = False
+    highlight_index: int | None = None
+    selectors: HtmlSelector = field(default_factory=HtmlSelector)
+
+
+@dataclass
+class DomNode:
+    id: str | None
+    type: NodeType
+    role: NodeRole | str
+    text: str
+    subtree_ids: list[str] = field(init=False, default_factory=list)
+    children: list["DomNode"] = field(default_factory=list)
+    attributes: DomAttributes | None = None
+    computed_attributes: ComputedDomAttributes = field(default_factory=ComputedDomAttributes)
+
+    def __post_init__(self) -> None:
+        subtree_ids: list[str] = [] if self.id is None else [self.id]
+        for child in self.children:
+            subtree_ids.extend(child.subtree_ids)
+        self.subtree_ids = subtree_ids
+        if isinstance(self.role, str):
+            self.role = NodeRole.from_value(self.role)
+
+    @staticmethod
+    def from_a11y_node(node: A11yNode, notte_selector: str = "") -> "DomNode":
+        children = [DomNode.from_a11y_node(child, notte_selector) for child in node.get("children", [])]
+        node_id = node.get("id")
+        node_role = NodeRole.from_value(node["role"])
+        node_type = NodeType.INTERACTION if node_id is not None else NodeType.OTHER
+        if not isinstance(node_role, str) and node_role.category().value == NodeCategory.TEXT.value:
+            node_type = NodeType.TEXT
+        highlight_index: int | None = node.get("highlight_index")  # type: ignore
+        return DomNode(
+            id=node_id,
+            type=node_type,
+            role=node_role,
+            text=node["name"],
+            children=children,
+            attributes=DomAttributes.from_a11y_node(node),
+            computed_attributes=ComputedDomAttributes(
+                in_viewport=bool(node.get("in_viewport", False)),
+                is_interactive=bool(node.get("is_interactive", False)),
+                is_top_element=bool(node.get("is_top_element", False)),
+                shadow_root=bool(node.get("shadow_root", False)),
+                highlight_index=highlight_index,
+                selectors=HtmlSelector(
+                    notte_selector=notte_selector,
+                ),
+            ),
+        )
+
+    def get_role_str(self) -> str:
+        if isinstance(self.role, str):
+            return self.role
+        return self.role.value
+
+    def get_url(self) -> str | None:
+        attr = self.computed_attributes.selectors
+        if attr.notte_selector is None:
+            return None
+        return attr.notte_selector.split(":")[0]
+
+    def find(self, id: str) -> "DomNode | None":
+        if self.id == id:
+            return self
+        for child in self.children:
+            found = child.find(id)
+            if found:
+                return found
+        return None
+
+    def is_interaction(self) -> bool:
+        if isinstance(self.role, str):
+            return False
+        if self.id is None:
+            return False
+        return self.role.category().value == NodeCategory.INTERACTION.value
+
+    def is_image(self) -> bool:
+        if isinstance(self.role, str):
+            return False
+        if self.id is None:
+            return False
+        return self.role.category().value == NodeCategory.IMAGE.value
+
+    def flatten(self, only_interaction: bool = False) -> list["DomNode"]:
+        base: list["DomNode"] = [] if only_interaction and not self.is_interaction() else [self]
+        return base + [node for child in self.children for node in child.flatten(only_interaction)]
+
+    def interaction_nodes(self) -> list["InteractionDomNode"]:
+        inodes = self.flatten(only_interaction=True)
+        return [inode.to_interaction_node() for inode in inodes]
+
+    def image_nodes(self) -> list["DomNode"]:
+        return [node for node in self.flatten() if node.is_image()]
+
+    def subtree_filter(self, ft: Callable[["DomNode"], bool]) -> "DomNode | None":
+        def inner(node: DomNode) -> DomNode | None:
+            children = node.children
+            if not ft(node):
+                return None
+
+            filtered_children: list[DomNode] = []
+            for child in children:
+                filtered_child = inner(child)
+                if filtered_child is not None:
+                    filtered_children.append(filtered_child)
+            updated_node = copy.deepcopy(node)
+            updated_node.children = filtered_children
+            return updated_node
+
+        return inner(self)
+
+    def subtree_without(self, roles: set[str]) -> "DomNode":
+
+        def only_roles(node: DomNode) -> bool:
+            if isinstance(node.role, str):
+                return True
+            return node.role.value not in roles
+
+        filtered = self.subtree_filter(only_roles)
+        if filtered is None:
+            raise NodeFilteringResultsInEmptyGraph(
+                url=self.get_url(),
+                operation=f"subtree_without(roles={roles})",
+            )
+        return filtered
+
+    def to_interaction_node(self) -> "InteractionDomNode":
+        if self.type != NodeType.INTERACTION:
+            raise InvalidInternalCheckError(
+                check="DomNode must be an interaction node to be converted to an interaction node",
+                url=self.get_url(),
+                dev_advice="This should never happen.",
+            )
+        return InteractionDomNode(
+            id=self.id,
+            type=NodeType.INTERACTION,
+            role=self.role,
+            text=self.text,
+            attributes=self.attributes,
+            computed_attributes=self.computed_attributes,
+            # children are not allowed in interaction nodes
+            children=[],
+        )
+
+
+class InteractionDomNode(DomNode):
+    id: str  # type: ignore
+    type: NodeType = NodeType.INTERACTION
+
+    def __post_init__(self) -> None:
+        if self.id is None:
+            raise InvalidInternalCheckError(
+                check="InteractionNode must have a valid non-None id",
+                url=self.get_url(),
+                dev_advice=(
+                    "This should technically never happen since the id should always be set "
+                    "when creating an interaction node."
+                ),
+            )
+        if len(self.children) > 0:
+            raise InvalidInternalCheckError(
+                check="InteractionNode must have no children",
+                url=self.get_url(),
+                dev_advice=(
+                    "This should technically never happen but you should check the `pruning.py` file "
+                    "to diagnose this issue."
+                ),
+            )
+        super().__post_init__()
+
+
+@dataclass
+class ResolvedLocator:
+    role: NodeRole | str
+    is_editable: bool
+    input_type: str | None
+    selector: str
