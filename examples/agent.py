@@ -137,7 +137,7 @@ class SimpleNotteAgent(BaseAgent):
                     return AgentOutput(
                         answer=obs.output.answer,
                         success=obs.output.success,
-                        snapshot=obs.snapshot,
+                        trajectory=self.env.trajectory,
                         messages=self.conv.messages(),
                     )
 
@@ -149,7 +149,7 @@ class SimpleNotteAgent(BaseAgent):
             return AgentOutput(
                 answer=error_msg,
                 success=False,
-                snapshot=self.env.context.snapshot,
+                trajectory=self.env.trajectory,
                 messages=self.conv.messages(),
             )
 

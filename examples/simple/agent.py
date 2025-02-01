@@ -116,8 +116,6 @@ class SimpleAgent(BaseAgent):
                     else:
                         logger.info(f"🚀 Successfully executed action: {action.id} = {action.description}")
                         self.conv.add_user_message(content=self.perception.perceive(result.get()))
-                    logger.info(f"Waiting for 5 seconds before after action: {action}")
-                    time.sleep(5)
         error_msg = f"Failed to solve task in {max_steps} steps"
         logger.info(f"🚨 {error_msg}")
         return AgentOutput(

@@ -303,6 +303,8 @@ class NodeRole(Enum):
                 return "I"
             case NodeRole.IMAGE.value | NodeRole.IMG.value:
                 return "F"
+            case NodeRole.OPTION.value:
+                return "O"
             case _:
                 if force_id:
                     logger.warning(f"No short id for role {self}. Returning 'M' (forced).")

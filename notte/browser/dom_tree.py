@@ -150,6 +150,8 @@ class DomAttributes:
     aria_colspan: int | None
     aria_rowindex: int | None
     aria_rowspan: int | None
+    aria_description: str | None
+    aria_activedescendant: str | None
     hidden: bool | None
     expanded: bool | None
 
@@ -394,9 +396,12 @@ class DomNode:
         return filtered
 
     def to_interaction_node(self) -> "InteractionDomNode":
-        if self.type != NodeType.INTERACTION:
+        if self.type.value != NodeType.INTERACTION.value:
             raise InvalidInternalCheckError(
-                check="DomNode must be an interaction node to be converted to an interaction node",
+                check=(
+                    f"DomNode must be an interaction node to be converted to an interaction node. "
+                    f"But is: {self.type} with id: {self.id}, role: {self.role}, text: {self.text}"
+                ),
                 url=self.get_url(),
                 dev_advice="This should never happen.",
             )
