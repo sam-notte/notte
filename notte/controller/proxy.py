@@ -17,7 +17,7 @@ from notte.controller.actions import (
     ScreenshotAction,
     ScrollDownAction,
     ScrollUpAction,
-    SelectAction,
+    SelectDropdownOptionAction,
     WaitAction,
 )
 from notte.errors.actions import InvalidActionError, MoreThanOneParameterActionError
@@ -90,7 +90,9 @@ class NotteActionProxy:
             case ("input", "checkbox", _):
                 return CheckAction(id=action.id, selector=action.locator.selector, value=bool(value), press_enter=enter)
             case ("input", "combobox", _):
-                return SelectAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
+                return SelectDropdownOptionAction(
+                    id=action.id, selector=action.locator.selector, value=value, press_enter=enter
+                )
             case ("input", _, _):
                 return FillAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
             case _:

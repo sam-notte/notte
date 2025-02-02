@@ -13,17 +13,24 @@ from notte.actions.base import (
     BrowserAction,
 )
 from notte.browser.driver import BrowserConfig, BrowserDriver
+from notte.browser.node_type import NodeRole
 from notte.browser.observation import Observation, TrajectoryProgress
 from notte.browser.pool import BrowserPool
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import BrowserSnapshot
 from notte.common.logging import timeit
 from notte.common.resource import AsyncResource
-from notte.controller.actions import BaseAction, BrowserActionId, InteractionAction
+from notte.controller.actions import (
+    BaseAction,
+    BrowserActionId,
+    InteractionAction,
+    SelectDropdownOptionAction,
+)
 from notte.controller.base import BrowserController
 from notte.controller.proxy import NotteActionProxy
 from notte.errors.actions import InvalidActionError
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
+from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
 from notte.pipe.action.base import BaseActionSpacePipe
 from notte.pipe.action.pipe import MainActionSpaceConfig, MainActionSpacePipe
@@ -46,6 +53,8 @@ class SimpleActionResolutionPipe:
         if not isinstance(action, InteractionAction) or context is None:
             # no need to resolve
             return action
+        if isinstance(action, SelectDropdownOptionAction):
+            return SimpleActionResolutionPipe.resolve_selector_locators(action, context)
         selector_map: dict[str, str] = {
             inode.id: inode.computed_attributes.selectors.xpath_selector
             for inode in context.interaction_nodes()
@@ -55,6 +64,62 @@ class SimpleActionResolutionPipe:
             raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
         action.selector = selector_map[action.id]
         return action
+
+    @staticmethod
+    def resolve_selector_locators(
+        action: SelectDropdownOptionAction,
+        context: ProcessedBrowserSnapshot,
+    ) -> SelectDropdownOptionAction:
+        """
+        Resolve the selector locators for a dropdown option.
+
+        We need to find the selector node and the option node.
+        This function simply iterates over the interaction nodes to find the option node.
+        The selector node is the first node with a role in [COMBOBOX, LISTBOX, LIST]
+        that appears before the option node.
+        """
+        inodes = context.node.interaction_nodes()
+        snode = None
+        for node in inodes:
+            if node.get_role_str() in [NodeRole.COMBOBOX.value, NodeRole.LISTBOX.value, NodeRole.LIST.value]:
+                snode = node
+            if (action.option_id is not None and node.id == action.option_id) or (
+                action.value is not None and node.text == action.value and node.get_role_str() == NodeRole.OPTION.value
+            ):
+                if snode is None:
+                    raise ValueError(f"No select html element found for {action.option_id} or {action.value}")
+                selector_xpath = snode.computed_attributes.selectors.xpath_selector
+                option_xpath = node.computed_attributes.selectors.xpath_selector
+                if selector_xpath is None or option_xpath is None:
+                    raise InvalidInternalCheckError(
+                        check=f"Cannot find associated selector element for option node {node.id}",
+                        url=None,
+                        dev_advice=(
+                            (
+                                "This technnically should never happen. There is likely an issue during playright "
+                                "conflict resolution pipe, i.e `SimpleActionResolutionPipe`."
+                            )
+                        ),
+                    )
+                logger.info(
+                    (
+                        f"Resolved locators for select dropdown {snode.id} ({snode.text})"
+                        f" and option {node.id} ({node.text})"
+                    )
+                )
+                action.option_selector = option_xpath
+                action.selector = selector_xpath
+                return action
+        raise InvalidInternalCheckError(
+            check=f"No select html element found for {action.option_id} or {action.value}",
+            url=None,
+            dev_advice=(
+                (
+                    "This technnically should never happen. There is likely an issue during playright "
+                    "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
+                )
+            ),
+        )
 
 
 class NotteEnvConfig(BaseModel):

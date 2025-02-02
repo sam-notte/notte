@@ -175,7 +175,12 @@ class ListDropdownOptionsAction(InteractionAction):
     description: str = "List all options of a dropdown"
 
 
-class SelectAction(InteractionAction):
+class SelectDropdownOptionAction(InteractionAction):
     id: str
-    description: str = "Select an option from a dropdown."
-    value: str
+    description: str = (
+        "Select an option from a dropdown. The `id` field should be set to the select element's id. "
+        "Then you can either set the `value` field to the option's text or the `option_id` field to the option's `id`."
+    )
+    option_id: str | None = None
+    value: str | None = None
+    option_selector: str | None = Field(exclude=True, default=None)

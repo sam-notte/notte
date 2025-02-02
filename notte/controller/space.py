@@ -119,7 +119,7 @@ class ActionSpace(BaseActionSpace):
         for action_name, action_cls in self.action_map.items():
             try:
                 # Get schema and safely remove common fields
-                skip_keys = ["press_enter", "category"]
+                skip_keys = ["press_enter", "category", "option_selector"]
                 sub_skip_keys = ["title", "$ref"]
                 schema = {
                     k: {sub_k: sub_v for sub_k, sub_v in v.items() if sub_k not in sub_skip_keys}

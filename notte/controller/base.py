@@ -20,7 +20,7 @@ from notte.controller.actions import (
     ScreenshotAction,
     ScrollDownAction,
     ScrollUpAction,
-    SelectAction,
+    SelectDropdownOptionAction,
     WaitAction,
 )
 from notte.pipe.preprocessing.dom.dropdown_menu import dropdown_menu_options
@@ -90,12 +90,28 @@ class BrowserController:
                     await self.page.check(f"xpath={selector}")
                 else:
                     await self.page.uncheck(selector)
-            case SelectAction(selector=selector, value=value, press_enter=press_enter):
+            case SelectDropdownOptionAction(
+                selector=selector, value=value, press_enter=press_enter, option_selector=option_selector
+            ):
                 if press_enter is not None:
                     _press_enter = press_enter
                 if selector is None:
-                    raise ValueError("Selector is required for SelectAction")
-                _ = await self.page.select_option(f"xpath={selector}", value)
+                    raise ValueError("Selector is required for `SelectDropdownOptionAction`")
+                # Get element info
+                select_element = await self.page.query_selector(f"xpath={selector}")
+                if not select_element:
+                    raise ValueError(f"Select element not found: {selector}")
+
+                # Check if it's a standard HTML select
+                tag_name: str = await select_element.evaluate("el => el.tagName.toLowerCase()")
+                if tag_name == "select":
+                    # Handle standard HTML select
+                    _ = await self.page.select_option(f"xpath={selector}", value)
+                else:
+                    # Handle non-standard select
+                    # await self.page.click(f"xpath={selector}")
+                    await self.page.click(f"xpath={option_selector}")
+
             case ListDropdownOptionsAction(selector=selector):
                 if selector is None:
                     raise ValueError("Selector is required for ListDropdownOptionsAction")

@@ -343,7 +343,9 @@ class DomNode:
             return False
         if self.id is None:
             return False
-        return self.role.category().value == NodeCategory.INTERACTION.value
+        if self.type.value == NodeType.INTERACTION.value:
+            return True
+        return self.role.category().value in [NodeCategory.INTERACTION.value, NodeCategory.PARAMETERS.value]
 
     def is_image(self) -> bool:
         if isinstance(self.role, str):
