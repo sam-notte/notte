@@ -4,6 +4,7 @@ from loguru import logger
 from notte.password.vault import Vault
 from notte.password.models import Credentials
 
+
 class BitwardenVault(Vault):
     def __new__(cls, server_url: str, api_key: str) -> "BitwardenVault":
         if cls._instance is None:
@@ -31,7 +32,7 @@ class BitwardenVault(Vault):
         print(response.json())
         if response.status_code != 200:
             raise ValueError(f"Failed to fetch items from Bitwarden: {response.text}")
-        return response.json().get('items', [])
+        return response.json().get('ciphers', [])
 
     def sync_with_bitwarden(self) -> None:
         """Sync credentials from Bitwarden to local vault"""
