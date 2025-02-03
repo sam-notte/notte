@@ -1,12 +1,13 @@
-version: '3'
+version: '3.8'
 services:
-  vaultwarden:
-    image: vaultwarden/server:latest
-    container_name: vaultwarden
-    restart: unless-stopped
-    environment:
-      - DOMAIN=http://localhost:8080  # Change this to your domain
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault
     ports:
-      - "8080:80"  # Web vault port
-    volumes:
-      - ./vw-data/:/data/
+      - "8200:8200"
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=dev-root-token
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    command: server -dev

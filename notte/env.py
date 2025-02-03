@@ -27,6 +27,7 @@ from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
 from notte.sdk.types import DEFAULT_MAX_NB_ACTIONS, DEFAULT_MAX_NB_STEPS
 from notte.utils.url import get_domain
+from notte.password.models import HashiCorpVault
 
 
 @final
@@ -58,6 +59,8 @@ class NotteEnv(AsyncResource):
         browser: BrowserDriver | None = None,
         llmserve: LLMService | None = None,
         **browser_kwargs: Unpack[BrowserArgs],
+        vault_url: str = "http://localhost:8200",
+        vault_token: str = "dev-root-token",
     ) -> None:
         self._max_steps: int | None = max_steps
         self._browser: BrowserDriver = browser or BrowserDriver(**browser_kwargs)
@@ -66,7 +69,7 @@ class NotteEnv(AsyncResource):
         self._context: Context | None = None
         self._context_to_action_space_pipe: BaseContextToActionSpacePipe = ContextToActionSpacePipe(llmserve=llmserve)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, browser=self._browser)
-        self._vault = Vault.get_instance()
+        self._vault = HashiCorpVault(url=vault_url, token=vault_token)
 
     @property
     def context(self) -> Context:

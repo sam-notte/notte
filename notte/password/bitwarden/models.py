@@ -1,58 +1,65 @@
-from typing import Dict, Optional
-import requests
-from loguru import logger
-from notte.password.vault import Vault
+from hvac import Client
+from typing import Optional
 from notte.password.models import Credentials
+from urllib.parse import urlparse
 
-
-class BitwardenVault(Vault):
-    def __new__(cls, server_url: str, api_key: str) -> "BitwardenVault":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self, server_url: str, api_key: str):
-        if self._initialized:
-            return
+class HashiCorpVault:
+    def __init__(self, url: str = "http://localhost:8200", token: str = "dev-root-token"):
+        self.client = Client(url=url, token=token)
+        self._mount_path = "secret"
         
-        super().__init__()  # Call parent's __init__ with no vault_path
-        self.server_url = server_url.rstrip('/')
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.session.headers.update({
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        })
-        self._initialized = True
+        # Check if secrets engine is enabled and properly configured
+        try:
+            mounts = self.client.sys.list_mounted_secrets_engines()
+            if self._mount_path not in mounts['data']:
+                self.client.sys.enable_secrets_engine(
+                    backend_type='kv',
+                    path=self._mount_path,
+                    options={'version': '2'}
+                )
+            else:
+                # Verify it's a v2 KV store
+                mount_info = mounts['data'][f'{self._mount_path}/']['options']
+                if mount_info.get('version') != '2':
+                    raise ValueError(f"Existing {self._mount_path} mount is not a KV v2 secrets engine")
+        except Exception as e:
+            if "path is already in use" not in str(e):
+                raise e
 
-    def _get_bitwarden_items(self) -> list:
-        print(self.server_url)
-        response = self.session.get(f"{self.server_url}/api/sync")
-        print(response.json())
-        if response.status_code != 200:
-            raise ValueError(f"Failed to fetch items from Bitwarden: {response.text}")
-        return response.json().get('ciphers', [])
+    def add_credentials(self, url: str, username: str, password: str) -> None:
+        """Store credentials for a given URL"""
+        domain = urlparse(url).netloc or url  # Handle cases where url might not have scheme
+        self.client.secrets.kv.v2.create_or_update_secret(
+            path=f'credentials/{domain}',
+            secret=dict(
+                url=url,
+                username=username,
+                password=password
+            ),
+            mount_point=self._mount_path
+        )
 
-    def sync_with_bitwarden(self) -> None:
-        """Sync credentials from Bitwarden to local vault"""
-        items = self._get_bitwarden_items()
-        print(items)
-        
-        for item in items:
-            if item.get('type') == 1:  # Login type
-                login = item.get('login', {})
-                uri = login.get('uri', '')
-                if uri:
-                    creds = Credentials(
-                        url=uri,
-                        username=login.get('username', ''),
-                        password=login.get('password', '')
-                    )
-                    self.add_credentials(
-                        url=uri,
-                        username=creds.username,
-                        password=creds.password
-                    )
-        
-        logger.info(f"Synced {len(items)} items from Bitwarden")
+    def get_credentials(self, url: str) -> Optional[Credentials]:
+        """Retrieve credentials for a given URL"""
+        domain = urlparse(url).netloc or url
+        try:
+            secret = self.client.secrets.kv.v2.read_secret_version(
+                path=f'credentials/{domain}',
+                mount_point=self._mount_path
+            )
+            data = secret['data']['data']
+            return Credentials(
+                url=data['url'],
+                username=data['username'],
+                password=data['password']
+            )
+        except Exception:
+            return None
+
+    def remove_credentials(self, url: str) -> None:
+        """Remove credentials for a given URL"""
+        domain = urlparse(url).netloc or url
+        self.client.secrets.kv.v2.delete_metadata_and_all_versions(
+            path=f'credentials/{domain}',
+            mount_point=self._mount_path
+        )
