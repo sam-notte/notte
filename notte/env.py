@@ -12,6 +12,7 @@ from notte.actions.base import (
     ActionParameterValue,
     BrowserAction,
 )
+from notte.browser.dom_tree import InteractionDomNode
 from notte.browser.driver import BrowserConfig, BrowserDriver
 from notte.browser.node_type import NodeRole
 from notte.browser.observation import Observation, TrajectoryProgress
@@ -23,8 +24,10 @@ from notte.common.resource import AsyncResource
 from notte.controller.actions import (
     BaseAction,
     BrowserActionId,
+    GotoAction,
     InteractionAction,
     SelectDropdownOptionAction,
+    WaitAction,
 )
 from notte.controller.base import BrowserController
 from notte.controller.proxy import NotteActionProxy
@@ -55,14 +58,23 @@ class SimpleActionResolutionPipe:
             return action
         if isinstance(action, SelectDropdownOptionAction):
             return SimpleActionResolutionPipe.resolve_selector_locators(action, context)
-        selector_map: dict[str, str] = {
-            inode.id: inode.computed_attributes.selectors.xpath_selector
-            for inode in context.interaction_nodes()
-            if inode.computed_attributes.selectors.xpath_selector is not None
-        }
+        selector_map: dict[str, InteractionDomNode] = {inode.id: inode for inode in context.interaction_nodes()}
         if action.id not in selector_map:
             raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
-        action.selector = selector_map[action.id]
+        node = selector_map[action.id]
+        if node.computed_attributes.selectors.xpath_selector is None:
+            raise InvalidInternalCheckError(
+                check=f"No selector found for action {action.id}",
+                url=None,
+                dev_advice=(
+                    (
+                        "This technnically should never happen. There is likely an issue during playright "
+                        "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
+                    )
+                ),
+            )
+        action.selector = node.computed_attributes.selectors.xpath_selector
+        action.text_label = node.text
         return action
 
     @staticmethod
@@ -135,7 +147,7 @@ class NotteEnvConfig(BaseModel):
 
 class TrajectoryStep(BaseModel):
     obs: Observation
-    action: BaseAction | None
+    action: BaseAction
 
 
 class NotteEnv(AsyncResource):
@@ -196,7 +208,7 @@ class NotteEnv(AsyncResource):
 
     # ---------------------------- observe, step functions ----------------------------
 
-    def _preobserve(self, snapshot: BrowserSnapshot, action: BaseAction | None = None) -> Observation:
+    def _preobserve(self, snapshot: BrowserSnapshot, action: BaseAction) -> Observation:
         if len(self.trajectory) >= self.config.max_steps:
             raise MaxStepsReachedError(max_steps=self.config.max_steps)
         self._context = ProcessedSnapshotPipe.forward(snapshot, type=self.config.processing_type)
@@ -229,7 +241,7 @@ class NotteEnv(AsyncResource):
             check_snapshot = await self._browser.snapshot(screenshot=False)
             if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
                 logger.warning("Snapshot changed since the beginning of the action listing, retrying to observe again")
-                _ = self._preobserve(check_snapshot)
+                _ = self._preobserve(check_snapshot, action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)))
                 return await self._observe(retry=retry - 1, pagination=pagination)
 
         if (
@@ -244,7 +256,7 @@ class NotteEnv(AsyncResource):
     @timeit("goto")
     async def goto(self, url: str | None) -> Observation:
         snapshot = await self._browser.goto(url)
-        return self._preobserve(snapshot)
+        return self._preobserve(snapshot, action=GotoAction(url=snapshot.metadata.url))
 
     @timeit("observe")
     async def observe(

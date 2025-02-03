@@ -126,7 +126,7 @@ class DOMElementNode(DOMBaseNode):
 
     @override
     def __post_init__(self) -> None:
-        if self.tag_name.startswith("wiz_"):
+        if self.tag_name is not None and self.tag_name.startswith("wiz_"):
             self.tag_name = self.tag_name[len("wiz_") :].replace("_", "-")
         # replace also in the attributes
         self.attributes = cleanup_aria_attributes(self.attributes)

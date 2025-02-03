@@ -85,8 +85,10 @@ Notes:
    - only use multiple actions if it makes sense.
    - use maximum {{max_actions_per_step}} actions per sequence
 
+9. Long tasks:
+- If the task is long keep track of the status in the memory. If the ultimate task requires multiple subinformation, keep track of the status in the memory
+
 Functions:
 {{& action_description}}
 
 Remember: Your responses must be valid JSON matching the specified format. Each action in the sequence must be valid.
-You first action should always be a `{{goto_action_name}}` action with a url related to the task. If you don't have a url, simply use `https://www.google.com` as the url.

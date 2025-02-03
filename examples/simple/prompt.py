@@ -5,6 +5,7 @@ from pathlib import Path
 import chevron
 
 from notte.controller.actions import (
+    BaseAction,
     ClickAction,
     CompletionAction,
     FillAction,
@@ -23,47 +24,28 @@ class SimplePrompt:
         self.max_actions_per_step: int = max_actions_per_step
         self.space: ActionSpace = ActionSpace(description="")
 
+    def _json_dump(self, steps: list[BaseAction]) -> str:
+        lines = ",\n  ".join(
+            [f"{action.name()}: {json.dumps(action.model_dump(exclude=action.non_agent_fields()))}" for action in steps]
+        )
+        return "{\n  " + lines + "\n}"
+
     def example_form_filling(self) -> str:
-        return json.dumps(
-            [
-                {
-                    FillAction.name(): FillAction(id="I1", value="username").model_dump(
-                        exclude={"category", "description", "selector", "press_enter"}
-                    ),
-                },
-                {
-                    FillAction.name(): FillAction(id="I2", value="password").model_dump(
-                        exclude={"category", "description", "selector", "press_enter"}
-                    ),
-                },
-                {
-                    ClickAction.name(): ClickAction(id="B1").model_dump(
-                        exclude={"category", "description", "selector", "press_enter"}
-                    ),
-                },
-            ],
-            indent=2,
+        return self._json_dump(
+            [FillAction(id="I1", value="username"), FillAction(id="I2", value="password"), ClickAction(id="B1")]
         )
 
     def example_navigation_and_extraction(self) -> str:
-        return json.dumps(
-            [
-                {
-                    GotoAction.name(): GotoAction(url="https://www.google.com").model_dump(
-                        exclude={"category", "description"}
-                    ),
-                },
-                {
-                    ScrapeAction.name(): ScrapeAction().model_dump(exclude={"category", "description"}),
-                },
-            ],
-            indent=2,
-        )
+        return self._json_dump([GotoAction(url="https://www.google.com"), ScrapeAction()])
+
+    def completion_example(self) -> str:
+        return self._json_dump([CompletionAction(success=True, answer="<answer to the task>")])
 
     def example_step(self) -> str:
         return """
 {
   "state": {
+    "page_summary": "On the page are company a,b,c wtih their revenue 1,2,3.",
     "previous_goal_eval": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Ignore the action result. The website is the ground truth. Also mention if something unexpected happened like new suggestions in an input field. Shortly state why/why not",
     "memory": "Description of what has been done and what you need to remember until the end of the task",
     "next_goal": "What needs to be done with the next actions"
@@ -77,11 +59,6 @@ class SimplePrompt:
   ]
 }
 """
-
-    def completion_example(self) -> str:
-        return CompletionAction(success=True, answer="<answer to the task>").model_dump_json(
-            indent=2, exclude={"category", "description", "id"}
-        )
 
     def system(self) -> str:
         return chevron.render(
@@ -101,7 +78,7 @@ class SimplePrompt:
 
     def task(self, task: str):
         return f"""
-Your ultimate task is: {task}.
+Your ultimate task is: "{task}".
 If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task.
 If not, continue as usual.
 """

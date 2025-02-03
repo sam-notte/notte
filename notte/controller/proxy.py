@@ -14,7 +14,6 @@ from notte.controller.actions import (
     PressKeyAction,
     ReloadAction,
     ScrapeAction,
-    ScreenshotAction,
     ScrollDownAction,
     ScrollUpAction,
     SelectDropdownOptionAction,
@@ -38,8 +37,8 @@ class NotteActionProxy:
                 if len(params) != 1:
                     raise MoreThanOneParameterActionError(action.id, len(params))
                 return ScrapeAction()
-            case BrowserActionId.SCREENSHOT:
-                return ScreenshotAction()
+            # case BrowserActionId.SCREENSHOT:
+            #     return ScreenshotAction()
             case BrowserActionId.GO_BACK:
                 return GoBackAction()
             case BrowserActionId.GO_FORWARD:

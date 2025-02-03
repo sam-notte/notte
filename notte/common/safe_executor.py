@@ -1,5 +1,6 @@
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Generic, TypeVar, final
+from typing import Callable, Generic, TypeVar, final
 
 from pydantic_core import ValidationError
 
@@ -11,13 +12,14 @@ T = TypeVar("T")  # Target type
 
 
 @dataclass
-class ExecutionStatus(Generic[T]):
-    status: bool
+class ExecutionStatus(Generic[S, T]):
+    input: S
     output: T | None
+    success: bool
     message: str
 
     def get(self) -> T:
-        if self.output is None or not self.status:
+        if self.output is None or not self.success:
             raise ValueError(f"Execution failed with message: {self.message}")
         return self.output
 
@@ -41,27 +43,38 @@ class SafeActionExecutor(Generic[S, T]):
         self.consecutive_failures = 0
         self.raise_on_failure = raise_on_failure
 
-    def on_failure(self, error_msg: str, e: Exception) -> ExecutionStatus[T]:
+    def on_failure(self, input_data: S, error_msg: str, e: Exception) -> ExecutionStatus[S, T]:
         self.consecutive_failures += 1
         if self.consecutive_failures >= self.max_failures:
             raise MaxConsecutiveFailuresError(self.max_failures) from e
         if self.raise_on_failure:
             raise StepExecutionFailure(error_msg) from e
-        return ExecutionStatus(status=False, output=None, message=error_msg)
+        return ExecutionStatus(
+            input=input_data,
+            output=None,
+            success=False,
+            message=error_msg,
+        )
 
-    async def execute(self, input_data: S) -> ExecutionStatus[T]:
+    async def execute(self, input_data: S) -> ExecutionStatus[S, T]:
         try:
             result = await self.func(input_data)
             self.consecutive_failures = 0
             return ExecutionStatus(
-                status=True, output=result, message=f"Successfully executed action with input: {input_data}"
+                input=input_data,
+                success=True,
+                output=result,
+                message=f"Successfully executed action with input: {input_data}",
             )
         except RateLimitError as e:
-            return self.on_failure("Rate limit reached. Waiting before retry.", e)
+            return self.on_failure(input_data, "Rate limit reached. Waiting before retry.", e)
         except NotteBaseError as e:
-            return self.on_failure(f"Failure during action execution with error: {e.dev_message} : {e.user_message}", e)
+            return self.on_failure(
+                input_data, f"Failure during action execution with error: {e.dev_message} : {e.user_message}", e
+            )
         except ValidationError as e:
             return self.on_failure(
+                input_data,
                 (
                     f"JSON Schema Validation error: The output format is invalid. "
                     f"Please ensure your response follows the expected schema. Details: {str(e)}"
@@ -69,4 +82,4 @@ class SafeActionExecutor(Generic[S, T]):
                 e,
             )
         except Exception as e:
-            return self.on_failure(f"An unexpected error occurred: {e}", e)
+            return self.on_failure(input_data, f"An unexpected error occurred: {e}", e)

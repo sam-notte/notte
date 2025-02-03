@@ -17,7 +17,6 @@ from notte.controller.actions import (
     PressKeyAction,
     ReloadAction,
     ScrapeAction,
-    ScreenshotAction,
     ScrollDownAction,
     ScrollUpAction,
     SelectDropdownOptionAction,
@@ -61,8 +60,8 @@ class BrowserController:
                     await self.page.mouse.wheel(delta_x=0, delta_y=-amount)
                 else:
                     await self.page.keyboard.press("PageUp")
-            case ScreenshotAction():
-                return await self.driver.snapshot(screenshot=True)
+            # case ScreenshotAction():
+            #     return await self.driver.snapshot(screenshot=True)
             case ScrapeAction():
                 raise NotImplementedError("Scrape action is not supported in the browser controller")
             case CompletionAction(success=success, answer=answer):

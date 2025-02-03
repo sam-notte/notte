@@ -119,7 +119,7 @@ class ActionSpace(BaseActionSpace):
         for action_name, action_cls in self.action_map.items():
             try:
                 # Get schema and safely remove common fields
-                skip_keys = ["press_enter", "category", "option_selector"]
+                skip_keys = action_cls.non_agent_fields().difference(set(["description"]))
                 sub_skip_keys = ["title", "$ref"]
                 schema = {
                     k: {sub_k: sub_v for sub_k, sub_v in v.items() if sub_k not in sub_skip_keys}
@@ -135,16 +135,11 @@ class ActionSpace(BaseActionSpace):
                         dev_advice="This should never happen.",
                     )
                 _description: str = __description["default"]  # type: ignore
-                if "selector" in schema:
-                    _ = schema.pop("selector")
-                else:
-                    # ids should not be diplayed for non-interaction actions
-                    _ = schema.pop("id")
                 # Format as: ActionName: {param1: {type: str, description: ...}, ...}
                 description = f"""
-{_description}:
+* "{action_name}" : {_description}. Format:
 ```json
-{json.dumps({action_name: schema}, indent=2)}
+{json.dumps({action_name: schema})}
 ```
 """
                 descriptions.append(description)

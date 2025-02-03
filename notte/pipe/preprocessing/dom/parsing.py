@@ -40,11 +40,11 @@ class ParseDomTreePipe:
     async def forward(page: Page, config: DomParsingConfig | None = None) -> NotteDomNode:
         config = config or DomParsingConfig()
         dom_tree = await ParseDomTreePipe.parse_dom_tree(page, config)
-        for step in [simple_generate_sequential_ids, generate_notte_selector]:
-            dom_tree = step(dom_tree)
-            if isinstance(dom_tree, dict):
-                raise ValueError(f"Dom tree is not a valid NotteDomNode: {dom_tree}")
-        return dom_tree.to_notte_domnode()
+        dom_tree = simple_generate_sequential_ids(dom_tree)
+        _dom_tree = generate_notte_selector(dom_tree)
+        if isinstance(_dom_tree, dict):
+            raise ValueError(f"Dom tree is not a valid NotteDomNode: {_dom_tree}")
+        return _dom_tree.to_notte_domnode()
 
     @staticmethod
     async def parse_dom_tree(page: Page, config: DomParsingConfig) -> DOMBaseNode:

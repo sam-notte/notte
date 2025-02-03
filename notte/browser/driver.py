@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from notte.actions.base import ExecutableAction
 from notte.actions.executor import ActionExecutor, get_executor
-from notte.browser.dom_tree import A11yNode, A11yTree
+from notte.browser.dom_tree import A11yNode, A11yTree, DomNode
 from notte.browser.pool import BrowserPool, BrowserResource
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import (
@@ -33,8 +33,10 @@ from notte.utils.url import is_valid_url
 class BrowserConfig(BaseModel):
     headless: bool = False
     goto_timeout: int = 10000
+    goto_retry_timeout: int = 1000
     retry_timeout: int = 1000
-    step_timeout: int = 200
+    step_timeout: int = 1000
+    short_wait_timeout: int = 200
     screenshot: bool | None = True
     empty_page_max_retry: int = 5
 
@@ -59,7 +61,7 @@ class PlaywrightResource:
         # Get or create a browser from the pool
         self._resource = await self.browser_pool.get_browser_resource(self.config.headless)
         # Create and track a new context
-        self._resource.page.set_default_timeout(self.config.goto_timeout)
+        self._resource.page.set_default_timeout(self.config.step_timeout)
 
     async def close(self) -> None:
         if self._resource is not None:
@@ -103,7 +105,7 @@ class BrowserDriver(AsyncResource):
         await self.short_wait()
 
     async def short_wait(self) -> None:
-        await self.page.wait_for_timeout(self._playwright.config.step_timeout)
+        await self.page.wait_for_timeout(self._playwright.config.short_wait_timeout)
 
     async def snapshot(self, screenshot: bool | None = None, retries: int | None = None) -> BrowserSnapshot:
         # logger.error(f"Taking snapshot of {self.page.url}")
@@ -113,18 +115,28 @@ class BrowserDriver(AsyncResource):
             retries = self._playwright.config.empty_page_max_retry
         if retries <= 0:
             raise EmptyPageContentError(url=self.page.url, nb_retries=self._playwright.config.empty_page_max_retry)
+        html_content: str = ""
+        a11y_simple: A11yNode | None = None
+        a11y_raw: A11yNode | None = None
+        dom_node: DomNode | None = None
         try:
             html_content = await self.page.content()
-            a11y_simple: A11yNode | None = await self.page.accessibility.snapshot()  # type: ignore
-            a11y_raw: A11yNode | None = await self.page.accessibility.snapshot(interesting_only=False)  # type: ignore
+            a11y_simple = await self.page.accessibility.snapshot()  # type: ignore
+            a11y_raw = await self.page.accessibility.snapshot(interesting_only=False)  # type: ignore
             dom_node = await ParseDomTreePipe.forward(self.page)
         except Exception as e:
             if "has been closed" in str(e):
                 raise BrowserExpiredError() from e
-            raise UnexpectedBrowserError(url=self.page.url) from e
+            if "Unable to retrieve content because the page is navigating and changing the content" in str(e):
+                # Should retry after the page is loaded
+                await self.short_wait()
+            else:
+                raise UnexpectedBrowserError(url=self.page.url) from e
+        if dom_node is None:
+            raise UnexpectedBrowserError(url=self.page.url)
         if a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
             logger.warning(f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms")
-            await self.short_wait()
+            await self.page.wait_for_timeout(self._playwright.config.goto_retry_timeout)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
         take_screenshot = screenshot if screenshot is not None else self._playwright.config.screenshot
         snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
@@ -178,7 +190,7 @@ class BrowserDriver(AsyncResource):
             raise InvalidURLError(url=url)
         try:
             _ = await self.page.goto(url)
-            await self.page.wait_for_load_state()
+            await self.page.wait_for_load_state(timeout=self._playwright.config.goto_timeout)
         except Exception as e:
             raise PageLoadingError(url=url) from e
         await self.long_wait()

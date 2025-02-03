@@ -11,6 +11,7 @@ from notte.controller.space import ActionSpace
 class AgentState(BaseModel):
     """Current state of the agent"""
 
+    page_summary: str
     previous_goal_eval: str
     memory: str
     next_goal: str
@@ -80,6 +81,7 @@ class StepAgentOutput(BaseModel):
     def log(self) -> None:
         """Log the agent's output with descriptive emojis for better visualization"""
         # Log previous goal evaluation
+        logger.debug(f"🤖 Page summary: {self.state.page_summary}")
         eval_emoji: Literal["👍", "⚠️", "🤔"] = (
             "👍"
             if "Success" in self.state.previous_goal_eval

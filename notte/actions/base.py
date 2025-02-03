@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing_extensions import override
 
 from notte.browser.dom_tree import ResolvedLocator
 from notte.controller.actions import ActionRole, ActionStatus, BaseAction
@@ -78,6 +79,11 @@ class Action(BaseAction, PossibleAction):
 
     def embedding_description(self) -> str:
         return self.role + " " + self.description
+
+    @override
+    def execution_message(self) -> str:
+        # TODO: think about a better message here
+        return f"Sucessfully executed: '{self.description}'"
 
 
 class ExecutableAction(Action):
