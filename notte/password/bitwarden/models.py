@@ -4,7 +4,7 @@ from notte.password.models import Credentials
 from urllib.parse import urlparse
 
 class HashiCorpVault:
-    def __init__(self, url: str = "http://localhost:8200", token: str = "dev-root-token"):
+    def __init__(self, url: str, token: str):
         self.client = Client(url=url, token=token)
         self._mount_path = "secret"
         
