@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from typing import Protocol, Dict, Optional, Union
+from typing import Dict, Optional, Protocol
+
 
 @dataclass
 class Credentials:
     url: str
     username: str
     password: str
+
 
 class VaultInterface(Protocol):
     def add_credentials(self, url: str, username: str, password: str) -> None:

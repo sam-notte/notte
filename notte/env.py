@@ -2,6 +2,7 @@ import asyncio
 from typing import Unpack, final
 
 from loguru import logger
+
 from notte.actions.base import (
     Action,
     ActionParameter,
@@ -16,6 +17,7 @@ from notte.browser.observation import Observation
 from notte.browser.snapshot import BrowserSnapshot
 from notte.common.logging import timeit
 from notte.common.resource import AsyncResource
+from notte.credentials.models import VaultInterface
 from notte.errors.actions import InvalidActionError
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.llms.service import LLMService
@@ -24,7 +26,6 @@ from notte.pipe.main import BaseContextToActionSpacePipe, ContextToActionSpacePi
 from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
 from notte.sdk.types import DEFAULT_MAX_NB_ACTIONS, DEFAULT_MAX_NB_STEPS
-from notte.credentials.models import VaultInterface
 
 
 @final
@@ -158,7 +159,7 @@ class NotteEnv(AsyncResource):
             params = self._vault.replace_placeholder_credentials(current_url, params)
 
         if SpecialAction.is_special(action_id):
-            return await self._execute_special(action_id, params)
+            return await self._execute_special(SpecialActionId(action_id), params)
         if action_id not in [inode.id for inode in self.context.interaction_nodes()]:
             raise InvalidActionError(action_id=action_id, reason=f"action '{action_id}' not found in page context.")
         action, _params = self._parse_env(action_id, params)
