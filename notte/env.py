@@ -2,7 +2,6 @@ import asyncio
 from typing import Unpack, final
 
 from loguru import logger
-
 from notte.actions.base import (
     Action,
     ActionParameter,
@@ -20,14 +19,12 @@ from notte.common.resource import AsyncResource
 from notte.errors.actions import InvalidActionError
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.llms.service import LLMService
-from notte.password.vault import Vault
 from notte.pipe.data_scraping import DataScrapingPipe
 from notte.pipe.main import BaseContextToActionSpacePipe, ContextToActionSpacePipe
 from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
 from notte.sdk.types import DEFAULT_MAX_NB_ACTIONS, DEFAULT_MAX_NB_STEPS
-from notte.utils.url import get_domain
-from notte.password.models import HashiCorpVault
+from notte.credentials.models import VaultInterface
 
 
 @final
@@ -57,19 +54,18 @@ class NotteEnv(AsyncResource):
         self,
         max_steps: int = DEFAULT_MAX_NB_STEPS,
         browser: BrowserDriver | None = None,
+        vault: VaultInterface | None = None,
         llmserve: LLMService | None = None,
         **browser_kwargs: Unpack[BrowserArgs],
-        vault_url: str = "http://localhost:8200",
-        vault_token: str = "dev-root-token",
     ) -> None:
         self._max_steps: int | None = max_steps
         self._browser: BrowserDriver = browser or BrowserDriver(**browser_kwargs)
+        self._vault = vault
         super().__init__(self._browser)
         self._trajectory: list[Observation] = []
         self._context: Context | None = None
         self._context_to_action_space_pipe: BaseContextToActionSpacePipe = ContextToActionSpacePipe(llmserve=llmserve)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, browser=self._browser)
-        self._vault = HashiCorpVault(url=vault_url, token=vault_token)
 
     @property
     def context(self) -> Context:
@@ -149,35 +145,6 @@ class NotteEnv(AsyncResource):
         logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
         return await self._obslisting(min_nb_actions, max_nb_actions)
 
-    def _replace_placeholder_credentials(
-        self, action_id: str, params: dict[str, str] | str | None
-    ) -> dict[str, str] | str | None:
-        """Replace placeholder credentials with actual credentials from vault if available."""
-        if not params or not isinstance(params, dict):
-            return params
-
-        # Get current URL from context
-        current_url = self.context.snapshot.metadata.url if self.context and self.context.snapshot else None
-        url = get_domain(current_url) if current_url else None
-        if not url:
-            return params
-
-        # Get credentials for current domain
-        creds = self._vault.get_credentials(url)
-        if not creds:
-            return params
-
-        # Replace placeholder values with actual credentials
-        print("params", params)
-        new_params = params.copy()
-        for key, value in new_params.items():
-            if value == "login@login_page.com":
-                new_params[key] = creds.username
-            elif value == "login_password":
-                new_params[key] = creds.password
-
-        return new_params
-
     @timeit("execute")
     async def execute(
         self,
@@ -185,11 +152,13 @@ class NotteEnv(AsyncResource):
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
-        # Replace placeholder credentials if present
-        params = self._replace_placeholder_credentials(action_id, params)
+        # Replace credentials only if vault is configured
+        if self._vault and isinstance(params, dict):
+            current_url = self.context.snapshot.metadata.url if self.context and self.context.snapshot else None
+            params = self._vault.replace_placeholder_credentials(current_url, params)
 
         if SpecialAction.is_special(action_id):
-            return await self._execute_special(action_id, params)  # type: ignore
+            return await self._execute_special(action_id, params)
         if action_id not in [inode.id for inode in self.context.interaction_nodes()]:
             raise InvalidActionError(action_id=action_id, reason=f"action '{action_id}' not found in page context.")
         action, _params = self._parse_env(action_id, params)

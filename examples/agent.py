@@ -5,12 +5,12 @@ from dotenv import load_dotenv
 from loguru import logger
 from typing_extensions import override
 
-from examples.credentials import get_credentials_for_domain
 from notte.common.agent import AgentOutput, BaseAgent
 from notte.common.parser import BaseNotteParser, Parser
 from notte.env import NotteEnv
 from notte.llms.engine import LLMEngine
 from notte.utils.url import clean_url
+from notte.credentials.models import VaultInterface
 
 _ = load_dotenv()
 
@@ -68,6 +68,7 @@ class SimpleNotteAgent(BaseAgent):
         max_steps: int,
         headless: bool,
         parser: Parser | None = None,
+        vault: VaultInterface | None = None,
     ):
         self.model: str = model
         self.llm: LLMEngine = LLMEngine()
@@ -78,6 +79,7 @@ class SimpleNotteAgent(BaseAgent):
         self.env: NotteEnv = NotteEnv(
             headless=headless,
             max_steps=max_steps,
+            vault=vault,
         )
 
     def think(self, messages: list[dict[str, str]]) -> str:
@@ -146,6 +148,28 @@ class SimpleNotteAgent(BaseAgent):
         await self.env.reset()
         self.step_count = 0
 
+    async def is_login_page(self) -> bool:
+        """
+        Use LLM to determine if the current page is a login page.
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that determines if a webpage is a login page. Respond with only 'true' or 'false'."
+            },
+            {
+                "role": "user",
+                "content": f"Based on the following webpage content, is this a login page? Only respond with 'true' or 'false'.\n\n{self.env.context.snapshot.text}"
+            }
+        ]
+        
+        response = self.llm.completion(
+            messages=messages,
+            model=self.model,
+        ).choices[0].message.content.lower().strip()
+        
+        return response == "true"
+
     @override
     async def run(self, task: str, url: str | None = None) -> AgentOutput:
         """
@@ -157,14 +181,12 @@ class SimpleNotteAgent(BaseAgent):
         3. When and how to determine task completion
         4. Error handling and recovery strategies
         """
-        credentials, password = get_credentials_for_domain(clean_url(url) if url else None)
-        if credentials and password:
-            logger.info(f"🔑 Using credentials for {url}: {credentials} / {password}")
-        else:
-            logger.info(f"🔑 No credentials found for {url}")
-
         logger.info(f"🚀 starting agent with task: {task} and url: {url}")
+        
         async with self.env:
+            # First observation to get initial page content
+            initial_obs = await self.env.observe(url)
+            
             messages = [
                 {
                     "role": "system",
