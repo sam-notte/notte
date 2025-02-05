@@ -39,9 +39,13 @@ class LLMEngine:
         response_format: type[T],
         model: str | None = None,
     ) -> T:
-        content = self.single_completion(messages, model)
-        content = self.sc.extract(content).strip()
+        content = self.single_completion(messages, model).strip()
         logger.info(f"LLM response: \n{content}")
+        if "```json" in content:
+            # extract content from JSON code blocks
+            content = self.sc.extract(content).strip()
+        elif not content.startswith("{") or not content.endswith("}"):
+            raise LLMParsingError(f"Invalid LLM response. JSON code blocks or JSON object expected, got: {content}")
         try:
             return response_format.model_validate_json(content)
         except ValidationError as e:
@@ -135,7 +139,7 @@ class StructuredContent:
         """Extract content from text based on defined tags
 
         Parameters:
-            text: The text to extract content from
+                text: The text to extract content from
 
         """
         content = text

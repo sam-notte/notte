@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 
-from common.parser import BaseParser, NotteParser, TaskOutput
-from common.perception import BasePerception, NottePerception
-from common.prompt import NottePrompt
 from loguru import logger
 from pydantic import BaseModel
 
 from notte.browser.observation import Observation
 from notte.browser.snapshot import BrowserSnapshot
+from notte.common.parser import BaseParser, NotteParser, TaskOutput
+from notte.common.perception import BasePerception, NottePerception
+from notte.common.prompt import NottePrompt
 from notte.controller.actions import BaseAction
 from notte.env import NotteEnv
 

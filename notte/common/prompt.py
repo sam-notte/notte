@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-from common.parser import NotteParser
 from typing_extensions import override
+
+from notte.common.parser import NotteParser
 
 
 class BasePrompt(ABC):

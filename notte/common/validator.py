@@ -19,9 +19,12 @@ Try to understand the page and help the model with suggestions like scroll, do x
 
 Task to validate: {{task}}.
 
-Return a JSON object with 2 keys: `is_valid` and `reason` (inside `json` code block):
+Return a JSON object with 2 keys: `is_valid` and `reason`:
 - `is_valid` is a boolean that indicates if the output is correct.
 - `reason` is a string that explains why it is valid or not.
+
+CRITICAL: Return the JSON object inside a JSON code block (i.e. ```json ... ```)
+
 Example:
 ```json
 {
@@ -29,6 +32,8 @@ Example:
     "reason": "The user wanted to search for "cat photos", but the agent searched for "dog photos" instead."
 }
 ```
+
+Your turn:
 """
 
 

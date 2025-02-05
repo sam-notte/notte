@@ -53,14 +53,14 @@ class BrowserController:
                 await self.page.keyboard.press(key)
             case ScrollUpAction(amount=amount):
                 if amount is not None:
-                    await self.page.mouse.wheel(delta_x=0, delta_y=amount)
-                else:
-                    await self.page.keyboard.press("PageDown")
-            case ScrollDownAction(amount=amount):
-                if amount is not None:
                     await self.page.mouse.wheel(delta_x=0, delta_y=-amount)
                 else:
                     await self.page.keyboard.press("PageUp")
+            case ScrollDownAction(amount=amount):
+                if amount is not None:
+                    await self.page.mouse.wheel(delta_x=0, delta_y=amount)
+                else:
+                    await self.page.keyboard.press("PageDown")
             # case ScreenshotAction():
             #     return await self.driver.snapshot(screenshot=True)
             case ScrapeAction():

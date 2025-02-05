@@ -34,6 +34,8 @@ max_actions_per_step = 5
 # Remove base 64 images from current state
 # TODO: add fault tolerance LLM parsing
 # TODO: only display modal actions when modal is open (same as before)
+# TODO: handle prevent default click JS events
+# TODO: add some tree structure for menu elements (like we had in notte before. Ex. Menu in Arxiv)
 
 # TODO: fix this piece of code
 # ```
