@@ -23,8 +23,7 @@ class InvalidURLError(BrowserError):
     ) -> None:
         super().__init__(
             dev_message=(
-                f"Invalid URL: {url}. Check if the URL is reachable. "
-                "URLs should start with https:// or http://. "
+                f"Invalid URL: {url}. Check if the URL is reachable. URLs should start with https:// or http://. "
             ),
             user_message=(
                 "Impossible to access the given URL. Check if the URL is reachable. "
@@ -53,9 +52,7 @@ class BrowserNotStartedError(BrowserError):
                 "Browser not started. You should use `await browser.start()` to start a new session "
                 "(or `await env.start()`)."
             ),
-            user_message=(
-                "Session not started. Please start a new session to continue."
-            ),
+            user_message=("Session not started. Please start a new session to continue."),
             should_retry_later=False,
         )
 

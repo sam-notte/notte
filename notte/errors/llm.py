@@ -40,11 +40,8 @@ class InvalidPromptTemplateError(NotteBaseError):
     def __init__(self, prompt_id: str, message: str) -> None:
         super().__init__(
             dev_message=(
-                f"Invalid prompt template: {prompt_id}. {message}. "
-                "This should not happen in production environment."
+                f"Invalid prompt template: {prompt_id}. {message}. This should not happen in production environment."
             ),
-            user_message=(
-                "Sorry, Notte failed to generate a valid response for your request this time."
-            ),
+            user_message=("Sorry, Notte failed to generate a valid response for your request this time."),
             should_retry_later=False,
         )

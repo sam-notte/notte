@@ -25,9 +25,7 @@ def test_parse_parameter_empty_values_list():
 
 
 def test_parse_parameter_quoted_values():
-    param = parse_table_parameter(
-        'name: paramC, type: string, values=["val1","val2","val3"]'
-    )
+    param = parse_table_parameter('name: paramC, type: string, values=["val1","val2","val3"]')
     assert param.name == "paramC"
     assert param.type == "string"
     assert param.values == ["val1", "val2", "val3"]
@@ -75,14 +73,8 @@ def action_parameters() -> list[str]:
         # Settings and Preferences
         " B3: Open accessibility feedback dialog",
         # Search Actions
-        (
-            " I1: Select ticket type "
-            "(ticketType: string = [Round trip, One way, Multi-city])"
-        ),
-        (
-            " I2: Select seating class "
-            "(seatingClass: string = [Economy, Premium economy, Business, First])"
-        ),
+        (" I1: Select ticket type (ticketType: string = [Round trip, One way, Multi-city])"),
+        (" I2: Select seating class (seatingClass: string = [Economy, Premium economy, Business, First])"),
         " I3: Enter origin (origin: string = [Boston, New York, Los Angeles, ...])",
         " I6: Enter return date (returnDate: date = [2023-12-01, 2023-12-02, ...])",
         # Flight Search and Booking Actions
@@ -195,8 +187,6 @@ def action_parameters_with_values() -> list[list[ActionParameter]]:
     "action_str, expected_parameters",
     zip(action_parameters(), action_parameters_with_values()),
 )
-def test_parse_action_parameters(
-    action_str: str, expected_parameters: list[ActionParameter]
-) -> None:
+def test_parse_action_parameters(action_str: str, expected_parameters: list[ActionParameter]) -> None:
     parsed_parameters = parse_action_parameters(action_str)
     assert parsed_parameters == expected_parameters  # nosec: B101

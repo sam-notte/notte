@@ -33,8 +33,7 @@ class InvalidInternalCheckError(SnapshotProcessingError):
     def __init__(self, url: str | None, check: str, dev_advice: str) -> None:
         super().__init__(
             dev_message=(
-                f"Internal check '{check}' failed during snapshot processing. "
-                f"Advice to resolve: {dev_advice}"
+                f"Internal check '{check}' failed during snapshot processing. Advice to resolve: {dev_advice}"
             ),
             url=url,
         )
@@ -72,12 +71,8 @@ class NodeFilteringResultsInEmptyGraph(SnapshotProcessingError):
 class InvalidA11yTreeType(InvalidInternalCheckError):
     def __init__(self, type: str) -> None:
         super().__init__(
-            check=(
-                f"Unknown a11y tree type {type}. Valid types are: 'processed', 'simple', 'raw'."
-            ),
-            dev_advice=(
-                "This should not happen. Someone proably added a new type without updating properly the code."
-            ),
+            check=(f"Unknown a11y tree type {type}. Valid types are: 'processed', 'simple', 'raw'."),
+            dev_advice=("This should not happen. Someone proably added a new type without updating properly the code."),
             url=None,
         )
 

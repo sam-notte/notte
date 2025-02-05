@@ -4,9 +4,8 @@ from typing import Any
 from loguru import logger
 from typing_extensions import override
 
-from notte.browser.dom_tree import ComputedDomAttributes, DomAttributes
+from notte.browser.dom_tree import ComputedDomAttributes, DomAttributes, NodeSelectors
 from notte.browser.dom_tree import DomNode as NotteDomNode
-from notte.browser.dom_tree import NodeSelectors
 from notte.browser.node_type import NodeRole, NodeType
 
 VERBOSE = False
@@ -44,17 +43,13 @@ class DOMBaseNode:
 
     def __post_init__(self) -> None:
         self.children = [] if getattr(self, "children", None) is None else self.children
-        self.notte_id = (
-            None if getattr(self, "notte_id", None) is None else self.notte_id
-        )
+        self.notte_id = None if getattr(self, "notte_id", None) is None else self.notte_id
 
     def to_dict(self) -> dict[str, str]:
         raise NotImplementedError("to_dict method not implemented for DOMBaseNode")
 
     def to_notte_domnode(self) -> NotteDomNode:
-        raise NotImplementedError(
-            "to_notte_domnode method not implemented for DOMBaseNode"
-        )
+        raise NotImplementedError("to_notte_domnode method not implemented for DOMBaseNode")
 
     @property
     def name(self) -> str:
@@ -175,9 +170,7 @@ class DOMElementNode(DOMBaseNode):
         if self.tag_name is None or len(self.tag_name) == 0:
             if len(self.attributes) == 0 and len(self.children) == 0:
                 return "none"
-            raise ValueError(
-                f"No tag_name found for element: {self} with attributes: {self.attributes}"
-            )
+            raise ValueError(f"No tag_name found for element: {self} with attributes: {self.attributes}")
         clean_tag_name = self.tag_name.lower().replace("-", "").replace("_", "")
         match self.tag_name.lower():
             # Structural elements
@@ -306,9 +299,7 @@ class DOMElementNode(DOMBaseNode):
                     return "MenuListPopup"
 
                 if VERBOSE:
-                    logger.warning(
-                        f"No role found for tag: {self.tag_name} with attributes: {self.attributes}"
-                    )
+                    logger.warning(f"No role found for tag: {self.tag_name} with attributes: {self.attributes}")
                 return "generic"
 
     @property
@@ -413,9 +404,7 @@ class DOMElementNode(DOMBaseNode):
 
         first_5_attrs = list(self.attributes.items())[:5]
         if VERBOSE:
-            logger.error(
-                f"No name found for element: {self} with attributes: {first_5_attrs}"
-            )
+            logger.error(f"No name found for element: {self} with attributes: {first_5_attrs}")
         return ""
 
     def _get_text_content(self) -> str:

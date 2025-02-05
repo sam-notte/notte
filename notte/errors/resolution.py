@@ -5,10 +5,7 @@ from notte.errors.processing import InvalidInternalCheckError
 class NodeResolutionAttributeError(InvalidInternalCheckError):
     def __init__(self, node: DomNode, error_component: str) -> None:
         super().__init__(
-            check=(
-                f"node '{error_component}' are required to create an executable action from a node "
-                "but are None"
-            ),
+            check=(f"node '{error_component}' are required to create an executable action from a node but are None"),
             url=node.get_url(),
             dev_advice=(
                 "This technnically should never happen. There is likely an issue during node resolution "

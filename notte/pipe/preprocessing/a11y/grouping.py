@@ -25,16 +25,13 @@ def get_group_func(group_type: NodeCategory) -> Callable[[A11yNode], A11yNode]:
             raise InvalidInternalCheckError(
                 check=f"Unknown group type: {group_type}. Valid group types are: {list(NodeCategory)}",
                 dev_advice=(
-                    "This should not happen. Someone proably added a new group type"
-                    " without updating properly the code."
+                    "This should not happen. Someone proably added a new group type without updating properly the code."
                 ),
                 url=None,
             )
 
 
-def should_group(
-    node: A11yNode, group_roles: set[str], add_group_role: bool = True
-) -> bool:
+def should_group(node: A11yNode, group_roles: set[str], add_group_role: bool = True) -> bool:
     all_group_roles = set(list(group_roles))
     if add_group_role:
         all_group_roles.update(["group", "generic", "none"])
@@ -45,25 +42,18 @@ def should_group(
         if len(children_roles(node).difference(all_group_roles)) > 0:
             return 0
         # count the number of valid groups in the children
-        return sum(
-            [node.get("children_roles_count", {}).get(role, 0) for role in group_roles]
-        )
+        return sum([node.get("children_roles_count", {}).get(role, 0) for role in group_roles])
 
     # 2 conditions to be able to group:
     # (a) all children are in the group_roles but not the node itself
     # (b) at least 2 children are in the group_roles but there is at
     # least one child that is not in the group_roles
-    nb_invalid_children = sum(
-        [nb_valid_groups(child) == 0 for child in node.get("children", [])]
-    )
-    total_nb_valid_groups = sum(
-        [nb_valid_groups(child) for child in node.get("children", [])]
-    )
+    nb_invalid_children = sum([nb_valid_groups(child) == 0 for child in node.get("children", [])])
+    total_nb_valid_groups = sum([nb_valid_groups(child) for child in node.get("children", [])])
 
-    return (
-        len(children_roles(node).difference(all_group_roles)) == 0
-        and node.get("role") not in all_group_roles
-    ) or (total_nb_valid_groups >= 2 and nb_invalid_children >= 1)
+    return (len(children_roles(node).difference(all_group_roles)) == 0 and node.get("role") not in all_group_roles) or (
+        total_nb_valid_groups >= 2 and nb_invalid_children >= 1
+    )
 
 
 def is_text_group(node: A11yNode, add_group_role: bool = True) -> bool:
@@ -126,11 +116,7 @@ def group_text_children(node: A11yNode) -> A11yNode:
             if node.get("role") in ["heading", "text"]:
                 return [node["name"]]
             if node.get("children"):
-                return [
-                    text
-                    for child in node.get("children", [])
-                    for text in flatten_text(child)
-                ]
+                return [text for child in node.get("children", []) for text in flatten_text(child)]
             return []
 
         flattened_texts = [text for child in children for text in flatten_text(child)]
@@ -186,9 +172,7 @@ def group_text_children(node: A11yNode) -> A11yNode:
             node["name"] = markdown
         node = add_group_role(node, "text-group")
         node["markdown"] = markdown
-        node["children_roles_count"] = _compute_children_roles_count(
-            text_group_children
-        )
+        node["children_roles_count"] = _compute_children_roles_count(text_group_children)
         del node["children"]
     else:
         # print("---------------------------------------")
@@ -222,12 +206,7 @@ def group_interaction_children(node: A11yNode) -> A11yNode:
         else:
             # TODO: FIX THIS OTHERWISE INTERACTION CHILDREN WILL BE REORDERED
             # WHICH WILL CAUSE PROBLEMS WITH THE NOTTE IDS
-            if not all(
-                [
-                    role not in children_roles(child)
-                    for role in NodeCategory.INTERACTION.roles()
-                ]
-            ):
+            if not all([role not in children_roles(child) for role in NodeCategory.INTERACTION.roles()]):
                 raise InvalidA11yChildrenError(
                     check=f"Child {child} has invalid roles: {children_roles(child)}",
                     nb_children=len(node.get("children", [])),
@@ -263,9 +242,7 @@ def group_interaction_children(node: A11yNode) -> A11yNode:
                         "group_role": "interaction-group",
                         "name": child["name"],
                         "children": sub_children,
-                        "children_roles_count": _compute_children_roles_count(
-                            sub_children
-                        ),
+                        "children_roles_count": _compute_children_roles_count(sub_children),
                     }
                 )
         return flattened
@@ -287,9 +264,7 @@ def group_interaction_children(node: A11yNode) -> A11yNode:
     if len(other_children) == 0:
         node = add_group_role(node, "interaction-group")
         node["children"] = flattened_interactions
-        node["children_roles_count"] = _compute_children_roles_count(
-            flattened_interactions
-        )
+        node["children_roles_count"] = _compute_children_roles_count(flattened_interactions)
     else:
         # print("---------------------------------------")
         node["children"] = other_children
@@ -300,9 +275,7 @@ def group_interaction_children(node: A11yNode) -> A11yNode:
                 # 'name': 'KKKAKKAKAKAKAKAKKAKAKAKKAKA',
                 "name": "",
                 "children": flattened_interactions,
-                "children_roles_count": _compute_children_roles_count(
-                    flattened_interactions
-                ),
+                "children_roles_count": _compute_children_roles_count(flattened_interactions),
             }
         )
     return node
@@ -341,11 +314,7 @@ def group_list_text_children(node: A11yNode) -> A11yNode:
                     markdown += f"{indent}* {text_content}\n"
 
                 # Handle nested lists
-                nested_items = [
-                    c
-                    for c in child.get("children", [])
-                    if c.get("role") in ["list", "listitem"]
-                ]
+                nested_items = [c for c in child.get("children", []) if c.get("role") in ["list", "listitem"]]
                 if nested_items:
                     markdown += transform_to_markdown_list(nested_items, level + 1)
 
@@ -381,9 +350,7 @@ def group_list_text_children(node: A11yNode) -> A11yNode:
     return new_node
 
 
-def prune_non_interaction_node(
-    node: A11yNode, append_text_node: bool = False
-) -> A11yNode:
+def prune_non_interaction_node(node: A11yNode, append_text_node: bool = False) -> A11yNode:
     # Heuristic:
     # If current node has some children that are interactions
     # Then the other children that don't have interaction role
@@ -413,10 +380,7 @@ def prune_non_interaction_node(
     # replace all other_children with a placeholder text node
 
     print(
-        (
-            f"Prune nb_other_children: {len(other_children)} with roles "
-            f"{_compute_children_roles_count(other_children)}"
-        )
+        (f"Prune nb_other_children: {len(other_children)} with roles {_compute_children_roles_count(other_children)}")
     )
 
     node["children"] = interactions_children

@@ -27,21 +27,15 @@ async def resolve_link_conflict(
         return href.replace("http://", "").replace("https://", "")
 
     base_url = remove_http(page.url).split("/")[0]
-    hrefs: list[str | None] = [
-        await locator.get_attribute("href") for locator in locators
-    ]
+    hrefs: list[str | None] = [await locator.get_attribute("href") for locator in locators]
     clean_hrefs: list[str] = [
-        remove_http(href).replace(base_url, "").replace("#", "")
-        for href in hrefs
-        if href is not None
+        remove_http(href).replace(base_url, "").replace("#", "") for href in hrefs if href is not None
     ]
 
     if len(set(clean_hrefs)) == 1:
         return locators[0]
     else:
-        logger.warning(
-            f"{len(locators)} locators found for link '{node['name']}': {clean_hrefs}"
-        )
+        logger.warning(f"{len(locators)} locators found for link '{node['name']}': {clean_hrefs}")
         return None
 
 
@@ -51,11 +45,7 @@ def list_all_text_names_in_subtree(node: A11yNode) -> list[str]:
         return []
     if role in ["text", "heading", "paragraph"]:
         return [node["name"]] if node.get("name") else []
-    return [
-        name
-        for child in node.get("children", [])
-        for name in list_all_text_names_in_subtree(child)
-    ]
+    return [name for child in node.get("children", []) for name in list_all_text_names_in_subtree(child)]
 
 
 def get_first_parent_with_text_elements(
@@ -171,21 +161,15 @@ name: '{node["name"]}' role: '{node["role"]}' and len({len(node_path)})
     full_node_path: list[A11yNode] = copy.deepcopy(node_path)
     full_node_path.append(node)
     if node_path[0]["role"] != "WebArea":
-        raise ConflictResolutionCheckError(
-            f"the root node should be a WebArea but is '{node_path[0]['role']}'"
-        )
+        raise ConflictResolutionCheckError(f"the root node should be a WebArea but is '{node_path[0]['role']}'")
     if len(full_node_path) < 2:
-        raise ConflictResolutionCheckError(
-            "there should be at least two nodes in the path"
-        )
+        raise ConflictResolutionCheckError("there should be at least two nodes in the path")
     for i in range(1, len(full_node_path) - 1):
         selected_nodes: list[A11yNode] = full_node_path[-i - 1 :]  # noqa: E203
         locator = None
         for _node in selected_nodes:
             base = page if locator is None else locator
-            locator = base.get_by_role(
-                role=_node["role"], name=_node["name"], exact=True
-            )  # type: ignore
+            locator = base.get_by_role(role=_node["role"], name=_node["name"], exact=True)  # type: ignore
         if locator is None:
             continue
         locators = await locator.all()
@@ -221,9 +205,7 @@ async def resolve_conflicts_for_nested_buttons(
     # if the conflicts are only on its children, we can resolve them
     # by selecting the parent button
     def nb_conflicting_children(n: A11yNode) -> int:
-        nb_conflicting = sum(
-            [nb_conflicting_children(child) for child in n.get("children", [])]
-        )
+        nb_conflicting = sum([nb_conflicting_children(child) for child in n.get("children", [])])
 
         if n["role"] == "button" and n["name"] == node["name"]:
             nb_conflicting += 1
@@ -262,9 +244,7 @@ def format_path_for_conflict_resolution(
     node = node_path[0]
     node_path = node_path[1:][::-1]
     if node_path[0]["role"] != "WebArea":
-        raise ConflictResolutionCheckError(
-            "The first node in the node path should be the root node"
-        )
+        raise ConflictResolutionCheckError("The first node in the node path should be the root node")
     return node, node_path
 
 
@@ -274,9 +254,7 @@ async def get_locator_for_node_id(
     node_path = find_node_path_by_id(tree, node_id)
     node, node_path = format_path_for_conflict_resolution(node_path)
     if node.get("id") != node_id:
-        raise ConflictResolutionCheckError(
-            f"Node with notte_id {node_id} not found in raw accessibility tree"
-        )
+        raise ConflictResolutionCheckError(f"Node with notte_id {node_id} not found in raw accessibility tree")
     return await get_locator_for_a11y_path(page, node, node_path, conflict_resolution)
 
 
@@ -296,10 +274,7 @@ async def get_locator_for_a11y_path(
         args["checked"] = True
 
     if node.get("role"):
-        if (
-            node["role"] in NodeCategory.TEXT.roles()
-            or node["role"] in NodeCategory.IMAGE.roles()
-        ):
+        if node["role"] in NodeCategory.TEXT.roles() or node["role"] in NodeCategory.IMAGE.roles():
             # no need to get a locator for images or text
             return None
         # Primary strategy: use role and name
@@ -314,10 +289,7 @@ async def get_locator_for_a11y_path(
     locators = await locator.all()
     if len(locators) == 0:
         logger.warning(
-            (
-                f"Warning: No locators found for '{node['name']}'"
-                f" with role '{node['role']}' trying to relax selector"
-            )
+            (f"Warning: No locators found for '{node['name']}' with role '{node['role']}' trying to relax selector")
         )
         # last resort: try to relax the selector
         locators = await try_relax_selector(page, node)
@@ -326,9 +298,7 @@ async def get_locator_for_a11y_path(
             return None
         if len(locators) == 1:
             return locators[0]
-        logger.warning(
-            f"Multiple locators found for node '{node['name']}' after relaxation (try resolution)"
-        )
+        logger.warning(f"Multiple locators found for node '{node['name']}' after relaxation (try resolution)")
 
     elif len(locators) == 1:
         return locators[0]
@@ -473,9 +443,7 @@ async def get_html_selector(locator: Locator) -> NodeSelectors | None:
             # If there's an nth selector
             nth_match = re.search(r"nth=(\d+)", selector)
             if nth_match:
-                position = (
-                    int(nth_match.group(1)) + 1
-                )  # nth is 0-based, XPath is 1-based
+                position = int(nth_match.group(1)) + 1  # nth is 0-based, XPath is 1-based
                 return return_selector(f"//{tag}[{position}]")
             return return_selector(f"//{tag}")
 
@@ -495,9 +463,7 @@ async def resolve_conflicts_by_order(
     # if there as as many locators as paths
     # then the ordering should be the same as the path
     check_node = node_path[0]
-    all_paths = find_all_paths_by_role_and_name(
-        node, check_node["role"], check_node["name"]
-    )
+    all_paths = find_all_paths_by_role_and_name(node, check_node["role"], check_node["name"])
     if len(all_paths) != len(locators):
         return locators[0]
     for path, locator in zip(all_paths, locators):
@@ -508,15 +474,9 @@ async def resolve_conflicts_by_order(
     )
 
 
-async def resolve_conflict_with_closest_neighbor(
-    page: Page, tree: A11yNode, node_id: str
-) -> Locator | None:
-    async def find_neighbors_with_valid_locators() -> tuple[
-        Locator | None, Locator | None
-    ]:
-        interactive_nodes_ids = [
-            n["id"] for n in list_interactive_nodes(tree, only_with_id=True)
-        ]
+async def resolve_conflict_with_closest_neighbor(page: Page, tree: A11yNode, node_id: str) -> Locator | None:
+    async def find_neighbors_with_valid_locators() -> tuple[Locator | None, Locator | None]:
+        interactive_nodes_ids = [n["id"] for n in list_interactive_nodes(tree, only_with_id=True)]
         node_index = interactive_nodes_ids.index(node_id)
 
         async def get_valid_locator(index: int, step: int = 1) -> Locator | None:
@@ -531,9 +491,7 @@ async def resolve_conflict_with_closest_neighbor(
             )
             if locator is None:
                 return await get_valid_locator(index + step, step)
-            logger.info(
-                f"Found locator for idx: {index} with id: {interactive_nodes_ids[index]}"
-            )
+            logger.info(f"Found locator for idx: {index} with id: {interactive_nodes_ids[index]}")
             return locator
 
         left_locator = await get_valid_locator(node_index - 1, -1)
@@ -541,9 +499,7 @@ async def resolve_conflict_with_closest_neighbor(
 
         return left_locator, right_locator
 
-    async def find_common_ancestor(
-        locator1: Locator, locator2: Locator
-    ) -> Locator | None:
+    async def find_common_ancestor(locator1: Locator, locator2: Locator) -> Locator | None:
         # JavaScript function to find common ancestor
         js_code = """(elements) => {
             const [el1, el2] = elements;
@@ -594,9 +550,7 @@ async def resolve_conflict_with_closest_neighbor(
     return ancestor.filter(has=original_locator).first
 
 
-async def try_relax_selector(
-    page: Page, node: A11yNode, relax_level: int = 1
-) -> list[Locator]:
+async def try_relax_selector(page: Page, node: A11yNode, relax_level: int = 1) -> list[Locator]:
     if relax_level > 4:
         return []
     locator = page.get_by_role(

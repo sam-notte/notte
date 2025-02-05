@@ -2,9 +2,13 @@ from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from notte.browser.dom_tree import ResolvedLocator
-from notte.controller.actions import ActionRole, ActionStatus, BaseAction
+from notte.controller.actions import (
+    ActionRole,
+    ActionStatus,
+    BaseAction,
+    BrowserActionId,
+)
 from notte.controller.actions import BrowserAction as _BrowserAction
-from notte.controller.actions import BrowserActionId
 from notte.errors.actions import InvalidActionError, MoreThanOneParameterActionError
 
 

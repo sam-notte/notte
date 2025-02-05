@@ -3,9 +3,15 @@ from dataclasses import dataclass
 from typing import ClassVar, TypeVar, cast
 
 import litellm
-from litellm import APIError, AuthenticationError, BadRequestError
+from litellm import (
+    APIError,
+    AuthenticationError,
+    BadRequestError,
+    Message,
+    ModelResponse,
+    RateLimitError,
+)
 from litellm import ContextWindowExceededError as LiteLLMContextWindowExceededError
-from litellm import Message, ModelResponse, RateLimitError
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
@@ -31,9 +37,7 @@ class LLMEngine:
         model: str | None = None,
     ):
         self.model: str = model or "groq/llama-3.3-70b-versatile"
-        self.sc: StructuredContent = StructuredContent(
-            inner_tag="json", fail_if_inner_tag=False
-        )
+        self.sc: StructuredContent = StructuredContent(inner_tag="json", fail_if_inner_tag=False)
 
     def structured_completion(
         self,
@@ -47,15 +51,11 @@ class LLMEngine:
             # extract content from JSON code blocks
             content = self.sc.extract(content).strip()
         elif not content.startswith("{") or not content.endswith("}"):
-            raise LLMParsingError(
-                f"Invalid LLM response. JSON code blocks or JSON object expected, got: {content}"
-            )
+            raise LLMParsingError(f"Invalid LLM response. JSON code blocks or JSON object expected, got: {content}")
         try:
             return response_format.model_validate_json(content)
         except ValidationError as e:
-            logger.error(
-                f"Error parsing LLM response as {response_format.__name__} for content: \n{content}"
-            )
+            logger.error(f"Error parsing LLM response as {response_format.__name__} for content: \n{content}")
             raise LLMParsingError(f"Error parsing LLM response: {content}") from e
 
     def single_completion(
@@ -164,9 +164,7 @@ class StructuredContent:
                 splits = text.split(f"<{self.outer_tag}>")
                 # In this case, we want to fail if <outer_tag> is not found at least once
                 if self.fail_if_final_tag or len(splits) == 1:
-                    raise LLMParsingError(
-                        f"No content found within <{self.outer_tag}> tags in the response: {text}"
-                    )
+                    raise LLMParsingError(f"No content found within <{self.outer_tag}> tags in the response: {text}")
                 possible_match = splits[1]
                 if (
                     self.next_outer_tag is not None
@@ -182,9 +180,7 @@ class StructuredContent:
                     possible_match = splits[0].strip()
                 # if there is not html tag in `possible_match` then we can safely return it
                 if re.search(r"<[^>]*>", possible_match):
-                    raise LLMParsingError(
-                        f"No content found within <{self.outer_tag}> tags in the response: {text}"
-                    )
+                    raise LLMParsingError(f"No content found within <{self.outer_tag}> tags in the response: {text}")
                 content = possible_match
 
         if self.inner_tag:
@@ -193,9 +189,7 @@ class StructuredContent:
             if match:
                 return match.group(1).strip()
             if self.fail_if_inner_tag:
-                raise LLMParsingError(
-                    f"No content found within ```{self.inner_tag}``` blocks in the response: {text}"
-                )
+                raise LLMParsingError(f"No content found within ```{self.inner_tag}``` blocks in the response: {text}")
             return content
 
         return content
