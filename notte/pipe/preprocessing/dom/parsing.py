@@ -1,7 +1,7 @@
-import logging
 from pathlib import Path
 from typing import TypedDict
 
+from loguru import logger
 from playwright.async_api import Page
 from pydantic import BaseModel
 
@@ -13,7 +13,6 @@ from notte.pipe.preprocessing.dom.csspaths import build_csspath
 from notte.pipe.preprocessing.dom.types import DOMBaseNode, DOMElementNode, DOMTextNode
 
 DOM_TREE_JS_PATH = Path(__file__).parent / "buildDomNode.js"
-logger = logging.getLogger(__name__)
 
 
 class DomTreeDict(TypedDict):
@@ -31,9 +30,17 @@ class DomTreeDict(TypedDict):
 
 
 class DomParsingConfig(BaseModel):
+    """
+    Viewport expansion in pixels.
+    This amount will increase the number of elements which are included in the state what the LLM will see.
+    - If set to -1, all elements will be included (this leads to high token usage).
+    - If set to 0, only the elements which are visible in the viewport will be included.
+
+    """
+
     highlight_elements: bool = True
     focus_element: int = -1
-    viewport_expansion: int = 0
+    viewport_expansion: int = 500  # update from 0
 
 
 class ParseDomTreePipe:
@@ -53,6 +60,7 @@ class ParseDomTreePipe:
     @staticmethod
     async def parse_dom_tree(page: Page, config: DomParsingConfig) -> DOMBaseNode:
         js_code = DOM_TREE_JS_PATH.read_text()
+        logger.info(f"Parsing DOM tree for {page.url} with config: {config.model_dump()}")
         node: DomTreeDict | None = await page.evaluate(js_code, config.model_dump())  # type: ignore
         if node is None:
             raise ValueError("Failed to parse HTML to dictionary")

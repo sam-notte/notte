@@ -42,17 +42,27 @@ def selectors_through_shadow_dom(node: DomNode) -> NodeSelectors:
     root_selectors = node.computed_attributes.selectors
     if root_selectors is None:
         raise ValueError(f"Node id={node.id} has no selectors")
-    xpaths = [root_selectors.xpath_selector]
+    xpaths = [f"xpath={root_selectors.xpath_selector}"]
     while node.parent is not None:
         selectors = node.computed_attributes.selectors
         if selectors is None:
             raise ValueError("Is this a valid dom tree?")
         elif node.computed_attributes.shadow_root:
-            xpaths.append(selectors.xpath_selector)
-            xpaths[-2] = xpaths[-2].replace(xpaths[-1], "")
+            if len(selectors.xpath_selector) == 0:
+                logger.error(
+                    f"Error during shadow root xpath resolution for node '{node.id}'. Empty xpath. Using tag_name = {node.attributes.tag_name} instead."
+                )
+                xpaths.append(node.attributes.tag_name)
+            else:
+                # xpaths of children also contain xpaths part of parent that we need to remove for shadow root handling
+                xpaths[-1] = xpaths[-1].replace(selectors.xpath_selector, "")
+                if node.parent.parent is None:
+                    xpaths.append(selectors.xpath_selector)
+                else:
+                    xpaths.append(f"xpath={selectors.xpath_selector}")
         node = node.parent
 
-    shadow_locator = " >> xpath=".join(xpaths[::-1])
+    shadow_locator = " >> ".join(xpaths[::-1])
     # shadow_locator_css = " >> css=".join(css[::-1])
     return NodeSelectors(
         # override xpath and css selectors to include the shadow dom

@@ -22,6 +22,7 @@ from notte.sdk.types import PaginationParams
 class SimpleActionSpaceConfig(BaseModel):
     rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(
         type=DomNodeRenderingType.INTERACTION_ONLY,
+        include_images=True,
     )
 
 

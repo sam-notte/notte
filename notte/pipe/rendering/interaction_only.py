@@ -50,9 +50,9 @@ class InteractionOnlyDomNodeRenderingPipe:
             if not is_parent_interaction and len(node.text.strip()) > 0:
                 node_texts.append(f"_[:]{node.text.strip()}")
         else:
-            is_parent_interaction = False
             # Add element with highlight_index
             if node.id is not None:
+                is_parent_interaction = True
                 html_description = InteractionOnlyDomNodeRenderingPipe.render_node(
                     node, include_attributes, max_len_per_attribute
                 )
