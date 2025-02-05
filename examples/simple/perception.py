@@ -24,11 +24,12 @@ class SimplePerception(BasePerception):
         return f"""
 You will see the following only once. If you need to remember it and you dont know it yet, write it down in the memory.
 
-Current url: {obs.metadata.url}
-Current date and time: {obs.metadata.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
-Available tabs:
+* Current url: {obs.metadata.url}
+* Current page title: {obs.metadata.title}
+* Current date and time: {obs.metadata.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+* Available tabs:
 {obs.metadata.tabs}
-Current step: {obs.progress.current_step + 1}/{obs.progress.max_steps}'
+* Current step: {obs.progress.current_step + 1}/{obs.progress.max_steps}'
 """
 
     @override

@@ -1,3 +1,4 @@
+import json
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
@@ -85,6 +86,10 @@ class BaseAction(BaseModel, ABC):
     def execution_message(self) -> str:
         """Return the message to be displayed when the action is executed."""
         return f"🚀 Successfully executed action: {self.description}"
+
+    def dump_str(self) -> str:
+        params = json.dumps(self.model_dump(exclude=self.non_agent_fields()))
+        return "{" + f'"{self.name()}": {params}' + "}"
 
 
 class BrowserAction(BaseAction):

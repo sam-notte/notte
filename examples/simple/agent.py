@@ -94,7 +94,9 @@ class SimpleAgent(BaseAgent):
                     self.conv.add_system_message(content=system_msg)
                     self.conv.add_user_message(content=task_msg)
                     # Add the short trajectory execution history
-                    self.conv.add_user_message(content=self.trajectory.perceive())
+                    traj_msg = self.trajectory.perceive()
+                    logger.info(f"🔍 Trajectory history:\n{traj_msg}")
+                    self.conv.add_user_message(content=traj_msg)
                     # Add the last observation
                     last_obs = self.trajectory.last_obs()
                     if last_obs is not None:
@@ -112,11 +114,15 @@ class SimpleAgent(BaseAgent):
                 self.conv.add_tool_message(response, tool_id="step")
                 # check for completion
                 if response.output is not None:
+                    if not response.output.success:
+                        logger.error(f"🚨 Task failed with reason: {response.output.answer}")
+                        raise ValueError(f"Task failed with reason: {response.output.answer}")
                     # Sucessful execution and LLM output is not None
                     # Need to validate the output
-                    logger.info("🔍 Validating final output...")
+                    logger.info(f"🔥 Validating agent output:\n{response.output.model_dump_json()}")
                     if not self.validator.validate(task, response.output, self.env.trajectory[-1]):
-                        continue
+                        # TODO handle that differently
+                        raise ValueError(f"Validation failed for task {task} with output {response.output}")
                     logger.info("✅ Task completed successfully")
                     return AgentOutput(
                         answer=response.output.answer,
@@ -127,8 +133,8 @@ class SimpleAgent(BaseAgent):
                 # Execute the actions
                 for action in response.get_actions()[:max_actions_per_step]:
                     result = await executor.execute(action)
-                    self.trajectory.add_step(result)
-                    step_msg = self.trajectory.perceive_step(result, include_idx=True)
+                    self.trajectory.add_step(response, result)
+                    step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
                     if not result.success:
                         logger.error(f"🚨 {step_msg}")
                     else:

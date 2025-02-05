@@ -1,5 +1,4 @@
 import datetime as dt
-import json
 from pathlib import Path
 
 import chevron
@@ -24,11 +23,10 @@ class SimplePrompt:
         self.max_actions_per_step: int = max_actions_per_step
         self.space: ActionSpace = ActionSpace(description="")
 
-    def _json_dump(self, steps: list[BaseAction]) -> str:
-        lines = ",\n  ".join(
-            [f"{action.name()}: {json.dumps(action.model_dump(exclude=action.non_agent_fields()))}" for action in steps]
-        )
-        return "{\n  " + lines + "\n}"
+    @staticmethod
+    def _json_dump(steps: list[BaseAction]) -> str:
+        lines = ",\n  ".join([action.dump_str() for action in steps])
+        return "[\n  " + lines + "\n]"
 
     def example_form_filling(self) -> str:
         return self._json_dump(

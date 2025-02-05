@@ -1,10 +1,16 @@
 from pydantic import BaseModel, Field
 
+from examples.simple.types import StepAgentOutput
 from notte.browser.observation import Observation
 from notte.common.safe_executor import ExecutionStatus
 from notte.controller.actions import BaseAction, GotoAction
 
-TrajectoryStep = ExecutionStatus[BaseAction, Observation]
+ExecutionStepStatus = ExecutionStatus[BaseAction, Observation]
+
+
+class TrajectoryStep(BaseModel):
+    agent_response: StepAgentOutput
+    results: list[ExecutionStepStatus]
 
 
 def trim_message(message: str, max_length: int | None = None) -> str:
@@ -18,7 +24,7 @@ class TrajectoryHistory(BaseModel):
     max_error_length: int | None = None
 
     def perceive(self) -> str:
-        steps = "\n".join([f"* {i}. {self.perceive_step(step)}" for i, step in enumerate(self.steps)])
+        steps = "\n".join([self.perceive_step(step, step_idx=i) for i, step in enumerate(self.steps)])
         return f"""
 [Start of action execution history memory]
 {steps or self.start_rules()}
@@ -37,22 +43,43 @@ ONLY if you have ABSOLUTELY no idea what to do, you can use `https://www.google.
 THIS SHOULD BE THE LAST RESORT.
 """
 
+    def perceive_step_result(
+        self,
+        result: ExecutionStepStatus,
+        include_ids: bool = False,
+    ) -> str:
+        action = result.input
+        id_str = f" with id={action.id}" if include_ids else ""
+        if not result.success:
+            err_msg = trim_message(result.message, self.max_error_length)
+            return f"[Execution Failure] action '{action.name()}'{id_str} failed with error: {err_msg}"
+        return f"[Execution Success] action '{action.name()}'{id_str}: '{action.execution_message()}'"
+
     def perceive_step(
         self,
         step: TrajectoryStep,
-        include_idx: bool = False,
+        step_idx: int = 0,
+        include_ids: bool = False,
     ) -> str:
-        id_str = step.input.id if include_idx else ""
-        if not step.success:
-            err_msg = trim_message(step.message, self.max_error_length)
-            return f"[Execution Failure] action {id_str}: '{step.input.description}' failed with error: {err_msg}"
-        return f"[Execution Success] action {id_str}: '{step.input.execution_message()}'"
+        action_msg = "\n".join(["  - " + result.input.dump_str() for result in step.results])
+        status_msg = "\n".join(["  - " + self.perceive_step_result(result, include_ids) for result in step.results])
+        return f"""
+# Execution step {step_idx}
+* state: {step.agent_response.state.model_dump_json()}
+* selected actions:
+{action_msg}
+* execution results:
+{status_msg}"""
 
-    def add_step(self, step: TrajectoryStep) -> None:
-        self.steps.append(step)
+    def add_step(self, output: StepAgentOutput, step: ExecutionStepStatus) -> None:
+        if len(self.steps) == 0 or self.steps[-1].agent_response != output:
+            self.steps.append(TrajectoryStep(agent_response=output, results=[step]))
+        else:
+            self.steps[-1].results.append(step)
 
     def last_obs(self) -> Observation | None:
         for step in self.steps[::-1]:
-            if step.success and step.output is not None:
-                return step.output
+            for step_result in step.results[::-1]:
+                if step_result.success and step_result.output is not None:
+                    return step_result.output
         return None
