@@ -13,6 +13,7 @@ from notte.controller.actions import (
     GoBackAction,
     GoForwardAction,
     GotoAction,
+    InteractionAction,
     ListDropdownOptionsAction,
     PressKeyAction,
     ReloadAction,
@@ -23,6 +24,7 @@ from notte.controller.actions import (
     WaitAction,
 )
 from notte.pipe.preprocessing.dom.dropdown_menu import dropdown_menu_options
+from notte.pipe.preprocessing.dom.locate import locale_element
 
 
 @final
@@ -34,8 +36,7 @@ class BrowserController:
     def page(self) -> Page:
         return self.driver.page
 
-    async def execute(self, action: BaseAction) -> BrowserSnapshot:
-        _press_enter = False
+    async def execute_browser_action(self, action: BaseAction) -> BrowserSnapshot:
         match action:
             case GotoAction(url=url):
                 return await self.driver.goto(url)
@@ -67,64 +68,65 @@ class BrowserController:
             case CompletionAction(success=success, answer=answer):
                 logger.info(f"Completion action: status={'success' if success else 'failure'} with answer = {answer}")
                 await self.driver.close()
-            # Interaction actions
-            case ClickAction(selector=selector, press_enter=press_enter):
-                if press_enter is not None:
-                    _press_enter = press_enter
-                if selector is None:
-                    raise ValueError("Selector is required for ClickAction")
-                await self.page.click(f"xpath={selector}")
-            case FillAction(selector=selector, value=value, press_enter=press_enter):
-                if press_enter is not None:
-                    _press_enter = press_enter
-                if selector is None:
-                    raise ValueError("Selector is required for FillAction")
-                await self.page.fill(f"xpath={selector}", value)
-            case CheckAction(selector=selector, value=value, press_enter=press_enter):
-                if press_enter is not None:
-                    _press_enter = press_enter
-                if selector is None:
-                    raise ValueError("Selector is required for CheckAction")
-                if value:
-                    await self.page.check(f"xpath={selector}")
-                else:
-                    await self.page.uncheck(selector)
-            case SelectDropdownOptionAction(
-                selector=selector, value=value, press_enter=press_enter, option_selector=option_selector
-            ):
-                if press_enter is not None:
-                    _press_enter = press_enter
-                if selector is None:
-                    raise ValueError("Selector is required for `SelectDropdownOptionAction`")
-                # Get element info
-                select_element = await self.page.query_selector(f"xpath={selector}")
-                if not select_element:
-                    raise ValueError(f"Select element not found: {selector}")
+            case _:
+                raise ValueError(f"Unsupported action type: {type(action)}")
+        await self.driver.short_wait()
+        return await self.driver.snapshot()
 
+    async def execute_interaction_action(self, action: InteractionAction) -> BrowserSnapshot:
+        if action.selector is None:
+            raise ValueError(f"Selector is required for {action.name()}")
+        press_enter = False
+        if action.press_enter is not None:
+            press_enter = action.press_enter
+        # locate element (possibly in iframe)
+        locator = await locale_element(self.page, action.selector)
+        original_url = self.page.url
+        match action:
+            # Interaction actions
+            case ClickAction():
+                await locator.click()
+            case FillAction(value=value):
+                await locator.fill(value)
+            case CheckAction(value=value):
+                if value:
+                    await locator.check()
+                else:
+                    await locator.uncheck()
+            case SelectDropdownOptionAction(value=value, option_selector=option_selector):
                 # Check if it's a standard HTML select
-                tag_name: str = await select_element.evaluate("el => el.tagName.toLowerCase()")
+                tag_name: str = await locator.evaluate("el => el.tagName.toLowerCase()")
                 if tag_name == "select":
                     # Handle standard HTML select
-                    _ = await self.page.select_option(f"xpath={selector}", value)
+                    _ = await locator.select_option(value)
+                elif option_selector is None:
+                    raise ValueError(f"Option selector is required for {action.name()}")
                 else:
+                    option_locator = await locale_element(self.page, option_selector)
                     # Handle non-standard select
-                    # await self.page.click(f"xpath={selector}")
-                    await self.page.click(f"xpath={option_selector}")
+                    await option_locator.click()
 
-            case ListDropdownOptionsAction(selector=selector):
-                if selector is None:
-                    raise ValueError("Selector is required for ListDropdownOptionsAction")
-                options = await dropdown_menu_options(self.page, selector)
+            case ListDropdownOptionsAction():
+                options = await dropdown_menu_options(self.page, action.selector.xpath_selector)
                 logger.info(f"Dropdown options: {options}")
                 raise NotImplementedError("ListDropdownOptionsAction is not supported in the browser controller")
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
-        if _press_enter:
+        if press_enter:
             logger.info(f"🪦 Pressing enter for action {action.id}")
             await self.driver.short_wait()
             await self.page.keyboard.press("Enter")
+        if original_url != self.page.url:
+            logger.info(f"🪦 Page navigation detected for action {action.id} waiting for networkidle")
+            await self.driver.long_wait()
         await self.driver.short_wait()
         return await self.driver.snapshot()
+
+    async def execute(self, action: BaseAction) -> BrowserSnapshot:
+        if isinstance(action, InteractionAction):
+            return await self.execute_interaction_action(action)
+        else:
+            return await self.execute_browser_action(action)
 
     async def execute_multiple(self, actions: list[BaseAction]) -> list[BrowserSnapshot]:
         snapshots: list[BrowserSnapshot] = []

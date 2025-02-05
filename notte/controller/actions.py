@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
+from notte.browser.dom_tree import NodeSelectors
+
 # ############################################################
 # Action enums
 # ############################################################
@@ -232,7 +234,7 @@ class CompletionAction(BrowserAction):
 
 class InteractionAction(BaseAction, ABC):
     id: str
-    selector: str | None = Field(default=None, exclude=True)
+    selector: NodeSelectors | None = Field(default=None, exclude=True)
     category: str = "Interaction Actions"
     press_enter: bool | None = Field(default=None, exclude=True)
     text_label: str | None = Field(default=None, exclude=True)
@@ -288,7 +290,7 @@ class SelectDropdownOptionAction(InteractionAction):
     )
     option_id: str | None = None
     value: str | None = None
-    option_selector: str | None = Field(exclude=True, default=None)
+    option_selector: NodeSelectors | None = Field(exclude=True, default=None)
 
     @override
     def execution_message(self) -> str:

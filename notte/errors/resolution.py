@@ -1,4 +1,4 @@
-from notte.browser.dom_tree import DomNode, HtmlSelector
+from notte.browser.dom_tree import DomNode, NodeSelectors
 from notte.errors.processing import InvalidInternalCheckError
 
 
@@ -52,7 +52,7 @@ class ConflictResolutionCheckError(InvalidInternalCheckError):
 
 
 class FailedUniqueLocatorResolutionError(InvalidInternalCheckError):
-    def __init__(self, selectors: HtmlSelector) -> None:
+    def __init__(self, selectors: NodeSelectors) -> None:
         super().__init__(
             check=f"Failed to resolve unique playwright locator for selectors: {selectors.selectors()}",
             url=None,

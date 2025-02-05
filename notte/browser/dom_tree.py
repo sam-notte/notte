@@ -1,6 +1,6 @@
-import copy
+import time
 from dataclasses import asdict, dataclass, field
-from typing import Callable, Required, TypedDict
+from typing import Callable, ClassVar, Required, TypeAlias, TypedDict
 
 from loguru import logger
 
@@ -45,25 +45,68 @@ class A11yTree:
     simple: A11yNode
 
 
-@dataclass
-class HtmlSelector:
+@dataclass(frozen=True)
+class NodeSelectors:
+    css_selector: str
+    xpath_selector: str
+    notte_selector: str
+    in_iframe: bool
+    in_shadow_root: bool
+    iframe_parent_css_selectors: list[str]
     playwright_selector: str | None = None
-    css_selector: str | None = None
-    xpath_selector: str | None = None
-    notte_selector: str | None = None
-
-    def is_valid(self) -> bool:
-        return self.playwright_selector is not None or self.css_selector is not None or self.xpath_selector is not None
 
     def selectors(self) -> list[str]:
         l: list[str] = []
         if self.playwright_selector is not None:
             l.append(self.playwright_selector)
-        if self.css_selector is not None:
-            l.append(self.css_selector)
-        if self.xpath_selector is not None:
-            l.append(self.xpath_selector)
+        l.append(self.css_selector)
+        l.append(self.xpath_selector)
         return l
+
+
+# Type alias for clarity
+AttributeValues: TypeAlias = list[str | int | bool | None]
+
+
+class DomErrorBuffer:
+    """Buffer for DOM attribute errors to avoid spam logging."""
+
+    _buffer: ClassVar[dict[str, AttributeValues]] = {}
+    _max_samples_per_key: ClassVar[int] = 5
+
+    @staticmethod
+    def add_error(extra_keys: set[str], values: dict[str, AttributeValues]) -> None:
+        """
+        Add an error to the buffer, consolidating the values.
+        Each attribute will store up to _max_samples_per_key unique values.
+        """
+
+        for key in extra_keys:
+            if key not in DomErrorBuffer._buffer.keys():
+                DomErrorBuffer._buffer[key] = []
+            str_v = str(values[key])[:50]
+            if (
+                len(DomErrorBuffer._buffer[key]) < DomErrorBuffer._max_samples_per_key
+                and str_v not in DomErrorBuffer._buffer[key]
+            ):
+                DomErrorBuffer._buffer[key].append(str_v)
+
+    @staticmethod
+    def flush() -> None:
+        """Flush all buffered error messages in a consolidated format."""
+        if len(DomErrorBuffer._buffer) == 0:
+            return
+
+        logger.error(
+            f"""
+Extra DOM attributes found: {list(DomErrorBuffer._buffer.keys())}.
+Sample values:
+{DomErrorBuffer._buffer}
+These attributes should be added to the DomAttributes class. Fix this ASAP.
+"""
+        )
+        # Clear the buffer
+        DomErrorBuffer._buffer.clear()
 
 
 @dataclass
@@ -161,6 +204,7 @@ class DomAttributes:
         if "class" in kwargs:
             kwargs["class_name"] = kwargs["class"]
             del kwargs["class"]
+
         # replace '-' with '_' in keys
         kwargs = {
             k.replace("-", "_"): v
@@ -172,6 +216,7 @@ class DomAttributes:
                 and not k.startswith("g-")
             )
         }
+
         keys = set(DomAttributes.__dataclass_fields__.keys())
         excluded_keys = set(
             [
@@ -193,14 +238,11 @@ class DomAttributes:
                 "view",
             ]
         )
+
         extra_keys = set(kwargs.keys()).difference(keys).difference(excluded_keys)
         if len(extra_keys) > 0:
-            logger.error(
-                (
-                    f"Extra DOM attributes found: {extra_keys} with values {kwargs}. "
-                    "They should be added to the DomAttributes class. Fix this ASAP."
-                )
-            )
+            DomErrorBuffer.add_error(extra_keys, kwargs)
+
         return DomAttributes(**{key: kwargs.get(key, None) for key in keys})
 
     def relevant_attrs(
@@ -261,34 +303,66 @@ class DomAttributes:
         return DomAttributes.init(**{key: node[key] for key in remaning_keys})  # type: ignore
 
 
-@dataclass
+@dataclass(frozen=True)
 class ComputedDomAttributes:
     in_viewport: bool = False
     is_interactive: bool = False
     is_top_element: bool = False
     shadow_root: bool = False
     highlight_index: int | None = None
-    selectors: HtmlSelector = field(default_factory=HtmlSelector)
+    selectors: NodeSelectors | None = None
+
+    def set_selectors(self, selectors: NodeSelectors) -> None:
+        object.__setattr__(self, "selectors", selectors)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DomNode:
     id: str | None
     type: NodeType
     role: NodeRole | str
     text: str
+    children: list["DomNode"]
+    attributes: DomAttributes | None
+    computed_attributes: ComputedDomAttributes
     subtree_ids: list[str] = field(init=False, default_factory=list)
-    children: list["DomNode"] = field(default_factory=list)
-    attributes: DomAttributes | None = None
-    computed_attributes: ComputedDomAttributes = field(default_factory=ComputedDomAttributes)
+    # parents cannot be set in the constructor because it is a recursive structure
+    # we need to set it after the constructor
+    parent: "DomNode | None" = None
 
     def __post_init__(self) -> None:
         subtree_ids: list[str] = [] if self.id is None else [self.id]
         for child in self.children:
             subtree_ids.extend(child.subtree_ids)
-        self.subtree_ids = subtree_ids
+        object.__setattr__(self, "subtree_ids", subtree_ids)
         if isinstance(self.role, str):
-            self.role = NodeRole.from_value(self.role)
+            object.__setattr__(self, "role", NodeRole.from_value(self.role))
+
+    def set_parent(self, parent: "DomNode | None") -> None:
+        object.__setattr__(self, "parent", parent)
+
+    def inner_text(self) -> str:
+        if self.type == NodeType.TEXT:
+            return self.text
+        texts: list[str] = []
+        for child in self.children:
+            # inner text is not allowed to be hidden
+            # or not visible
+            # or disabled
+            child_text = child.inner_text()
+            if len(child_text) == 0:
+                continue
+            elif child.attributes is None:
+                texts.append(child.inner_text())
+            elif child.attributes.hidden is not None and not child.attributes.hidden:
+                continue
+            elif child.attributes.visible is not None and not child.attributes.visible:
+                continue
+            elif child.attributes.enabled is not None and not child.attributes.enabled:
+                continue
+            else:
+                texts.append(child.inner_text())
+        return " ".join(texts)
 
     @staticmethod
     def from_a11y_node(node: A11yNode, notte_selector: str = "") -> "DomNode":
@@ -312,9 +386,8 @@ class DomNode:
                 is_top_element=bool(node.get("is_top_element", False)),
                 shadow_root=bool(node.get("shadow_root", False)),
                 highlight_index=highlight_index,
-                selectors=HtmlSelector(
-                    notte_selector=notte_selector,
-                ),
+                # TODO: fix this and compute selectors directly from the a11y node
+                selectors=None,
             ),
         )
 
@@ -325,7 +398,7 @@ class DomNode:
 
     def get_url(self) -> str | None:
         attr = self.computed_attributes.selectors
-        if attr.notte_selector is None:
+        if attr is None or len(attr.notte_selector or "") == 0:
             return None
         return attr.notte_selector.split(":")[0]
 
@@ -355,8 +428,14 @@ class DomNode:
         return self.role.category().value == NodeCategory.IMAGE.value
 
     def flatten(self, only_interaction: bool = False) -> list["DomNode"]:
-        base: list["DomNode"] = [] if only_interaction and not self.is_interaction() else [self]
-        return base + [node for child in self.children for node in child.flatten(only_interaction)]
+        def inner(node: DomNode, acc: list["DomNode"]) -> list["DomNode"]:
+            if not only_interaction or node.is_interaction():
+                acc.append(node)
+            for child in node.children:
+                _ = inner(child, acc)
+            return acc
+
+        return inner(self, [])
 
     def interaction_nodes(self) -> list["InteractionDomNode"]:
         inodes = self.flatten(only_interaction=True)
@@ -376,11 +455,23 @@ class DomNode:
                 filtered_child = inner(child)
                 if filtered_child is not None:
                     filtered_children.append(filtered_child)
-            updated_node = copy.deepcopy(node)
-            updated_node.children = filtered_children
-            return updated_node
+                    # need copy the parent
+            return DomNode(
+                id=node.id,
+                type=node.type,
+                role=node.role,
+                text=node.text,
+                children=filtered_children,
+                attributes=node.attributes,
+                computed_attributes=node.computed_attributes,
+                parent=node.parent,
+            )
 
-        return inner(self)
+        start = time.time()
+        snode = inner(self)
+        end = time.time()
+        logger.info(f"🔍 Filtering subtree of full graph done in {end - start:.2f} seconds")
+        return snode
 
     def subtree_without(self, roles: set[str]) -> "DomNode":
 
@@ -416,6 +507,7 @@ class DomNode:
             computed_attributes=self.computed_attributes,
             # children are not allowed in interaction nodes
             children=[],
+            parent=self.parent,
         )
 
 
@@ -445,9 +537,9 @@ class InteractionDomNode(DomNode):
         super().__post_init__()
 
 
-@dataclass
+@dataclass(frozen=True)
 class ResolvedLocator:
     role: NodeRole | str
     is_editable: bool
     input_type: str | None
-    selector: str
+    selector: NodeSelectors

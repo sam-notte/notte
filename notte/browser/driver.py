@@ -189,7 +189,7 @@ class BrowserDriver(AsyncResource):
         if not is_valid_url(url, check_reachability=False):
             raise InvalidURLError(url=url)
         try:
-            _ = await self.page.goto(url)
+            _ = await self.page.goto(url, timeout=self._playwright.config.goto_timeout)
             await self.page.wait_for_load_state(timeout=self._playwright.config.goto_timeout)
         except Exception as e:
             raise PageLoadingError(url=url) from e

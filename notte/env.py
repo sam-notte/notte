@@ -37,6 +37,7 @@ from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
 from notte.pipe.action.base import BaseActionSpacePipe
 from notte.pipe.action.pipe import MainActionSpaceConfig, MainActionSpacePipe
+from notte.pipe.preprocessing.dom.locate import selectors_through_shadow_dom
 from notte.pipe.preprocessing.pipe import PreprocessingType, ProcessedSnapshotPipe
 from notte.pipe.resolution import ActionNodeResolutionPipe
 from notte.pipe.scraping.config import ScrapingConfig
@@ -62,7 +63,7 @@ class SimpleActionResolutionPipe:
         if action.id not in selector_map:
             raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
         node = selector_map[action.id]
-        if node.computed_attributes.selectors.xpath_selector is None:
+        if node.computed_attributes.selectors is None:
             raise InvalidInternalCheckError(
                 check=f"No selector found for action {action.id}",
                 url=None,
@@ -73,7 +74,11 @@ class SimpleActionResolutionPipe:
                     )
                 ),
             )
-        action.selector = node.computed_attributes.selectors.xpath_selector
+        selectors = node.computed_attributes.selectors
+        if selectors.in_shadow_root:
+            logger.info(f"🔍 Resolving shadow root selectors for {node.id} ({node.text})")
+            selectors = selectors_through_shadow_dom(node)
+        action.selector = selectors
         action.text_label = node.text
         return action
 
@@ -100,9 +105,8 @@ class SimpleActionResolutionPipe:
             ):
                 if snode is None:
                     raise ValueError(f"No select html element found for {action.option_id} or {action.value}")
-                selector_xpath = snode.computed_attributes.selectors.xpath_selector
-                option_xpath = node.computed_attributes.selectors.xpath_selector
-                if selector_xpath is None or option_xpath is None:
+
+                if node.computed_attributes.selectors is None or snode.computed_attributes.selectors is None:
                     raise InvalidInternalCheckError(
                         check=f"Cannot find associated selector element for option node {node.id}",
                         url=None,
@@ -113,14 +117,16 @@ class SimpleActionResolutionPipe:
                             )
                         ),
                     )
+                selectors = snode.computed_attributes.selectors
+                option_selectors = node.computed_attributes.selectors
                 logger.info(
                     (
                         f"Resolved locators for select dropdown {snode.id} ({snode.text})"
                         f" and option {node.id} ({node.text})"
                     )
                 )
-                action.option_selector = option_xpath
-                action.selector = selector_xpath
+                action.option_selector = option_selectors
+                action.selector = selectors
                 return action
         raise InvalidInternalCheckError(
             check=f"No select html element found for {action.option_id} or {action.value}",

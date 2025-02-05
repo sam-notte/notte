@@ -4,7 +4,7 @@ from loguru import logger
 from playwright.async_api import Locator
 
 from notte.actions.base import Action, ActionParameterValue, ExecutableAction
-from notte.browser.dom_tree import DomNode, HtmlSelector, ResolvedLocator
+from notte.browser.dom_tree import DomNode, NodeSelectors, ResolvedLocator
 from notte.browser.driver import BrowserDriver
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import BrowserSnapshot
@@ -65,7 +65,7 @@ class ActionNodeResolutionPipe:
 
     async def fill_node_selectors(self, node: DomNode, snapshot: BrowserSnapshot) -> None:
         selectors = node.computed_attributes.selectors
-        if not selectors.is_valid():
+        if selectors is None:
             assert node.id is not None
             locator = await get_locator_for_node_id(self._browser.page, snapshot.a11y_tree.raw, node.id)
             if locator is None:
@@ -74,15 +74,18 @@ class ActionNodeResolutionPipe:
             _selectors = await get_html_selector(locator)
             if _selectors is None:
                 raise FailedNodeResolutionError(node)
-            selectors = HtmlSelector(
+            selectors = NodeSelectors(
                 playwright_selector=_selectors.playwright_selector,
                 css_selector=_selectors.css_selector,
                 xpath_selector=_selectors.xpath_selector,
-                notte_selector=selectors.notte_selector,
+                notte_selector="",
+                in_iframe=False,
+                in_shadow_root=False,
+                iframe_parent_css_selectors=[],
             )
-            node.computed_attributes.selectors = selectors
+            node.computed_attributes.set_selectors(selectors)
 
-    async def get_valid_locator(self, selectors: HtmlSelector) -> tuple[Locator, str]:
+    async def get_valid_locator(self, selectors: NodeSelectors) -> tuple[Locator, str]:
         if len(selectors.selectors()) == 0:
             raise InvalidInternalCheckError(
                 check="No selectors found",
@@ -115,9 +118,15 @@ class ActionNodeResolutionPipe:
                 dev_advice="ActionNodeResolutionPipe should only be called on nodes with a valid id.",
             )
         selectors = node.computed_attributes.selectors
-        if not selectors.is_valid():
+        if selectors is not None:
             await self.fill_node_selectors(node, snapshot)
             selectors = node.computed_attributes.selectors
+        if selectors is None:
+            raise InvalidInternalCheckError(
+                check="No selectors found",
+                url=snapshot.metadata.url,
+                dev_advice="No selectors found for node",
+            )
         # logger.info(f"Selectors filled for node {node.id}: {selectors}")
         locator, selector = await self.get_valid_locator(selectors)
         is_editable = await locator.is_editable(timeout=100)
@@ -134,5 +143,13 @@ class ActionNodeResolutionPipe:
             role=node.role,
             is_editable=is_editable,
             input_type=input_type,
-            selector=selector,
+            selector=NodeSelectors(
+                playwright_selector=selector,
+                css_selector=selectors.css_selector,
+                xpath_selector=selectors.xpath_selector,
+                notte_selector=selectors.notte_selector,
+                in_iframe=selectors.in_iframe,
+                in_shadow_root=selectors.in_shadow_root,
+                iframe_parent_css_selectors=selectors.iframe_parent_css_selectors,
+            ),
         )

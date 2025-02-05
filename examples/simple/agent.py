@@ -30,8 +30,10 @@ max_actions_per_step = 5
 # Done callback
 # Setup telemetry
 # Setup memory
-# Handle custom functions, e.g. `Upload file to element`
-
+# Handle custom functions, e.g. `Upload file to element`ç
+# Remove base 64 images from current state
+# TODO: add fault tolerance LLM parsing
+# TODO: only display modal actions when modal is open (same as before)
 
 # TODO: fix this piece of code
 # ```
@@ -97,12 +99,13 @@ class SimpleAgent(BaseAgent):
                         self.conv.add_user_message(content=self.perception.perceive(last_obs))
 
                 # Let the LLM Agent think about the next action
-                logger.info(
-                    "\n\n".join([f"# Message {i}: {m.role}\n{m.content}" for i, m in enumerate(self.conv.messages())])
-                )
+                # logger.info(
+                #     "\n\n".join([f"# Message {i}: {m.role}\n{m.content}" for i, m in enumerate(self.conv.messages())])
+                # )
                 response: StepAgentOutput = self.llm.structured_completion(
                     self.conv.messages(), response_format=StepAgentOutput
                 )
+                logger.info(f"🔍 LLM response:\n{response}")
 
                 self.conv.add_tool_message(response, tool_id="step")
                 # check for completion

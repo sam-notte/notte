@@ -5,9 +5,11 @@ from typing import TypedDict
 from playwright.async_api import Page
 from pydantic import BaseModel
 
+from notte.browser.dom_tree import DomErrorBuffer
 from notte.browser.dom_tree import DomNode as NotteDomNode
 from notte.pipe.preprocessing.a11y.id_generation import simple_generate_sequential_ids
 from notte.pipe.preprocessing.a11y.notte_selector import generate_notte_selector
+from notte.pipe.preprocessing.dom.csspaths import build_csspath
 from notte.pipe.preprocessing.dom.types import DOMBaseNode, DOMElementNode, DOMTextNode
 
 DOM_TREE_JS_PATH = Path(__file__).parent / "buildDomNode.js"
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 class DomTreeDict(TypedDict):
     type: str
     text: str
-    tagName: str
+    tagName: str | None
     xpath: str
     attributes: dict[str, str]
     isVisible: bool
@@ -44,7 +46,9 @@ class ParseDomTreePipe:
         _dom_tree = generate_notte_selector(dom_tree)
         if isinstance(_dom_tree, dict):
             raise ValueError(f"Dom tree is not a valid NotteDomNode: {_dom_tree}")
-        return _dom_tree.to_notte_domnode()
+        notte_dom_tree = _dom_tree.to_notte_domnode()
+        DomErrorBuffer.flush()
+        return notte_dom_tree
 
     @staticmethod
     async def parse_dom_tree(page: Page, config: DomParsingConfig) -> DOMBaseNode:
@@ -52,13 +56,27 @@ class ParseDomTreePipe:
         node: DomTreeDict | None = await page.evaluate(js_code, config.model_dump())  # type: ignore
         if node is None:
             raise ValueError("Failed to parse HTML to dictionary")
-        return ParseDomTreePipe._parse_node(node)
+        parsed = ParseDomTreePipe._parse_node(
+            node,
+            parent=None,
+            in_iframe=False,
+            in_shadow_root=False,
+            iframe_parent_css_paths=[],
+            notte_selector=page.url,
+        )
+        if parsed is None:
+            raise ValueError(f"Failed to parse DOM tree. Dom Tree is empty. {node}")
+        return parsed
 
     @staticmethod
     def _parse_node(
         node: DomTreeDict,
-        parent: "DOMElementNode | None" = None,
-    ) -> DOMBaseNode:
+        parent: "DOMElementNode | None",
+        in_iframe: bool,
+        in_shadow_root: bool,
+        iframe_parent_css_paths: list[str],
+        notte_selector: str,
+    ) -> DOMBaseNode | None:
         if node.get("type") == "TEXT_NODE":
             text_node = DOMTextNode(
                 text=node["text"],
@@ -69,24 +87,62 @@ class ParseDomTreePipe:
             return text_node
 
         tag_name = node["tagName"]
+        attrs = node.get("attributes", {})
+        xpath = node["xpath"]
+
+        if tag_name is None:
+            if xpath is None and len(attrs) == 0 and len(node.get("children", [])) == 0:
+                return None
+            raise ValueError(f"Tag name is None for node: {node}")
+
+        highlight_index = node.get("highlightIndex")
+        shadow_root = node.get("shadowRoot", False)
+        css_path = build_csspath(
+            tag_name=tag_name,
+            xpath=xpath,
+            attributes=attrs,
+            highlight_index=highlight_index,
+        )
+        _iframe_parent_css_paths = iframe_parent_css_paths
+        notte_selector = ":".join([notte_selector, str(hash(xpath)), str(hash(css_path))])
+
+        if shadow_root:
+            in_shadow_root = True
+
+        if tag_name.lower() == "iframe":
+            in_iframe = True
+            _iframe_parent_css_paths = _iframe_parent_css_paths + [css_path]
 
         element_node = DOMElementNode(
             tag_name=tag_name,
-            xpath=node["xpath"],
-            attributes=node.get("attributes", {}),
+            in_iframe=in_iframe,
+            xpath=xpath,
+            css_path=css_path,
+            notte_selector=notte_selector,
+            iframe_parent_css_selectors=iframe_parent_css_paths,
+            attributes=attrs,
             is_visible=node.get("isVisible", False),
             is_interactive=node.get("isInteractive", False),
             is_top_element=node.get("isTopElement", False),
             highlight_index=node.get("highlightIndex"),
-            shadow_root=node.get("shadowRoot", False),
+            shadow_root=shadow_root,
+            in_shadow_root=in_shadow_root,
             parent=parent,
         )
 
         children: list[DOMBaseNode] = []
         for child in node.get("children", []):
             if child is not None:
-                child_node = ParseDomTreePipe._parse_node(child, parent=element_node)
-                children.append(child_node)
+                child_node = ParseDomTreePipe._parse_node(
+                    node=child,
+                    parent=element_node,
+                    in_iframe=in_iframe,
+                    iframe_parent_css_paths=_iframe_parent_css_paths,
+                    notte_selector=notte_selector,
+                    in_shadow_root=in_shadow_root,
+                )
+                if child_node is not None:
+                    children.append(child_node)
 
         element_node.children = children
 

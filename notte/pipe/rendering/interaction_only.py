@@ -60,7 +60,7 @@ class InteractionOnlyDomNodeRenderingPipe:
 
             # Process children regardless
             for child in node.children:
-                node_texts = InteractionOnlyDomNodeRenderingPipe.format(
+                _ = InteractionOnlyDomNodeRenderingPipe.format(
                     node=child,
                     depth=depth + 1,
                     node_texts=node_texts,

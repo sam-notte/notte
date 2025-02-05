@@ -30,8 +30,8 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
         self.config: SimpleActionSpaceConfig = config
 
     def node_to_executable(self, node: InteractionDomNode) -> ExecutableAction:
-        xpath: str | None = node.computed_attributes.selectors.xpath_selector
-        if xpath is None:
+        selectors = node.computed_attributes.selectors
+        if selectors is None:
             raise InvalidInternalCheckError(
                 check="Node should have an xpath selector",
                 url=node.get_url(),
@@ -42,7 +42,7 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
             category="Interaction action",
             description=InteractionOnlyDomNodeRenderingPipe.render_node(node, self.config.rendering.include_attributes),
             locator=ResolvedLocator(
-                selector=xpath,
+                selector=selectors,
                 is_editable=False,
                 input_type=None,
                 role=node.role,

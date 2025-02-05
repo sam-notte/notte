@@ -15,6 +15,9 @@
   "editor.codeActionsOnSave": {
     "source.organizeImports": "explicit"
   },
+  "editor.insertSpaces": false,
+	"editor.formatOnSave": true, // only if you want auto fomattting on saving the file
+	"editor.detectIndentation": false,
   "[python]": {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "mikoz.black-py"

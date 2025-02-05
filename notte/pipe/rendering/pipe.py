@@ -23,13 +23,13 @@ DEFAULT_INCLUDE_ATTRIBUTES = frozenset(
         "name",
         "role",
         "tabindex",
-        "aria-label",
+        "aria_label",
         "placeholder",
         "value",
         "alt",
         "src",
         "href",
-        "aria-expanded",
+        "aria_expanded",
     ]
 )
 
@@ -52,7 +52,6 @@ class DomNodeRenderingPipe:
         # Exclude images if requested
         if not config.include_images:
             node = node.subtree_without(NodeCategory.IMAGE.roles())
-
         match config.type:
             case DomNodeRenderingType.INTERACTION_ONLY:
                 return InteractionOnlyDomNodeRenderingPipe.forward(

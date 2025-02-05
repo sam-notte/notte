@@ -6,7 +6,7 @@ from typing_extensions import override
 
 from notte.browser.dom_tree import ComputedDomAttributes, DomAttributes
 from notte.browser.dom_tree import DomNode as NotteDomNode
-from notte.browser.dom_tree import HtmlSelector
+from notte.browser.dom_tree import NodeSelectors
 from notte.browser.node_type import NodeRole, NodeType
 
 VERBOSE = False
@@ -39,14 +39,12 @@ class DOMBaseNode:
     is_visible: bool
     highlight_index: int | None
     notte_id: str | None = field(init=False, default=None)
-    notte_selector: str | None = field(init=False, default=None)
     children: list["DOMBaseNode"] = field(init=False, default_factory=list)
     # Use None as default and set parent later to avoid circular reference issues
 
     def __post_init__(self) -> None:
-        self.children = []
-        self.notte_selector = None
-        self.notte_id = None
+        self.children = [] if getattr(self, "children", None) is None else self.children
+        self.notte_id = None if getattr(self, "notte_id", None) is None else self.notte_id
 
     def to_dict(self) -> dict[str, str]:
         raise NotImplementedError("to_dict method not implemented for DOMBaseNode")
@@ -105,6 +103,7 @@ class DOMTextNode(DOMBaseNode):
             computed_attributes=ComputedDomAttributes(
                 in_viewport=self.is_visible,
             ),
+            attributes=None,
         )
 
 
@@ -119,7 +118,15 @@ class DOMElementNode(DOMBaseNode):
 
     tag_name: str
     xpath: str
+    # iframe resolution
+    in_iframe: bool
+    in_shadow_root: bool
+    css_path: str
+    iframe_parent_css_selectors: list[str]
+    notte_selector: str
+    # html attributes
     attributes: dict[str, str]
+    # computed attributes
     is_interactive: bool = False
     is_top_element: bool = False
     shadow_root: bool = False
@@ -297,13 +304,8 @@ class DOMElementNode(DOMBaseNode):
             return ""
         # Check explicit ARIA labeling
         if "aria-label" in self.attributes:
-            return self.attributes["aria-label"]
-
-        # Check aria-labelledby if present
-        if "aria-labelledby" in self.attributes:
-            # Note: This would require access to other elements
-            # TODO: Implement aria-labelledby resolution
-            pass
+            if len(self.attributes["aria-label"]) > 0:
+                return self.attributes["aria-label"]
 
         # Check for standard labeling attributes
         for attr in ["name", "title", "alt", "placeholder", "value"]:
@@ -316,14 +318,20 @@ class DOMElementNode(DOMBaseNode):
         if self.tag_name.lower() in ["button", "input"]:
             if "value" in self.attributes:
                 value = self.attributes.get("value")
-                if value and value.strip():
+                if value and len(value.strip()) > 0:
                     return value.strip()
+
+        # Check aria-labelledby if present
+        # if "aria-labelledby" in self.attributes:
+        #     # Note: This would require access to other elements
+        #     # TODO: Implement aria-labelledby resolution
+        #     pass
 
         # Check for text content for certain elements
         if self.tag_name.lower() in ["button", "a", "label"]:
-            text_content = self._get_text_content()
-            if text_content and text_content.strip():
-                return text_content.strip()
+            text_content = self._get_text_content().strip()
+            if len(text_content) > 0:
+                return text_content
 
         if self.tag_name.lower() in ["img", "a"]:
             if "src" in self.attributes:
@@ -400,11 +408,12 @@ class DOMElementNode(DOMBaseNode):
         def extract_text(node: DOMBaseNode) -> str:
             if isinstance(node, DOMTextNode):
                 return node.text if node.is_visible else ""
-            elif isinstance(node, DOMElementNode):
-                return "".join(extract_text(child) for child in node.children)
-            return ""
+            else:
+                children_text = "".join(extract_text(child) for child in node.children)
+                return children_text
 
-        return extract_text(self)
+        result = extract_text(self)
+        return result
 
     @override
     def to_dict(self) -> dict[str, Any]:
@@ -419,7 +428,7 @@ class DOMElementNode(DOMBaseNode):
     @override
     def to_notte_domnode(self) -> NotteDomNode:
 
-        return NotteDomNode(
+        node = NotteDomNode(
             id=self.notte_id,
             type=NodeType.INTERACTION if self.is_interactive else NodeType.OTHER,
             role=NodeRole.from_value(self.role),
@@ -432,6 +441,17 @@ class DOMElementNode(DOMBaseNode):
                 is_top_element=self.is_top_element,
                 shadow_root=self.shadow_root,
                 highlight_index=self.highlight_index,
-                selectors=HtmlSelector(xpath_selector=self.xpath, notte_selector=self.notte_selector),
+                selectors=NodeSelectors(
+                    css_selector=self.css_path,
+                    xpath_selector=self.xpath,
+                    notte_selector=self.notte_selector,
+                    in_iframe=self.in_iframe,
+                    iframe_parent_css_selectors=self.iframe_parent_css_selectors,
+                    in_shadow_root=self.in_shadow_root,
+                ),
             ),
         )
+        # second path to set the parent
+        for child in node.children:
+            child.set_parent(node)
+        return node

@@ -65,7 +65,6 @@ _AgentAction: type[AgentAction] = create_agent_action_model()
 
 class StepAgentOutput(BaseModel):
     state: AgentState
-    # TODO: enable multiple actions later
     actions: list[_AgentAction]
 
     @property

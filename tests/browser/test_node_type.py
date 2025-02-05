@@ -4,7 +4,7 @@ from notte.browser.dom_tree import (
     ComputedDomAttributes,
     DomAttributes,
     DomNode,
-    HtmlSelector,
+    NodeSelectors,
 )
 from notte.browser.node_type import NodeCategory, NodeRole
 
@@ -119,7 +119,7 @@ def test_notte_node_flatten():
 
 
 def test_html_selector():
-    selector = HtmlSelector(
+    selector = NodeSelectors(
         playwright_selector="button[name='Submit']",
         css_selector="form > button.submit",
         xpath_selector="//form/button[@name='Submit']",
@@ -179,7 +179,7 @@ def test_node_attributes():
     assert pre_attrs.description == "Test description"
 
     # Test NotteAttributesPost
-    selector = HtmlSelector("test", "test", "test")
+    selector = NodeSelectors("test", "test", "test")
     post_attrs = ComputedDomAttributes(selectors=selector)
     assert post_attrs.selectors == selector
 
