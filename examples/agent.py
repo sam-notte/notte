@@ -132,7 +132,11 @@ class SimpleNotteAgent(BaseAgent):
                 obs = await self.proxy.step(resp)
                 # Check if the task is done
                 if obs.output is not None:
-                    status = "😎 task completed sucessfully" if obs.output.success else "👿 task failed"
+                    status = (
+                        "😎 task completed sucessfully"
+                        if obs.output.success
+                        else "👿 task failed"
+                    )
                     logger.info(f"{status} with answer: {obs.output.answer}")
                     return AgentOutput(
                         answer=obs.output.answer,

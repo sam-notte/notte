@@ -49,7 +49,9 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         config: LlmActionSpaceConfig,
     ) -> None:
         self.config: LlmActionSpaceConfig = config
-        self.action_listing_pipe: BaseActionListingPipe = MainActionListingPipe(llmserve, config=self.config.listing)
+        self.action_listing_pipe: BaseActionListingPipe = MainActionListingPipe(
+            llmserve, config=self.config.listing
+        )
         self.doc_categoriser_pipe: DocumentCategoryPipe | None = (
             DocumentCategoryPipe(llmserve) if self.config.doc_categorisation else None
         )
@@ -75,7 +77,9 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         n_required = int(len(inodes_ids) * self.config.required_action_coverage)
         n_required = min(n_required, pagination.max_nb_actions)
         if n_listed >= n_required and pagination.min_nb_actions is None:
-            logger.info(f"[ActionListing] Enough actions: {n_listed} >= {n_required}. Stop action listing prematurely.")
+            logger.info(
+                f"[ActionListing] Enough actions: {n_listed} >= {n_required}. Stop action listing prematurely."
+            )
             return True
         # for min_nb_actions, we want to check that the first min_nb_actions are in the action_list
         # /!\ the order matter here ! We want to make sure that all the early actions are in the action_list
@@ -86,7 +90,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
                     logger.warning(
                         (
                             f"[ActionListing] min_nb_actions = {pagination.min_nb_actions} but action {id} "
-                            f"({i+1}th action) is not in the action list. Retry listng."
+                            f"({i + 1}th action) is not in the action list. Retry listng."
                         )
                     )
                     return False
@@ -117,21 +121,29 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         inodes_ids = [inode.id for inode in context.interaction_nodes()]
         previous_action_list = previous_action_list or []
         # we keep only intersection of current context inodes and previous actions!
-        previous_action_list = [action for action in previous_action_list if action.id in inodes_ids]
+        previous_action_list = [
+            action for action in previous_action_list if action.id in inodes_ids
+        ]
         # TODO: question, can we already perform a `check_enough_actions` here ?
         possible_space = self.action_listing_pipe.forward(context, previous_action_list)
-        merged_actions = self.merge_action_lists(inodes_ids, possible_space.actions, previous_action_list)
+        merged_actions = self.merge_action_lists(
+            inodes_ids, possible_space.actions, previous_action_list
+        )
         # check if we have enough actions to proceed.
         completed = self.check_enough_actions(inodes_ids, merged_actions, pagination)
         if not completed and n_trials == 0:
             raise NotEnoughActionsListedError(
-                n_trials=self.get_n_trials(nb_nodes=len(inodes_ids), max_nb_actions=pagination.max_nb_actions),
+                n_trials=self.get_n_trials(
+                    nb_nodes=len(inodes_ids), max_nb_actions=pagination.max_nb_actions
+                ),
                 n_actions=len(inodes_ids),
                 threshold=self.config.required_action_coverage,
             )
 
         if not completed and n_trials > 0:
-            logger.info(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
+            logger.info(
+                f"[ActionListing] Retry listing actions with {n_trials} trials left."
+            )
             return self.forward_unfiltered(
                 context,
                 merged_actions,
@@ -177,9 +189,13 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         actions: Sequence[PossibleAction],
         previous_action_list: Sequence[Action],
     ) -> list[Action]:
-        validated_action = ActionListValidationPipe.forward(inodes_ids, actions, previous_action_list)
+        validated_action = ActionListValidationPipe.forward(
+            inodes_ids, actions, previous_action_list
+        )
         # we merge newly validated actions with the misses we got from previous actions!
         valided_action_ids = set([action.id for action in validated_action])
         return validated_action + [
-            a for a in previous_action_list if (a.id not in valided_action_ids) and (a.id in inodes_ids)
+            a
+            for a in previous_action_list
+            if (a.id not in valided_action_ids) and (a.id in inodes_ids)
         ]

@@ -30,7 +30,11 @@ def construct_image_url(base_page_url: str, image_src: str) -> str:
     """
     # If image_src is already absolute URL, return as is
     if image_src.startswith(("http://", "https://", "//")):
-        return image_src.replace("//", "https://", 1) if image_src.startswith("//") else image_src
+        return (
+            image_src.replace("//", "https://", 1)
+            if image_src.startswith("//")
+            else image_src
+        )
 
     # For relative paths, use urljoin which handles path resolution
     return urljoin(base_page_url, image_src)
@@ -100,7 +104,6 @@ async def get_images_as_base64(images_urls: list[str]) -> list[dict[str, Any]]:
 
     async with aiohttp.ClientSession() as session:
         for url in images_urls:
-
             try:
                 async with session.get(url) as response:
                     if response.status == 200:

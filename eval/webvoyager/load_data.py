@@ -37,7 +37,9 @@ def load_webvoyager_data() -> list[WebVoyagerTask]:
             raw_ids = data["id"].split("--")
             website_id, task_id = raw_ids[0], int(raw_ids[1])
             task_answer = answers[website_id]["answers"][task_id]
-            task_ref_answers = [WebVoyagerAnswer(type=task_answer["type"], answer=task_answer["ans"])]
+            task_ref_answers = [
+                WebVoyagerAnswer(type=task_answer["type"], answer=task_answer["ans"])
+            ]
             tasks.append(
                 WebVoyagerTask(
                     name=data["web_name"],

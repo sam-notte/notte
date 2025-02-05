@@ -26,7 +26,10 @@ class BetterAgentAction(BaseModel):
 
     @classmethod
     def from_action(cls, action: BaseAction) -> "BetterAgentAction":
-        return cls(action_name=action.name(), parameters=action.model_dump(exclude={"category", "id"}))
+        return cls(
+            action_name=action.name(),
+            parameters=action.model_dump(exclude={"category", "id"}),
+        )
 
     def to_action(self, space: ActionSpace) -> BaseAction:
         action_cls = space.action_map.get(self.action_name)
@@ -36,7 +39,6 @@ class BetterAgentAction(BaseModel):
 
 
 class AgentAction(BaseModel):
-
     def to_action(self) -> BaseAction:
         field_sets = self.model_fields_set
         if len(field_sets) != 1:
@@ -51,7 +53,12 @@ def create_agent_action_model() -> type[AgentAction]:
     fields = {
         name: (
             ActionModel | None,
-            Field(default=None, description=ActionModel.model_json_schema()["properties"]["description"]["default"]),
+            Field(
+                default=None,
+                description=ActionModel.model_json_schema()["properties"][
+                    "description"
+                ]["default"],
+            ),
         )
         for name, ActionModel in space.action_map.items()
     }
@@ -69,7 +76,9 @@ class StepAgentOutput(BaseModel):
 
     @property
     def output(self) -> TaskOutput | None:
-        last_action: CompletionAction | None = getattr(self.actions[-1], CompletionAction.name())
+        last_action: CompletionAction | None = getattr(
+            self.actions[-1], CompletionAction.name()
+        )
         if last_action is not None:
             return TaskOutput(success=last_action.success, answer=last_action.answer)
         return None
@@ -84,9 +93,13 @@ class StepAgentOutput(BaseModel):
         eval_emoji: Literal["👍", "⚠️", "🤔"] = (
             "👍"
             if "Success" in self.state.previous_goal_eval
-            else "⚠️" if "Failed" in self.state.previous_goal_eval else "🤔"
+            else "⚠️"
+            if "Failed" in self.state.previous_goal_eval
+            else "🤔"
         )
-        logger.info(f"{eval_emoji} previous goal evaluation: {self.state.previous_goal_eval}")
+        logger.info(
+            f"{eval_emoji} previous goal evaluation: {self.state.previous_goal_eval}"
+        )
 
         # Log memory state
         logger.info(f"💭 Memory: {self.state.memory}")

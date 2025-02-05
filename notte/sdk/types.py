@@ -31,11 +31,17 @@ class SessionRequestDict(TypedDict, total=False):
 
 class SessionRequest(BaseModel):
     session_id: Annotated[
-        str | None, Field(description="The ID of the session. A new session is created when not provided.")
+        str | None,
+        Field(
+            description="The ID of the session. A new session is created when not provided."
+        ),
     ] = None
 
     keep_alive: Annotated[
-        bool, Field(description="If True, the session will not be closed after the operation is completed.")
+        bool,
+        Field(
+            description="If True, the session will not be closed after the operation is completed."
+        ),
     ] = False
 
     session_timeout_minutes: Annotated[
@@ -47,7 +53,10 @@ class SessionRequest(BaseModel):
         ),
     ] = DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES
 
-    screenshot: Annotated[bool | None, Field(description="Whether to include a screenshot in the response.")] = None
+    screenshot: Annotated[
+        bool | None,
+        Field(description="Whether to include a screenshot in the response."),
+    ] = None
 
     max_steps: Annotated[
         int | None,
@@ -78,14 +87,23 @@ class SessionResponse(BaseModel):
         ),
     ]
     timeout_minutes: Annotated[
-        int, Field(description="Session timeout in minutes. Will timeout if now() > last access time + timeout_minutes")
+        int,
+        Field(
+            description="Session timeout in minutes. Will timeout if now() > last access time + timeout_minutes"
+        ),
     ]
     created_at: Annotated[dt.datetime, Field(description="Session creation time")]
     last_accessed_at: Annotated[dt.datetime, Field(description="Last access time")]
     duration: Annotated[dt.timedelta, Field(description="Session duration")]
-    status: Annotated[Literal["active", "closed", "error", "timed_out"], Field(description="Session status")]
+    status: Annotated[
+        Literal["active", "closed", "error", "timed_out"],
+        Field(description="Session status"),
+    ]
     # TODO: discuss if this is the best way to handle errors
-    error: Annotated[str | None, Field(description="Error message if the operation failed to complete")] = None
+    error: Annotated[
+        str | None,
+        Field(description="Error message if the operation failed to complete"),
+    ] = None
 
 
 class SessionResponseDict(TypedDict, total=False):
@@ -130,9 +148,12 @@ class PaginationParams(BaseModel):
 
 
 class ObserveRequest(SessionRequest, PaginationParams):
-    url: Annotated[str | None, Field(description="The URL to observe. If not provided, uses the current page URL.")] = (
-        None
-    )
+    url: Annotated[
+        str | None,
+        Field(
+            description="The URL to observe. If not provided, uses the current page URL."
+        ),
+    ] = None
 
 
 class ObserveRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
@@ -147,18 +168,25 @@ class ScrapeRequestDict(SessionRequestDict, total=False):
 
 class ScrapeParams(BaseModel):
     scrape_images: Annotated[
-        bool, Field(description="Whether to scrape images from the page. Images are not scraped by default.")
+        bool,
+        Field(
+            description="Whether to scrape images from the page. Images are not scraped by default."
+        ),
     ] = False
 
     scrape_links: Annotated[
-        bool, Field(description="Whether to scrape links from the page. Links are scraped by default.")
+        bool,
+        Field(
+            description="Whether to scrape links from the page. Links are scraped by default."
+        ),
     ] = True
 
     only_main_content: Annotated[
         bool,
         Field(
             description=(
-                "Whether to only scrape the main content of the page. " "If True, navbars, footers, etc. are excluded."
+                "Whether to only scrape the main content of the page. "
+                "If True, navbars, footers, etc. are excluded."
             ),
         ),
     ] = True
@@ -171,9 +199,14 @@ class ScrapeRequest(ObserveRequest, ScrapeParams):
 class StepRequest(SessionRequest, PaginationParams):
     action_id: Annotated[str, Field(description="The ID of the action to execute")]
 
-    value: Annotated[str | None, Field(description="The value to input for form actions")] = None
+    value: Annotated[
+        str | None, Field(description="The value to input for form actions")
+    ] = None
 
-    enter: Annotated[bool | None, Field(description="Whether to press enter after inputting the value")] = None
+    enter: Annotated[
+        bool | None,
+        Field(description="Whether to press enter after inputting the value"),
+    ] = None
 
 
 class StepRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
@@ -183,16 +216,27 @@ class StepRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=Fa
 
 
 class ActionSpaceResponse(BaseModel):
-    markdown: Annotated[str | None, Field(description="Markdown representation of the action space")] = None
-    description: Annotated[str, Field(description="Human-readable description of the current web page")]
+    markdown: Annotated[
+        str | None, Field(description="Markdown representation of the action space")
+    ] = None
+    description: Annotated[
+        str, Field(description="Human-readable description of the current web page")
+    ]
 
-    actions: Annotated[Sequence[BaseAction], Field(description="List of available actions in the current state")]
+    actions: Annotated[
+        Sequence[BaseAction],
+        Field(description="List of available actions in the current state"),
+    ]
     browser_actions: Annotated[
-        Sequence[BrowserAction], Field(description="List of special actions, i.e browser actions")
+        Sequence[BrowserAction],
+        Field(description="List of special actions, i.e browser actions"),
     ]
 
     category: Annotated[
-        str | None, Field(description="Category of the action space (e.g., 'homepage', 'search-results', 'item)")
+        str | None,
+        Field(
+            description="Category of the action space (e.g., 'homepage', 'search-results', 'item)"
+        ),
     ] = None
 
     @staticmethod
@@ -210,14 +254,20 @@ class ActionSpaceResponse(BaseModel):
 
 
 class DataSpaceResponse(BaseModel):
-    markdown: Annotated[str | None, Field(description="Markdown representation of the extracted data")] = None
+    markdown: Annotated[
+        str | None, Field(description="Markdown representation of the extracted data")
+    ] = None
 
     images: Annotated[
-        list[ImageData] | None, Field(description="List of images extracted from the page (ID and download link)")
+        list[ImageData] | None,
+        Field(
+            description="List of images extracted from the page (ID and download link)"
+        ),
     ] = None
 
     structured: Annotated[
-        list[dict[str, Any]] | None, Field(description="Structured data extracted from the page in JSON format")
+        list[dict[str, Any]] | None,
+        Field(description="Structured data extracted from the page in JSON format"),
     ] = None
 
     @staticmethod
@@ -232,16 +282,28 @@ class DataSpaceResponse(BaseModel):
 
 
 class ObserveResponse(BaseModel):
-    session: Annotated[SessionResponse, Field(description="Browser session information")]
+    session: Annotated[
+        SessionResponse, Field(description="Browser session information")
+    ]
     metadata: Annotated[
-        SnapshotMetadata, Field(description="Metadata of the current page, i.e url, page title, snapshot timestamp.")
+        SnapshotMetadata,
+        Field(
+            description="Metadata of the current page, i.e url, page title, snapshot timestamp."
+        ),
     ]
 
-    screenshot: Annotated[bytes | None, Field(description="Base64 encoded screenshot of the current page")] = None
+    screenshot: Annotated[
+        bytes | None, Field(description="Base64 encoded screenshot of the current page")
+    ] = None
 
-    data: Annotated[DataSpaceResponse | None, Field(description="Extracted data from the page")] = None
+    data: Annotated[
+        DataSpaceResponse | None, Field(description="Extracted data from the page")
+    ] = None
 
-    space: Annotated[ActionSpaceResponse | None, Field(description="Available actions in the current state")] = None
+    space: Annotated[
+        ActionSpaceResponse | None,
+        Field(description="Available actions in the current state"),
+    ] = None
 
     model_config = {
         "json_encoders": {
@@ -259,5 +321,7 @@ class ObserveResponse(BaseModel):
             metadata=obs.metadata,
             screenshot=obs.screenshot,
             data=DataSpaceResponse.from_data(obs.data),
-            space=ActionSpaceResponse.from_space(obs.space if obs.has_space() else None),
+            space=ActionSpaceResponse.from_space(
+                obs.space if obs.has_space() else None
+            ),
         )

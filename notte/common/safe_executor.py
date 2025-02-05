@@ -32,18 +32,28 @@ class StepExecutionFailure(NotteBaseError):
 class MaxConsecutiveFailuresError(NotteBaseError):
     def __init__(self, max_failures: int):
         self.max_failures: int = max_failures
-        super().__init__(f"Max consecutive failures reached in a single step: {max_failures}", user_message="")
+        super().__init__(
+            f"Max consecutive failures reached in a single step: {max_failures}",
+            user_message="",
+        )
 
 
 @final
 class SafeActionExecutor(Generic[S, T]):
-    def __init__(self, func: Callable[[S], Awaitable[T]], max_failures: int = 3, raise_on_failure: bool = True) -> None:
+    def __init__(
+        self,
+        func: Callable[[S], Awaitable[T]],
+        max_failures: int = 3,
+        raise_on_failure: bool = True,
+    ) -> None:
         self.func = func
         self.max_failures = max_failures
         self.consecutive_failures = 0
         self.raise_on_failure = raise_on_failure
 
-    def on_failure(self, input_data: S, error_msg: str, e: Exception) -> ExecutionStatus[S, T]:
+    def on_failure(
+        self, input_data: S, error_msg: str, e: Exception
+    ) -> ExecutionStatus[S, T]:
         self.consecutive_failures += 1
         if self.consecutive_failures >= self.max_failures:
             raise MaxConsecutiveFailuresError(self.max_failures) from e
@@ -67,10 +77,14 @@ class SafeActionExecutor(Generic[S, T]):
                 message=f"Successfully executed action with input: {input_data}",
             )
         except RateLimitError as e:
-            return self.on_failure(input_data, "Rate limit reached. Waiting before retry.", e)
+            return self.on_failure(
+                input_data, "Rate limit reached. Waiting before retry.", e
+            )
         except NotteBaseError as e:
             return self.on_failure(
-                input_data, f"Failure during action execution with error: {e.dev_message} : {e.user_message}", e
+                input_data,
+                f"Failure during action execution with error: {e.dev_message} : {e.user_message}",
+                e,
             )
         except ValidationError as e:
             return self.on_failure(

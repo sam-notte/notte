@@ -21,7 +21,6 @@ from notte.pipe.preprocessing.a11y.conflict_resolution import (
 
 @final
 class ActionNodeResolutionPipe:
-
     def __init__(self, browser: BrowserDriver) -> None:
         self._browser = browser
 
@@ -63,11 +62,15 @@ class ActionNodeResolutionPipe:
             locator=resolved_locator,
         )
 
-    async def fill_node_selectors(self, node: DomNode, snapshot: BrowserSnapshot) -> None:
+    async def fill_node_selectors(
+        self, node: DomNode, snapshot: BrowserSnapshot
+    ) -> None:
         selectors = node.computed_attributes.selectors
         if selectors is None:
             assert node.id is not None
-            locator = await get_locator_for_node_id(self._browser.page, snapshot.a11y_tree.raw, node.id)
+            locator = await get_locator_for_node_id(
+                self._browser.page, snapshot.a11y_tree.raw, node.id
+            )
             if locator is None:
                 raise FailedNodeResolutionError(node)
             # You can now use the locator for interaction
@@ -102,7 +105,9 @@ class ActionNodeResolutionPipe:
                         # Found unique match, perform click
                         return locator, selector
                 except Exception as e:
-                    logger.error(f"Error with selector '{selector}' on frame '{frame}': {str(e)}, trying next...")
+                    logger.error(
+                        f"Error with selector '{selector}' on frame '{frame}': {str(e)}, trying next..."
+                    )
                     continue
         raise FailedUniqueLocatorResolutionError(selectors)
 

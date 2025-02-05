@@ -18,7 +18,6 @@ from .load_data import WebVoyagerTask
 
 
 class BaseWebVoyagerEvaluator(ABC):
-
     def __init__(
         self,
         # api_model: str = "openai/gpt-4-turbo",
@@ -40,7 +39,10 @@ class BaseWebVoyagerEvaluator(ABC):
                 return response.choices[0].message.content
             except Exception as e:
                 logger.error(e)
-                if isinstance(e, Exception) and type(e).__name__ == "InvalidRequestError":
+                if (
+                    isinstance(e, Exception)
+                    and type(e).__name__ == "InvalidRequestError"
+                ):
                     raise
                 time.sleep(10 if type(e).__name__ != "APIError" else 15)
 
@@ -51,7 +53,6 @@ class BaseWebVoyagerEvaluator(ABC):
 
 @final
 class SimpleWebVoyageEvaluator(BaseWebVoyagerEvaluator):
-
     SYSTEM_PROMPT = """As an evaluator, you will be presented with three primary components to assist you in your role:
 
 1. Web Task Instruction: This is a clear and specific directive provided in natural language, detailing the online activity to be carried out. These requirements may include conducting searches, verifying information, comparing prices, checking availability, or any other action relevant to the specified web service (such as Amazon, Apple, ArXiv, BBC News, Booking etc).
@@ -79,7 +80,6 @@ Then validate that whether or not each subtask has been completed to provide you
 
     @override
     def evaluate_task(self, task: WebVoyagerTask, output: AgentOutput) -> int | None:
-
         response = self._call_llm_evaluator(
             [
                 {"role": "system", "content": self.SYSTEM_PROMPT},
@@ -87,7 +87,11 @@ Then validate that whether or not each subtask has been completed to provide you
                     "role": "user",
                     "content": chevron.render(
                         self.USER_PROMPT,
-                        {"task": task.question, "ref_answer": task.ref_answers[0].answer, "answer": output.answer},
+                        {
+                            "task": task.question,
+                            "ref_answer": task.ref_answers[0].answer,
+                            "answer": output.answer,
+                        },
                     ),
                 },
             ]
@@ -149,9 +153,16 @@ Result Response: <answer>
         matches.sort(key=lambda x: x[1])
         return matches[-self.max_attached_imgs :]
 
-    def _prepare_image_content(self, screenshot_files: list[tuple[str, int]]) -> list[dict[str, Any]]:
+    def _prepare_image_content(
+        self, screenshot_files: list[tuple[str, int]]
+    ) -> list[dict[str, Any]]:
         return [
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{self.encode_image(png_file[0])}"}}
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{self.encode_image(png_file[0])}"
+                },
+            }
             for png_file in screenshot_files
         ]
 

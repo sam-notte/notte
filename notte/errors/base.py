@@ -29,7 +29,9 @@ class NotteBaseError(ValueError):
     """Base exception class for all package errors."""
 
     TRY_AGAIN_LATER_MESSAGE: str = " Please try again later."
-    NOTTE_TEAM_NOTIFIED_MESSAGE: str = "Our team has been notified of the issue. We will fix it as soon as possible."
+    NOTTE_TEAM_NOTIFIED_MESSAGE: str = (
+        "Our team has been notified of the issue. We will fix it as soon as possible."
+    )
 
     def __init__(
         self,
@@ -56,7 +58,9 @@ class NotteBaseError(ValueError):
 
 class NotteTimeoutError(NotteBaseError):
     def __init__(self, message: str) -> None:
-        super().__init__(dev_message=message, user_message=message, should_retry_later=True)
+        super().__init__(
+            dev_message=message, user_message=message, should_retry_later=True
+        )
 
 
 class UnexpectedBehaviorError(NotteBaseError):

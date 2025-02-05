@@ -99,7 +99,12 @@ def test_notte_node_flatten():
     button2 = DomNode(id="btn2", role=NodeRole.BUTTON, text="Button 2")
     text_node = DomNode(id="txt1", role=NodeRole.TEXT, text="Some text")
 
-    group = DomNode(id="group1", role=NodeRole.GROUP, text="Group", children=[button1, text_node, button2])
+    group = DomNode(
+        id="group1",
+        role=NodeRole.GROUP,
+        text="Group",
+        children=[button1, text_node, button2],
+    )
 
     # Test flatten with all nodes
     flattened = group.flatten(only_interaction=False)
@@ -185,15 +190,18 @@ def test_node_attributes():
 
 
 def test_consistency_node_role_and_category():
-
     for role in NodeRole:
-        assert role.value in role.category().roles(), f"Role {role.value} is not in category {role.category()}"
+        assert role.value in role.category().roles(), (
+            f"Role {role.value} is not in category {role.category()}"
+        )
 
     for category in NodeCategory:
         for role_str in category.roles():
             role = NodeRole.from_value(role_str)
             assert not isinstance(role, str), f"Role {role_str} is a string"
-            assert role.category() == category, f"Role {role_str} has wrong category: {role.category()}"
+            assert role.category() == category, (
+                f"Role {role_str} has wrong category: {role.category()}"
+            )
 
 
 @pytest.fixture
@@ -253,7 +261,9 @@ def test_subtree_keep_one_node(nested_graph: DomNode):
     filtered_graph = nested_graph.subtree_filter(exclude_some_nodes)
     assert filtered_graph is not None
     assert filtered_graph.id is None
-    assert len(filtered_graph.children) == 3, f"Expected 3 children, got {len(filtered_graph.children)}"
+    assert len(filtered_graph.children) == 3, (
+        f"Expected 3 children, got {len(filtered_graph.children)}"
+    )
     assert filtered_graph.children[0].id == "B2"
     assert filtered_graph.children[1].role == NodeRole.GROUP
     assert filtered_graph.children[2].role == NodeRole.GROUP
@@ -293,11 +303,19 @@ def test_all_interaction_roles_have_short_id():
 
 
 def test_non_intersecting_category_roles():
-
     def all_except(category: NodeCategory) -> set[str]:
-        return set([role for cat in NodeCategory if cat.value != category.value for role in cat.roles()])
+        return set(
+            [
+                role
+                for cat in NodeCategory
+                if cat.value != category.value
+                for role in cat.roles()
+            ]
+        )
 
     for category in NodeCategory:
         _all = all_except(category)
         cat_roles = category.roles()
-        assert len(cat_roles.intersection(_all)) == 0, f"Category {category.value} has intersecting roles"
+        assert len(cat_roles.intersection(_all)) == 0, (
+            f"Category {category.value} has intersecting roles"
+        )

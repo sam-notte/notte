@@ -14,7 +14,9 @@ class MockNotteEnv(NotteEnv):
 
     def __init__(self) -> None:
         super().__init__(headless=True, screenshot=False)
-        self._mock_action = Action(description="Mock action", id="mock_id", category="mock", status="valid")
+        self._mock_action = Action(
+            description="Mock action", id="mock_id", category="mock", status="valid"
+        )
         self._mock_action_space = ActionSpace(
             _actions=[self._mock_action],
             description="Mock action space",

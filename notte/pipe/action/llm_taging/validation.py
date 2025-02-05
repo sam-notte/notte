@@ -6,7 +6,6 @@ from notte.actions.base import Action, PossibleAction
 
 
 class ActionListValidationPipe:
-
     @staticmethod
     def forward(
         inodes_ids: list[str],
@@ -18,10 +17,16 @@ class ActionListValidationPipe:
         actions_ids = {action.id for action in actions}
         previous_action_ids = {action.id for action in (previous_action_list or [])}
         hallucinated_ids = {id for id in actions_ids if id not in inodes_ids}
-        missed_ids = {id for id in inodes_ids if (id not in actions_ids) and (id not in previous_action_ids)}
+        missed_ids = {
+            id
+            for id in inodes_ids
+            if (id not in actions_ids) and (id not in previous_action_ids)
+        }
 
         if len(hallucinated_ids) > 0:
-            logger.warning(f"Hallucinated actions: {len(hallucinated_ids)} : {hallucinated_ids}")
+            logger.warning(
+                f"Hallucinated actions: {len(hallucinated_ids)} : {hallucinated_ids}"
+            )
             # TODO: log them into DB.
 
         if len(missed_ids) > 0:

@@ -60,7 +60,8 @@ class PossibleAction(BaseModel):
             case _:
                 if raise_error:
                     raise InvalidActionError(
-                        self.id, f"First ID character must be one of {ActionRole} but got {self.id[0]}"
+                        self.id,
+                        f"First ID character must be one of {ActionRole} but got {self.id[0]}",
                     )
                 return "other"
 
@@ -121,7 +122,10 @@ class BrowserAction(Action, _BrowserAction):
 
     def __post_init__(self):
         if not BrowserAction.is_special(self.id):
-            raise InvalidActionError(self.id, f"Special actions ID must be one of {BrowserActionId} but got {self.id}")
+            raise InvalidActionError(
+                self.id,
+                f"Special actions ID must be one of {BrowserActionId} but got {self.id}",
+            )
 
     @staticmethod
     def goto() -> "BrowserAction":

@@ -44,13 +44,17 @@ class DOMBaseNode:
 
     def __post_init__(self) -> None:
         self.children = [] if getattr(self, "children", None) is None else self.children
-        self.notte_id = None if getattr(self, "notte_id", None) is None else self.notte_id
+        self.notte_id = (
+            None if getattr(self, "notte_id", None) is None else self.notte_id
+        )
 
     def to_dict(self) -> dict[str, str]:
         raise NotImplementedError("to_dict method not implemented for DOMBaseNode")
 
     def to_notte_domnode(self) -> NotteDomNode:
-        raise NotImplementedError("to_notte_domnode method not implemented for DOMBaseNode")
+        raise NotImplementedError(
+            "to_notte_domnode method not implemented for DOMBaseNode"
+        )
 
     @property
     def name(self) -> str:
@@ -158,7 +162,7 @@ class DOMElementNode(DOMBaseNode):
             extras.append(f"highlight:{self.highlight_index}")
 
         if extras:
-            tag_str += f' [{", ".join(extras)}]'
+            tag_str += f" [{', '.join(extras)}]"
 
         return tag_str
 
@@ -171,7 +175,9 @@ class DOMElementNode(DOMBaseNode):
         if self.tag_name is None or len(self.tag_name) == 0:
             if len(self.attributes) == 0 and len(self.children) == 0:
                 return "none"
-            raise ValueError(f"No tag_name found for element: {self} with attributes: {self.attributes}")
+            raise ValueError(
+                f"No tag_name found for element: {self} with attributes: {self.attributes}"
+            )
         clean_tag_name = self.tag_name.lower().replace("-", "").replace("_", "")
         match self.tag_name.lower():
             # Structural elements
@@ -286,7 +292,13 @@ class DOMElementNode(DOMBaseNode):
             case "hr":
                 return "separator"
             case _:
-                roles_to_check = ["menuitemcheckbox", "menuitemradio", "menuitem", "menu", "dialog"]
+                roles_to_check = [
+                    "menuitemcheckbox",
+                    "menuitemradio",
+                    "menuitem",
+                    "menu",
+                    "dialog",
+                ]
                 for role in roles_to_check:
                     if role in clean_tag_name:
                         return role
@@ -294,7 +306,9 @@ class DOMElementNode(DOMBaseNode):
                     return "MenuListPopup"
 
                 if VERBOSE:
-                    logger.warning(f"No role found for tag: {self.tag_name} with attributes: {self.attributes}")
+                    logger.warning(
+                        f"No role found for tag: {self.tag_name} with attributes: {self.attributes}"
+                    )
                 return "generic"
 
     @property
@@ -399,7 +413,9 @@ class DOMElementNode(DOMBaseNode):
 
         first_5_attrs = list(self.attributes.items())[:5]
         if VERBOSE:
-            logger.error(f"No name found for element: {self} with attributes: {first_5_attrs}")
+            logger.error(
+                f"No name found for element: {self} with attributes: {first_5_attrs}"
+            )
         return ""
 
     def _get_text_content(self) -> str:
@@ -427,7 +443,6 @@ class DOMElementNode(DOMBaseNode):
 
     @override
     def to_notte_domnode(self) -> NotteDomNode:
-
         node = NotteDomNode(
             id=self.notte_id,
             type=NodeType.INTERACTION if self.is_interactive else NodeType.OTHER,

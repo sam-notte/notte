@@ -30,8 +30,12 @@ class MainActionSpacePipe(BaseActionSpacePipe):
     def __init__(self, llmserve: LLMService, config: MainActionSpaceConfig) -> None:
         self.config: MainActionSpaceConfig = config
         self.llmserve: LLMService = llmserve
-        self.llm_pipe: LlmActionSpacePipe = LlmActionSpacePipe(llmserve=llmserve, config=self.config.llm_tagging)
-        self.simple_pipe: SimpleActionSpacePipe = SimpleActionSpacePipe(config=self.config.simple)
+        self.llm_pipe: LlmActionSpacePipe = LlmActionSpacePipe(
+            llmserve=llmserve, config=self.config.llm_tagging
+        )
+        self.simple_pipe: SimpleActionSpacePipe = SimpleActionSpacePipe(
+            config=self.config.simple
+        )
 
     @override
     def forward(
@@ -46,4 +50,6 @@ class MainActionSpacePipe(BaseActionSpacePipe):
                 return self.llm_pipe.forward(context, previous_action_list, pagination)
             case ActionSpaceType.SIMPLE:
                 logger.info("📄 Running simple action space")
-                return self.simple_pipe.forward(context, previous_action_list, pagination)
+                return self.simple_pipe.forward(
+                    context, previous_action_list, pagination
+                )

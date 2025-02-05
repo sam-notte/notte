@@ -53,7 +53,11 @@ def trace_llm_usage(
                             "total_tokens": getattr(usage, "total_tokens", 0),
                         }
                         if usage
-                        else {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+                        else {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        }
                     )
 
                     tracer.trace(

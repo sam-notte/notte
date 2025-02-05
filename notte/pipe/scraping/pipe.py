@@ -37,5 +37,7 @@ class DataScrapingPipe:
         logger.info(f"📄 Extracted page as markdown\n: {data.markdown}\n")
         return data
 
-    async def forward_async(self, context: ProcessedBrowserSnapshot, config: ScrapingConfig) -> DataSpace:
+    async def forward_async(
+        self, context: ProcessedBrowserSnapshot, config: ScrapingConfig
+    ) -> DataSpace:
         return await self.complex_pipe.forward(context, config)

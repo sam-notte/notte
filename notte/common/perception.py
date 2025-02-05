@@ -5,7 +5,6 @@ from notte.browser.observation import Observation
 
 
 class BasePerception(ABC):
-
     def __init__(self, include_screenshot: bool = True):
         self.include_screenshot: bool = include_screenshot
 
@@ -21,7 +20,10 @@ class BasePerception(ABC):
             raise ValueError("Observation has no screenshot")
         return [
             {"type": "text", "text": content},
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{obs.screenshot!s}"}},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{obs.screenshot!s}"},
+            },
         ]
 
 

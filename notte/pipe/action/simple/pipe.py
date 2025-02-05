@@ -41,7 +41,9 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
         return ExecutableAction(
             id=node.id,
             category="Interaction action",
-            description=InteractionOnlyDomNodeRenderingPipe.render_node(node, self.config.rendering.include_attributes),
+            description=InteractionOnlyDomNodeRenderingPipe.render_node(
+                node, self.config.rendering.include_attributes
+            ),
             locator=ResolvedLocator(
                 selector=selectors,
                 is_editable=False,
@@ -66,7 +68,9 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
         previous_action_list: Sequence[BaseAction] | None,
         pagination: PaginationParams,
     ) -> ActionSpace:
-        page_content = DomNodeRenderingPipe.forward(context.snapshot.dom_node, config=self.config.rendering)
+        page_content = DomNodeRenderingPipe.forward(
+            context.snapshot.dom_node, config=self.config.rendering
+        )
         return ActionSpace(
             description=page_content,
             raw_actions=self.actions(context.snapshot.dom_node),

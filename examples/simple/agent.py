@@ -46,7 +46,6 @@ max_actions_per_step = 5
 
 
 class SimpleAgent(BaseAgent):
-
     def __init__(
         self,
         model: str,
@@ -72,7 +71,9 @@ class SimpleAgent(BaseAgent):
         )
         self.perception: SimplePerception = SimplePerception()
         self.short_history: bool = short_history
-        self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=max_error_length)
+        self.trajectory: TrajectoryHistory = TrajectoryHistory(
+            max_error_length=max_error_length
+        )
         self.raise_on_failure: bool = raise_on_failure
 
     @override
@@ -82,7 +83,9 @@ class SimpleAgent(BaseAgent):
         self.conv.add_system_message(content=system_msg)
         self.conv.add_user_message(content=task_msg)
 
-        executor = SafeActionExecutor(func=self.env.raw_step, raise_on_failure=self.raise_on_failure)
+        executor = SafeActionExecutor(
+            func=self.env.raw_step, raise_on_failure=self.raise_on_failure
+        )
         max_steps = self.env.config.max_steps
         # Loop through the steps
         async with self.env:
@@ -100,7 +103,9 @@ class SimpleAgent(BaseAgent):
                     # Add the last observation
                     last_obs = self.trajectory.last_obs()
                     if last_obs is not None:
-                        self.conv.add_user_message(content=self.perception.perceive(last_obs))
+                        self.conv.add_user_message(
+                            content=self.perception.perceive(last_obs)
+                        )
 
                 # Let the LLM Agent think about the next action
                 # logger.info(
@@ -115,14 +120,24 @@ class SimpleAgent(BaseAgent):
                 # check for completion
                 if response.output is not None:
                     if not response.output.success:
-                        logger.error(f"🚨 Task failed with reason: {response.output.answer}")
-                        raise ValueError(f"Task failed with reason: {response.output.answer}")
+                        logger.error(
+                            f"🚨 Task failed with reason: {response.output.answer}"
+                        )
+                        raise ValueError(
+                            f"Task failed with reason: {response.output.answer}"
+                        )
                     # Sucessful execution and LLM output is not None
                     # Need to validate the output
-                    logger.info(f"🔥 Validating agent output:\n{response.output.model_dump_json()}")
-                    if not self.validator.validate(task, response.output, self.env.trajectory[-1]):
+                    logger.info(
+                        f"🔥 Validating agent output:\n{response.output.model_dump_json()}"
+                    )
+                    if not self.validator.validate(
+                        task, response.output, self.env.trajectory[-1]
+                    ):
                         # TODO handle that differently
-                        raise ValueError(f"Validation failed for task {task} with output {response.output}")
+                        raise ValueError(
+                            f"Validation failed for task {task} with output {response.output}"
+                        )
                     logger.info("✅ Task completed successfully")
                     return AgentOutput(
                         answer=response.output.answer,
@@ -134,7 +149,9 @@ class SimpleAgent(BaseAgent):
                 for action in response.get_actions()[:max_actions_per_step]:
                     result = await executor.execute(action)
                     self.trajectory.add_step(response, result)
-                    step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
+                    step_msg = self.trajectory.perceive_step_result(
+                        result, include_ids=True
+                    )
                     if not result.success:
                         logger.error(f"🚨 {step_msg}")
                     else:

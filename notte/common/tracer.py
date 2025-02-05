@@ -15,7 +15,6 @@ class Tracer(Protocol):
 
 
 class LlmTracer(Tracer):
-
     @override
     def trace(
         self,
@@ -31,7 +30,6 @@ class LlmTracer(Tracer):
 
 
 class LlmUsageFileTracer(LlmTracer):
-
     file_path: ClassVar[Path] = Path(__file__).parent.parent.parent / "llm_usage.jsonl"
 
     @override
@@ -60,8 +58,9 @@ class LlmUsageFileTracer(LlmTracer):
 
 
 class LlmParsingErrorFileTracer(Tracer):
-
-    file_path: ClassVar[Path] = Path(__file__).parent.parent.parent / "llm_parsing_error.jsonl"
+    file_path: ClassVar[Path] = (
+        Path(__file__).parent.parent.parent / "llm_parsing_error.jsonl"
+    )
 
     @override
     def trace(

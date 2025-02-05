@@ -35,7 +35,9 @@ homepage
 
 
 @pytest.fixture
-async def env_generator(mock_llm_service: MockLLMService) -> AsyncGenerator[NotteEnv, None]:
+async def env_generator(
+    mock_llm_service: MockLLMService,
+) -> AsyncGenerator[NotteEnv, None]:
     """Create a NotteEnv instance with mock browser and LLM"""
     browser = MockBrowserDriver()
     async with NotteEnv(browser=browser, llmserve=mock_llm_service) as env:
@@ -52,7 +54,8 @@ async def aenv(env_generator: AsyncGenerator[NotteEnv, None]) -> NotteEnv:
 async def test_context_property_before_observation(aenv: Awaitable[NotteEnv]) -> None:
     """Test that accessing context before observation raises an error"""
     with pytest.raises(
-        ValueError, match="tried to access `env.context` but no context is available in the environment"
+        ValueError,
+        match="tried to access `env.context` but no context is available in the environment",
     ):
         _ = (await aenv).context
 
@@ -90,7 +93,9 @@ async def test_valid_observation_after_observation(aenv: Awaitable[NotteEnv]) ->
 
     # Verify each action has required attributes
     actions = [
-        Action(id="L1", description="Opens more information page", category="Navigation"),
+        Action(
+            id="L1", description="Opens more information page", category="Navigation"
+        ),
     ]
 
 
@@ -128,4 +133,6 @@ async def test_valid_observation_after_reset(aenv: Awaitable[NotteEnv]) -> None:
 
     # Verify the state was effectively reset
     assert env.context.snapshot.screenshot == obs.screenshot  # poor proxy but ok
-    assert len(env._trajectory) == 1  # the trajectory should only contains a single obs (from reset)
+    assert (
+        len(env._trajectory) == 1
+    )  # the trajectory should only contains a single obs (from reset)

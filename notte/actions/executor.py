@@ -11,7 +11,10 @@ ActionExecutor: TypeAlias = Callable[[Page], Awaitable[bool]]
 
 def get_executor(action: ExecutableAction) -> ActionExecutor:
     if action.code is None:
-        raise InvalidActionError(action_id=action.id, reason="`code` field cannot be None for executable actions.")
+        raise InvalidActionError(
+            action_id=action.id,
+            reason="`code` field cannot be None for executable actions.",
+        )
     # Create a new namespace to avoid polluting the global namespace
     namespace: dict[str, Any] = {}
     # Add required imports to the namespace

@@ -63,7 +63,6 @@ class MockLocator:
 
 
 class MockBrowserPage:
-
     def locate(self, selector: str) -> MockLocator:
         return MockLocator(name="mock", role="mock", selector=selector)
 

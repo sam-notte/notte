@@ -56,12 +56,12 @@ class NodeSelectors:
     playwright_selector: str | None = None
 
     def selectors(self) -> list[str]:
-        l: list[str] = []
+        selector_list: list[str] = []
         if self.playwright_selector is not None:
-            l.append(self.playwright_selector)
-        l.append(self.css_selector)
-        l.append(self.xpath_selector)
-        return l
+            selector_list.append(self.playwright_selector)
+        selector_list.append(self.css_selector)
+        selector_list.append(self.xpath_selector)
+        return selector_list
 
 
 # Type alias for clarity
@@ -418,7 +418,10 @@ class DomNode:
             return False
         if self.type.value == NodeType.INTERACTION.value:
             return True
-        return self.role.category().value in [NodeCategory.INTERACTION.value, NodeCategory.PARAMETERS.value]
+        return self.role.category().value in [
+            NodeCategory.INTERACTION.value,
+            NodeCategory.PARAMETERS.value,
+        ]
 
     def is_image(self) -> bool:
         if isinstance(self.role, str):
@@ -474,7 +477,6 @@ class DomNode:
         return snode
 
     def subtree_without(self, roles: set[str]) -> "DomNode":
-
         def only_roles(node: DomNode) -> bool:
             if isinstance(node.role, str):
                 return True

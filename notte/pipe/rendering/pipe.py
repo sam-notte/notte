@@ -46,7 +46,6 @@ class DomNodeRenderingConfig(BaseModel):
 
 @final
 class DomNodeRenderingPipe:
-
     @staticmethod
     def forward(node: DomNode, config: DomNodeRenderingConfig) -> str:
         # Exclude images if requested

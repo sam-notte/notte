@@ -6,7 +6,6 @@ from notte.errors.processing import InvalidInternalCheckError
 
 
 class InteractionOnlyDomNodeRenderingPipe:
-
     @staticmethod
     def render_node(
         node: DomNode,
@@ -25,7 +24,9 @@ class InteractionOnlyDomNodeRenderingPipe:
         attrs_str = ""
         attrs_relevant = attrs.relevant_attrs(include_attributes, max_len_per_attribute)
         if len(attrs_relevant) > 0:
-            attrs_str = " " + " ".join([f'{key}="{value}"' for key, value in attrs_relevant.items()])
+            attrs_str = " " + " ".join(
+                [f'{key}="{value}"' for key, value in attrs_relevant.items()]
+            )
         children_texts = InteractionOnlyDomNodeRenderingPipe.children_texts(node)
         children_str = "\n".join(children_texts).strip()
         return f"<{attrs.tag_name}{attrs_str}>{children_str}</{attrs.tag_name}>"

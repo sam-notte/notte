@@ -57,7 +57,9 @@ def prunable_with_linebreak_text_node() -> A11yNode:
     }
 
 
-def test_prune_text_field_already_contained_in_parent_name(prunable_text_node: A11yNode):
+def test_prune_text_field_already_contained_in_parent_name(
+    prunable_text_node: A11yNode,
+):
     assert prune_text_field_already_contained_in_parent_name(prunable_text_node) == {
         "role": "WebArea",
         "name": "",
@@ -75,7 +77,9 @@ def test_prune_text_field_already_contained_in_parent_name(prunable_text_node: A
 
 
 def test_prune_text_with_linebreak(prunable_with_linebreak_text_node: A11yNode):
-    assert prune_text_field_already_contained_in_parent_name(prunable_with_linebreak_text_node) == {
+    assert prune_text_field_already_contained_in_parent_name(
+        prunable_with_linebreak_text_node
+    ) == {
         "role": "heading",
         "name": "Take a closer look at our latest models.",
     }

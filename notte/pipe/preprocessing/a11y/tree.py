@@ -39,7 +39,9 @@ class ProcessedA11yTree:
 
     def __post_init__(self):
         if not self._filtered:
-            _ = check_interactions_consistency_accross_ax_trees(self.simple_tree, self.raw_tree, only_with_id=True)
+            _ = check_interactions_consistency_accross_ax_trees(
+                self.simple_tree, self.raw_tree, only_with_id=True
+            )
 
     @staticmethod
     def from_a11y_tree(tree: A11yTree) -> "ProcessedA11yTree":
@@ -58,9 +60,13 @@ class ProcessedA11yTree:
         processed_tree = simple_processing_accessiblity_tree(_processed_tree)
         if processed_tree is None:
             raise NodeFilteringResultsInEmptyGraph("pruning processed tree")
-        processed_tree = sync_ids_between_trees(source=simple_tree, target=processed_tree)
+        processed_tree = sync_ids_between_trees(
+            source=simple_tree, target=processed_tree
+        )
         # manually sync image IDs between trees
-        processed_tree = sync_image_ids_between_trees(source=raw_tree, target=processed_tree)
+        processed_tree = sync_image_ids_between_trees(
+            source=raw_tree, target=processed_tree
+        )
         # ASSUMPTION: only dialog actions are relevant if present
         processed_tree = prune_non_dialogs_if_present(processed_tree)
         # TODO: enable that if really needed
@@ -69,7 +75,9 @@ class ProcessedA11yTree:
         # Be aware that this call updates the IDs of the snapshot raw tree
         tree.raw = sync_ids_between_trees(source=simple_tree, target=tree.raw)
 
-        return ProcessedA11yTree(processed_tree=processed_tree, raw_tree=raw_tree, simple_tree=simple_tree)
+        return ProcessedA11yTree(
+            processed_tree=processed_tree, raw_tree=raw_tree, simple_tree=simple_tree
+        )
 
     def tree(self, type: str = "processed") -> A11yNode:
         match type:
@@ -82,14 +90,22 @@ class ProcessedA11yTree:
             case _:
                 raise InvalidA11yTreeType(type)
 
-    def interaction_nodes(self, type: str = "processed", parent_path: str | None = None) -> list[A11yNode]:
+    def interaction_nodes(
+        self, type: str = "processed", parent_path: str | None = None
+    ) -> list[A11yNode]:
         match type:
             case "processed":
-                return list_interactive_nodes(self.processed_tree, parent_path=parent_path, only_with_id=True)
+                return list_interactive_nodes(
+                    self.processed_tree, parent_path=parent_path, only_with_id=True
+                )
             case "simple":
-                return list_interactive_nodes(self.simple_tree, parent_path=parent_path, only_with_id=True)
+                return list_interactive_nodes(
+                    self.simple_tree, parent_path=parent_path, only_with_id=True
+                )
             case "raw":
-                return list_interactive_nodes(self.raw_tree, parent_path=parent_path, only_with_id=True)
+                return list_interactive_nodes(
+                    self.raw_tree, parent_path=parent_path, only_with_id=True
+                )
             case _:
                 raise InvalidA11yTreeType(type)
 
@@ -104,7 +120,9 @@ class ProcessedA11yTree:
             case _:
                 raise InvalidA11yTreeType(type)
 
-    def find_node_path_by_id(self, id: str, type: str = "processed") -> list[A11yNode] | None:
+    def find_node_path_by_id(
+        self, id: str, type: str = "processed"
+    ) -> list[A11yNode] | None:
         match type:
             case "processed":
                 return find_node_path_by_id(node=self.processed_tree, notte_id=id)
@@ -115,14 +133,22 @@ class ProcessedA11yTree:
             case _:
                 raise InvalidA11yTreeType(type)
 
-    def find_all_paths_by_role_and_name(self, role: str, name: str, type: str = "processed") -> list[list[A11yNode]]:
+    def find_all_paths_by_role_and_name(
+        self, role: str, name: str, type: str = "processed"
+    ) -> list[list[A11yNode]]:
         match type:
             case "processed":
-                return find_all_paths_by_role_and_name(node=self.processed_tree, role=role, name=name)
+                return find_all_paths_by_role_and_name(
+                    node=self.processed_tree, role=role, name=name
+                )
             case "simple":
-                return find_all_paths_by_role_and_name(node=self.simple_tree, role=role, name=name)
+                return find_all_paths_by_role_and_name(
+                    node=self.simple_tree, role=role, name=name
+                )
             case "raw":
-                return find_all_paths_by_role_and_name(node=self.raw_tree, role=role, name=name)
+                return find_all_paths_by_role_and_name(
+                    node=self.raw_tree, role=role, name=name
+                )
             case _:
                 raise InvalidA11yTreeType(type)
 

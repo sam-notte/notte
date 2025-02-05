@@ -8,7 +8,6 @@ from notte.pipe.preprocessing.a11y.tree import ProcessedA11yTree
 
 @final
 class A11yPreprocessingPipe:
-
     @staticmethod
     def forward(
         snapshot: BrowserSnapshot,

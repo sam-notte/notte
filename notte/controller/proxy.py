@@ -24,7 +24,6 @@ from notte.errors.resolution import NodeResolutionAttributeError
 
 
 class NotteActionProxy:
-
     @staticmethod
     def forward_special(action: ExecutableAction) -> BrowserAction:
         params = action.params_values
@@ -68,45 +67,75 @@ class NotteActionProxy:
                 raise InvalidActionError(
                     action_id=action.id,
                     reason=(
-                        (
-                            f"try executing a special action but '{action.id}' is not a special action. "
-                            f"Special actions are {list(BrowserActionId)}"
-                        )
+                        f"try executing a special action but '{action.id}' is not a special action. "
+                        f"Special actions are {list(BrowserActionId)}"
                     ),
                 )
 
     @staticmethod
-    def forward_parameter_action(action: ExecutableAction, enter: bool | None = None) -> InteractionAction:
+    def forward_parameter_action(
+        action: ExecutableAction, enter: bool | None = None
+    ) -> InteractionAction:
         if action.locator is None:
             raise NodeResolutionAttributeError(None, "post_attributes")  # type: ignore
         if len(action.params_values) != 1:
             raise MoreThanOneParameterActionError(action.id, len(action.params_values))
         value: str = action.params_values[0].value
-        node_role = action.locator.role if isinstance(action.locator.role, str) else action.locator.role.value
+        node_role = (
+            action.locator.role
+            if isinstance(action.locator.role, str)
+            else action.locator.role.value
+        )
         match (action.role, node_role, action.locator.is_editable):
             case (_, _, True) | ("input", "textbox", _):
-                return FillAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
+                return FillAction(
+                    id=action.id,
+                    selector=action.locator.selector,
+                    value=value,
+                    press_enter=enter,
+                )
             case ("input", "checkbox", _):
-                return CheckAction(id=action.id, selector=action.locator.selector, value=bool(value), press_enter=enter)
+                return CheckAction(
+                    id=action.id,
+                    selector=action.locator.selector,
+                    value=bool(value),
+                    press_enter=enter,
+                )
             case ("input", "combobox", _):
                 return SelectDropdownOptionAction(
-                    id=action.id, selector=action.locator.selector, value=value, press_enter=enter
+                    id=action.id,
+                    selector=action.locator.selector,
+                    value=value,
+                    press_enter=enter,
                 )
             case ("input", _, _):
-                return FillAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
+                return FillAction(
+                    id=action.id,
+                    selector=action.locator.selector,
+                    value=value,
+                    press_enter=enter,
+                )
             case _:
-                raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
+                raise InvalidActionError(
+                    action.id, f"unknown action type: {action.id[0]}"
+                )
 
     @staticmethod
     def forward(action: ExecutableAction, enter: bool | None = None) -> BaseAction:
         if action.locator is None:
-            raise InvalidActionError(action.id, "locator is to be able to execute an interaction action")
+            raise InvalidActionError(
+                action.id, "locator is to be able to execute an interaction action"
+            )
         match action.role:
             case "button" | "link":
-                return ClickAction(id=action.id, selector=action.locator.selector, press_enter=enter)
+                return ClickAction(
+                    id=action.id, selector=action.locator.selector, press_enter=enter
+                )
             case "input":
                 return NotteActionProxy.forward_parameter_action(action, enter=enter)
             case "special":
                 return NotteActionProxy.forward_special(action)
             case _:
-                raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
+                raise InvalidActionError(
+                    action.id, f"unknown action type: {action.id[0]}"
+                )

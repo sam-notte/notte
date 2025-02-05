@@ -50,13 +50,15 @@ async def dropdown_menu_options(page: Page, selector: str) -> list[str]:
 
                 if options:
                     logger.debug(f"Found dropdown in frame {frame_index}")
-                    logger.debug(f'Dropdown ID: {options["id"]}, Name: {options["name"]}')
+                    logger.debug(
+                        f"Dropdown ID: {options['id']}, Name: {options['name']}"
+                    )
 
                     formatted_options: list[str] = []
                     for opt in options["options"]:
                         # encoding ensures AI uses the exact string in select_dropdown_option
                         encoded_text = json.dumps(opt["text"])
-                        formatted_options.append(f'{opt["index"]}: text={encoded_text}')
+                        formatted_options.append(f"{opt['index']}: text={encoded_text}")
 
                     all_options.extend(formatted_options)
 
@@ -128,17 +130,23 @@ async def select_dropdown_option(
 
                 if dropdown_info:
                     if not dropdown_info.get("found"):
-                        logger.error(f'Frame {frame_index} error: {dropdown_info.get("error")}')
+                        logger.error(
+                            f"Frame {frame_index} error: {dropdown_info.get('error')}"
+                        )
                         continue
 
-                    logger.debug(f"Found dropdown in frame {frame_index}: {dropdown_info}")
+                    logger.debug(
+                        f"Found dropdown in frame {frame_index}: {dropdown_info}"
+                    )
 
                     # "label" because we are selecting by text
                     # nth(0) to disable error thrown by strict mode
                     # timeout=1000 because we are already waiting for all network events, therefore
                     # ideally we don't need to wait a lot here (default 30s)
                     select_element = frame.locator(_xpath).nth(0)
-                    selected_option_values = await select_element.select_option(label=text, timeout=1000)
+                    selected_option_values = await select_element.select_option(
+                        label=text, timeout=1000
+                    )
 
                     msg = f"selected option {text} with value {selected_option_values}"
                     logger.info(msg + f" in frame {frame_index}")

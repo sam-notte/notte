@@ -104,7 +104,10 @@ class GotoAction(BrowserAction):
     description: str = "Goto to a URL (in current tab)"
     url: str
 
-    model_config = {"extra": "forbid", "protected_namespaces": ()}  # Allow 'id' to be a field name
+    model_config = {
+        "extra": "forbid",
+        "protected_namespaces": (),
+    }  # Allow 'id' to be a field name
 
     __pydantic_fields_set__ = {"url"}
 
@@ -186,7 +189,9 @@ class WaitAction(BrowserAction):
 
 class PressKeyAction(BrowserAction):
     id: BrowserActionId = BrowserActionId.PRESS_KEY
-    description: str = "Press a keyboard key: e.g. 'Enter', 'Backspace', 'Insert', 'Delete', etc."
+    description: str = (
+        "Press a keyboard key: e.g. 'Enter', 'Backspace', 'Insert', 'Delete', etc."
+    )
     key: str
 
     @override
@@ -196,7 +201,9 @@ class PressKeyAction(BrowserAction):
 
 class ScrollUpAction(BrowserAction):
     id: BrowserActionId = BrowserActionId.SCROLL_UP
-    description: str = "Scroll up by a given amount of pixels. Use `null` for scrolling up one page"
+    description: str = (
+        "Scroll up by a given amount of pixels. Use `null` for scrolling up one page"
+    )
     # amount of pixels to scroll. None for scrolling up one page
     amount: int | None = None
 
@@ -223,13 +230,17 @@ class ScrollDownAction(BrowserAction):
 
 class CompletionAction(BrowserAction):
     id: BrowserActionId = BrowserActionId.COMPLETION
-    description: str = "Complete the task by returning the answer and terminate the browser session"
+    description: str = (
+        "Complete the task by returning the answer and terminate the browser session"
+    )
     success: bool
     answer: str
 
     @override
     def execution_message(self) -> str:
-        return f"Completed the task with success: {self.success} and answer: {self.answer}"
+        return (
+            f"Completed the task with success: {self.success} and answer: {self.answer}"
+        )
 
 
 # ############################################################
@@ -261,7 +272,9 @@ class FillAction(InteractionAction):
 
     @override
     def execution_message(self) -> str:
-        return f"Filled the input field '{self.text_label}' with the value: '{self.value}'"
+        return (
+            f"Filled the input field '{self.text_label}' with the value: '{self.value}'"
+        )
 
 
 class CheckAction(InteractionAction):
@@ -271,7 +284,11 @@ class CheckAction(InteractionAction):
 
     @override
     def execution_message(self) -> str:
-        return f"Checked the checkbox '{self.text_label}'" if self.text_label is not None else "Checked the checkbox"
+        return (
+            f"Checked the checkbox '{self.text_label}'"
+            if self.text_label is not None
+            else "Checked the checkbox"
+        )
 
 
 class ListDropdownOptionsAction(InteractionAction):

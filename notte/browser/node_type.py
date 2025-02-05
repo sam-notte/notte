@@ -307,7 +307,9 @@ class NodeRole(Enum):
                 return "O"
             case _:
                 if force_id:
-                    logger.warning(f"No short id for role {self}. Returning 'M' (forced).")
+                    logger.warning(
+                        f"No short id for role {self}. Returning 'M' (forced)."
+                    )
                     return "M"
                 return None
 
@@ -369,7 +371,11 @@ class NodeRole(Enum):
                 | NodeRole.MENULISTPOPUP.value
             ):
                 return NodeCategory.DATA_DISPLAY
-            case NodeRole.LIST.value | NodeRole.LISTITEM.value | NodeRole.LISTMARKER.value:
+            case (
+                NodeRole.LIST.value
+                | NodeRole.LISTITEM.value
+                | NodeRole.LISTMARKER.value
+            ):
                 return NodeCategory.LIST
             case (
                 NodeRole.TABLE.value
@@ -402,7 +408,9 @@ class NodeRole(Enum):
                 return NodeCategory.INTERACTION
             case NodeRole.CODE.value | NodeRole.MATH.value:
                 return NodeCategory.CODE
-            case NodeRole.TREE.value | NodeRole.TREEGRID.value | NodeRole.TREEITEM.value:
+            case (
+                NodeRole.TREE.value | NodeRole.TREEGRID.value | NodeRole.TREEITEM.value
+            ):
                 return NodeCategory.TREE
             case NodeRole.IMAGE.value | NodeRole.FIGURE.value | NodeRole.IMG.value:
                 return NodeCategory.IMAGE

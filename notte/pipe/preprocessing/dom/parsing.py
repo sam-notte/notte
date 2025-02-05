@@ -44,9 +44,10 @@ class DomParsingConfig(BaseModel):
 
 
 class ParseDomTreePipe:
-
     @staticmethod
-    async def forward(page: Page, config: DomParsingConfig | None = None) -> NotteDomNode:
+    async def forward(
+        page: Page, config: DomParsingConfig | None = None
+    ) -> NotteDomNode:
         config = config or DomParsingConfig()
         dom_tree = await ParseDomTreePipe.parse_dom_tree(page, config)
         dom_tree = simple_generate_sequential_ids(dom_tree)
@@ -60,7 +61,9 @@ class ParseDomTreePipe:
     @staticmethod
     async def parse_dom_tree(page: Page, config: DomParsingConfig) -> DOMBaseNode:
         js_code = DOM_TREE_JS_PATH.read_text()
-        logger.info(f"Parsing DOM tree for {page.url} with config: {config.model_dump()}")
+        logger.info(
+            f"Parsing DOM tree for {page.url} with config: {config.model_dump()}"
+        )
         node: DomTreeDict | None = await page.evaluate(js_code, config.model_dump())  # type: ignore
         if node is None:
             raise ValueError("Failed to parse HTML to dictionary")
@@ -112,7 +115,9 @@ class ParseDomTreePipe:
             highlight_index=highlight_index,
         )
         _iframe_parent_css_paths = iframe_parent_css_paths
-        notte_selector = ":".join([notte_selector, str(hash(xpath)), str(hash(css_path))])
+        notte_selector = ":".join(
+            [notte_selector, str(hash(xpath)), str(hash(css_path))]
+        )
 
         if shadow_root:
             in_shadow_root = True

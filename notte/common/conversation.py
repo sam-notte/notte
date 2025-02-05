@@ -35,7 +35,9 @@ class Conversation:
     """Manages conversation history and message extraction"""
 
     history: list[CachedMessage] = field(default_factory=list)
-    json_extractor: StructuredContent = field(default_factory=lambda: StructuredContent(inner_tag="json"))
+    json_extractor: StructuredContent = field(
+        default_factory=lambda: StructuredContent(inner_tag="json")
+    )
     autosize: bool = False
     max_tokens: int = 64000
     encoding: tiktoken.Encoding = tiktoken.get_encoding("cl100k_base")
@@ -62,8 +64,12 @@ class Conversation:
             return
 
         # Always keep system messages
-        system_messages = [msg for msg in self.history if msg.message["role"] == "system"]
-        other_messages = [msg for msg in self.history if msg.message["role"] != "system"]
+        system_messages = [
+            msg for msg in self.history if msg.message["role"] == "system"
+        ]
+        other_messages = [
+            msg for msg in self.history if msg.message["role"] != "system"
+        ]
 
         new_content_tokens = self.count_tokens(new_content)
         system_tokens = sum(msg.token_count for msg in system_messages)
@@ -132,7 +138,9 @@ class Conversation:
         """
         self._add_message({"role": role, "content": content})
 
-    def parse_structured_response(self, response: ModelResponse | str, model: type[T]) -> T:
+    def parse_structured_response(
+        self, response: ModelResponse | str, model: type[T]
+    ) -> T:
         """Parse a structured response from the LLM into a Pydantic model
 
         Args:
@@ -167,7 +175,9 @@ class Conversation:
             extracted = self.json_extractor.extract(content)
             return model.model_validate_json(extracted)
         except (json.JSONDecodeError, ValueError) as e:
-            raise LLMParsingError(f"Failed to parse response into {model.__name__}: {str(e)}")
+            raise LLMParsingError(
+                f"Failed to parse response into {model.__name__}: {str(e)}"
+            )
 
     def messages(self) -> list[Message]:
         """Get messages in LiteLLM format

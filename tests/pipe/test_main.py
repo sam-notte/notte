@@ -12,7 +12,14 @@ from tests.mock.mock_service import MockLLMService
 
 def actions_from_ids(ids: list[str]) -> list[Action]:
     return [
-        Action(id=id, description="my description", category="my category", params=[], status="valid") for id in ids
+        Action(
+            id=id,
+            description="my description",
+            category="my category",
+            params=[],
+            status="valid",
+        )
+        for id in ids
     ]
 
 
@@ -55,7 +62,9 @@ def space_to_ids(space: ActionSpace) -> list[str]:
 
 def test_previous_actions_ids_not_in_context_inodes_not_listed() -> None:
     # context[B1] + previous[L1] + llm(B1)=> [B1] not [B1,L1]
-    pipe = LlmActionSpacePipe(llmserve=MockLLMService(mock_response=""), categorise_document=False)
+    pipe = LlmActionSpacePipe(
+        llmserve=MockLLMService(mock_response=""), categorise_document=False
+    )
     context = context_from_ids(["B1"])
     previous_actions = actions_from_ids(["L1"])
     llm_patch = llm_patch_from_ids(["B1"])
@@ -69,7 +78,9 @@ def test_previous_actions_ids_not_in_context_inodes_not_listed() -> None:
 
 def test_previous_actions_ids_in_context_inodes_listed() -> None:
     # context[B1,L1] + previous[L1] + llm(B1) => [B1,L1]
-    pipe = LlmActionSpacePipe(llmserve=MockLLMService(mock_response=""), categorise_document=False)
+    pipe = LlmActionSpacePipe(
+        llmserve=MockLLMService(mock_response=""), categorise_document=False
+    )
     context = context_from_ids(["B1", "L1"])
     previous_actions = actions_from_ids(["L1"])
     llm_patch = llm_patch_from_ids(["B1"])

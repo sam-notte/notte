@@ -64,16 +64,22 @@ class BrowserController:
             # case ScreenshotAction():
             #     return await self.driver.snapshot(screenshot=True)
             case ScrapeAction():
-                raise NotImplementedError("Scrape action is not supported in the browser controller")
+                raise NotImplementedError(
+                    "Scrape action is not supported in the browser controller"
+                )
             case CompletionAction(success=success, answer=answer):
-                logger.info(f"Completion action: status={'success' if success else 'failure'} with answer = {answer}")
+                logger.info(
+                    f"Completion action: status={'success' if success else 'failure'} with answer = {answer}"
+                )
                 await self.driver.close()
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
         await self.driver.short_wait()
         return await self.driver.snapshot()
 
-    async def execute_interaction_action(self, action: InteractionAction) -> BrowserSnapshot:
+    async def execute_interaction_action(
+        self, action: InteractionAction
+    ) -> BrowserSnapshot:
         if action.selector is None:
             raise ValueError(f"Selector is required for {action.name()}")
         press_enter = False
@@ -93,7 +99,9 @@ class BrowserController:
                     await locator.check()
                 else:
                     await locator.uncheck()
-            case SelectDropdownOptionAction(value=value, option_selector=option_selector):
+            case SelectDropdownOptionAction(
+                value=value, option_selector=option_selector
+            ):
                 # Check if it's a standard HTML select
                 tag_name: str = await locator.evaluate("el => el.tagName.toLowerCase()")
                 if tag_name == "select":
@@ -107,9 +115,13 @@ class BrowserController:
                     await option_locator.click()
 
             case ListDropdownOptionsAction():
-                options = await dropdown_menu_options(self.page, action.selector.xpath_selector)
+                options = await dropdown_menu_options(
+                    self.page, action.selector.xpath_selector
+                )
                 logger.info(f"Dropdown options: {options}")
-                raise NotImplementedError("ListDropdownOptionsAction is not supported in the browser controller")
+                raise NotImplementedError(
+                    "ListDropdownOptionsAction is not supported in the browser controller"
+                )
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
         if press_enter:
@@ -117,7 +129,9 @@ class BrowserController:
             await self.driver.short_wait()
             await self.page.keyboard.press("Enter")
         if original_url != self.page.url:
-            logger.info(f"🪦 Page navigation detected for action {action.id} waiting for networkidle")
+            logger.info(
+                f"🪦 Page navigation detected for action {action.id} waiting for networkidle"
+            )
             await self.driver.long_wait()
         await self.driver.short_wait()
         return await self.driver.snapshot()
@@ -128,7 +142,9 @@ class BrowserController:
         else:
             return await self.execute_browser_action(action)
 
-    async def execute_multiple(self, actions: list[BaseAction]) -> list[BrowserSnapshot]:
+    async def execute_multiple(
+        self, actions: list[BaseAction]
+    ) -> list[BrowserSnapshot]:
         snapshots: list[BrowserSnapshot] = []
         for action in actions:
             snapshots.append(await self.execute(action))

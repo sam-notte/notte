@@ -59,7 +59,9 @@ def test_observation_fields_match_response_types():
     response_fields = set(response.model_fields.keys())
     missing_fields = observation_fields - response_fields
 
-    assert not missing_fields, f"Fields {missing_fields} exist in Observation but not in ObserveResponse"
+    assert not missing_fields, (
+        f"Fields {missing_fields} exist in Observation but not in ObserveResponse"
+    )
 
 
 def test_action_space_fields_match_response_types():
@@ -71,8 +73,13 @@ def test_action_space_fields_match_response_types():
     space_fields = {field.name for field in fields(ActionSpace)}
 
     # Remove internal fields that start with '_' and known exclusions
-    excluded_fields = {"_embeddings", "_actions"}  # _actions is 'actions' in the response types
-    space_fields = {f for f in space_fields if not f.startswith("_") and f not in excluded_fields}
+    excluded_fields = {
+        "_embeddings",
+        "_actions",
+    }  # _actions is 'actions' in the response types
+    space_fields = {
+        f for f in space_fields if not f.startswith("_") and f not in excluded_fields
+    }
     space_fields.add("actions")  # Add back 'actions' without underscore
 
     # Create a sample space with all fields filled
@@ -93,7 +100,9 @@ def test_action_space_fields_match_response_types():
     response_fields = set(response.model_fields.keys())
     missing_fields = space_fields - response_fields
 
-    assert not missing_fields, f"Fields {missing_fields} exist in ActionSpace but not in ActionSpaceResponse"
+    assert not missing_fields, (
+        f"Fields {missing_fields} exist in ActionSpace but not in ActionSpaceResponse"
+    )
 
 
 def test_observe_response_from_observation():

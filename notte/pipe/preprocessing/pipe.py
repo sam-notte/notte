@@ -14,9 +14,10 @@ class PreprocessingType(Enum):
 
 @final
 class ProcessedSnapshotPipe:
-
     @staticmethod
-    def forward(snapshot: BrowserSnapshot, type: PreprocessingType) -> ProcessedBrowserSnapshot:
+    def forward(
+        snapshot: BrowserSnapshot, type: PreprocessingType
+    ) -> ProcessedBrowserSnapshot:
         match type:
             case PreprocessingType.A11Y:
                 return A11yPreprocessingPipe.forward(snapshot)

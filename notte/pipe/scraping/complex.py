@@ -35,7 +35,9 @@ async def classify_image_element(locator: Locator) -> ImageCategory:
         return await classify_raster_image(locator)
 
 
-async def classify_svg(locator: Locator, return_svg_content: bool = False) -> ImageCategory:
+async def classify_svg(
+    locator: Locator, return_svg_content: bool = False
+) -> ImageCategory:
     """Classify an SVG element specifically."""
     # Common SVG attributes that might indicate purpose
     role = await locator.get_attribute("role")
@@ -115,7 +117,9 @@ async def classify_raster_image(locator: Locator) -> ImageCategory:
     return ImageCategory.CONTENT_IMAGE
 
 
-async def resolve_image_conflict(page: Page, node: DomNode, node_id: str) -> Locator | None:
+async def resolve_image_conflict(
+    page: Page, node: DomNode, node_id: str
+) -> Locator | None:
     if not node_id.startswith("F"):
         raise InvalidInternalCheckError(
             url=node.get_url() or "unknown",
@@ -130,7 +134,9 @@ async def resolve_image_conflict(page: Page, node: DomNode, node_id: str) -> Loc
             dev_advice="Check the `resolve_image_conflict` method for more information.",
         )
     if len(image_node.text) > 0:
-        locators = await page.get_by_role(image_node.get_role_str(), name=image_node.text).all()  # type: ignore
+        locators = await page.get_by_role(
+            image_node.get_role_str(), name=image_node.text
+        ).all()  # type: ignore
         if len(locators) == 1:
             return locators[0]
 
@@ -194,7 +200,9 @@ class ComplexScrapingPipe:
                 f" {len(self.llmserve.tokenizer.encode(document))} tokens => use Simple AXT instead"
             )
         )
-        short_snapshot = A11yPreprocessingPipe.forward(context.snapshot, tree_type="simple")
+        short_snapshot = A11yPreprocessingPipe.forward(
+            context.snapshot, tree_type="simple"
+        )
         document = DomNodeRenderingPipe.forward(
             node=short_snapshot.node,
             config=config.rendering,
@@ -206,11 +214,12 @@ class ComplexScrapingPipe:
         context: ProcessedBrowserSnapshot,
         config: ScrapingConfig,
     ) -> DataSpace:
-
         document = self._render_node(context, config)
         # make LLM call
         prompt = "only_main_content" if config.params.only_main_content else "all_data"
-        response = self.llmserve.completion(prompt_id=f"data-extraction/{prompt}", variables={"document": document})
+        response = self.llmserve.completion(
+            prompt_id=f"data-extraction/{prompt}", variables={"document": document}
+        )
         if response.choices[0].message.content is None:  # type: ignore
             raise LLMnoOutputCompletionError()
         response_text = str(response.choices[0].message.content)  # type: ignore
@@ -224,11 +233,15 @@ class ComplexScrapingPipe:
         text = sc.extract(response_text)
         return DataSpace(
             markdown=text,
-            images=None if not config.params.scrape_images else await self._scrape_images(context),
+            images=None
+            if not config.params.scrape_images
+            else await self._scrape_images(context),
             structured=None,
         )
 
-    async def _scrape_images(self, context: ProcessedBrowserSnapshot) -> list[ImageData]:
+    async def _scrape_images(
+        self, context: ProcessedBrowserSnapshot
+    ) -> list[ImageData]:
         if self.browser is None:
             logger.error("Images cannot be scraped without a browser")
             return []
@@ -236,7 +249,9 @@ class ComplexScrapingPipe:
         out_images: list[ImageData] = []
         for node in image_nodes:
             if node.id is not None:
-                locator = await resolve_image_conflict(self.browser.page, context.node, node.id)
+                locator = await resolve_image_conflict(
+                    self.browser.page, context.node, node.id
+                )
                 if locator is None:
                     logger.warning(f"No locator found for image node {node.id}")
                     continue
@@ -262,5 +277,7 @@ class ComplexScrapingPipe:
                 )
         return out_images
 
-    async def forward_async(self, context: ProcessedBrowserSnapshot, config: ScrapingConfig) -> DataSpace:
+    async def forward_async(
+        self, context: ProcessedBrowserSnapshot, config: ScrapingConfig
+    ) -> DataSpace:
         return await self.forward(context, config)

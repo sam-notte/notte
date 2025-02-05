@@ -29,7 +29,9 @@ def add_group_role(node: A11yNode, group_role: str) -> A11yNode:
 
 
 def compute_children_roles_count(node: A11yNode) -> A11yNode:
-    node["children_roles_count"] = _compute_children_roles_count(children=node.get("children", []))
+    node["children_roles_count"] = _compute_children_roles_count(
+        children=node.get("children", [])
+    )
     return node
 
 

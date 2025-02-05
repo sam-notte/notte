@@ -33,7 +33,9 @@ class PromptLibrary:
                 messages.append(Message(role=role, content=content))  # type: ignore
         return messages
 
-    def materialize(self, prompt_id: str, variables: dict[str, str] | None = None) -> list[dict[str, str]]:
+    def materialize(
+        self, prompt_id: str, variables: dict[str, str] | None = None
+    ) -> list[dict[str, str]]:
         # TODO. You cant pass variables that are not in the prompt template
         # But you can fewer variables than in the prompt template
         _messages: list[Message] = self.get(prompt_id)
@@ -53,7 +55,9 @@ class PromptLibrary:
             materialized_messages: list[dict[str, str]] = []
             for message in messages:  # type: ignore
                 formatted_content: str = chevron.render(message["content"], variables)
-                materialized_messages.append({"role": message["role"], "content": formatted_content})
+                materialized_messages.append(
+                    {"role": message["role"], "content": formatted_content}
+                )
             return materialized_messages
         except KeyError as e:
             raise InvalidPromptTemplateError(

@@ -10,7 +10,9 @@ def set_path(node: A11yNode | DOMBaseNode, notte_selector: str) -> None:
         node.notte_selector = notte_selector
 
 
-def generate_notte_selector(node: A11yNode | DOMBaseNode, notte_selector: str = "") -> A11yNode | DOMBaseNode:
+def generate_notte_selector(
+    node: A11yNode | DOMBaseNode, notte_selector: str = ""
+) -> A11yNode | DOMBaseNode:
     _node = as_dict(node)
     node_path = ":".join([notte_selector, _node["role"], _node["name"]])
     set_path(node, node_path)

@@ -42,7 +42,6 @@ class BrowserConfig(BaseModel):
 
 
 class PlaywrightResource:
-
     def __init__(self, pool: BrowserPool | None, config: BrowserConfig) -> None:
         self.config: BrowserConfig = config
         self.shared_pool: bool = pool is not None
@@ -59,7 +58,9 @@ class PlaywrightResource:
 
     async def start(self) -> None:
         # Get or create a browser from the pool
-        self._resource = await self.browser_pool.get_browser_resource(self.config.headless)
+        self._resource = await self.browser_pool.get_browser_resource(
+            self.config.headless
+        )
         # Create and track a new context
         self._resource.page.set_default_timeout(self.config.step_timeout)
 
@@ -80,13 +81,14 @@ class PlaywrightResource:
 
 
 class BrowserDriver(AsyncResource):
-
     def __init__(
         self,
         pool: BrowserPool | None = None,
         config: BrowserConfig | None = None,
     ) -> None:
-        self._playwright: PlaywrightResource = PlaywrightResource(pool, config or BrowserConfig())
+        self._playwright: PlaywrightResource = PlaywrightResource(
+            pool, config or BrowserConfig()
+        )
         super().__init__(self._playwright)
 
     @property
@@ -99,22 +101,31 @@ class BrowserDriver(AsyncResource):
 
     async def long_wait(self) -> None:
         try:
-            await self.page.wait_for_load_state("networkidle", timeout=self._playwright.config.goto_timeout)
+            await self.page.wait_for_load_state(
+                "networkidle", timeout=self._playwright.config.goto_timeout
+            )
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
+            logger.warning(
+                f"Timeout while waiting for networkidle state for '{self.page.url}'"
+            )
         await self.short_wait()
 
     async def short_wait(self) -> None:
         await self.page.wait_for_timeout(self._playwright.config.short_wait_timeout)
 
-    async def snapshot(self, screenshot: bool | None = None, retries: int | None = None) -> BrowserSnapshot:
+    async def snapshot(
+        self, screenshot: bool | None = None, retries: int | None = None
+    ) -> BrowserSnapshot:
         # logger.error(f"Taking snapshot of {self.page.url}")
         if not self.page:
             raise BrowserNotStartedError()
         if retries is None:
             retries = self._playwright.config.empty_page_max_retry
         if retries <= 0:
-            raise EmptyPageContentError(url=self.page.url, nb_retries=self._playwright.config.empty_page_max_retry)
+            raise EmptyPageContentError(
+                url=self.page.url,
+                nb_retries=self._playwright.config.empty_page_max_retry,
+            )
         html_content: str = ""
         a11y_simple: A11yNode | None = None
         a11y_raw: A11yNode | None = None
@@ -127,20 +138,36 @@ class BrowserDriver(AsyncResource):
         except Exception as e:
             if "has been closed" in str(e):
                 raise BrowserExpiredError() from e
-            if "Unable to retrieve content because the page is navigating and changing the content" in str(e):
+            if (
+                "Unable to retrieve content because the page is navigating and changing the content"
+                in str(e)
+            ):
                 # Should retry after the page is loaded
                 await self.short_wait()
             else:
                 raise UnexpectedBrowserError(url=self.page.url) from e
-        if dom_node is None or a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
-            logger.warning(f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms")
+        if (
+            dom_node is None
+            or a11y_simple is None
+            or a11y_raw is None
+            or len(a11y_simple.get("children", [])) == 0
+        ):
+            logger.warning(
+                f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms"
+            )
             await self.page.wait_for_timeout(self._playwright.config.goto_retry_timeout)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
-        take_screenshot = screenshot if screenshot is not None else self._playwright.config.screenshot
+        take_screenshot = (
+            screenshot if screenshot is not None else self._playwright.config.screenshot
+        )
         try:
-            snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
+            snapshot_screenshot = (
+                await self.page.screenshot() if take_screenshot else None
+            )
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
+            logger.warning(
+                f"Timeout while taking screenshot for {self.page.url}. Retrying..."
+            )
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
 
         return BrowserSnapshot(
@@ -152,8 +179,12 @@ class BrowserDriver(AsyncResource):
                     scroll_y=await self.page.evaluate("window.scrollY"),
                     viewport_width=await self.page.evaluate("window.innerWidth"),
                     viewport_height=await self.page.evaluate("window.innerHeight"),
-                    total_width=await self.page.evaluate("document.documentElement.scrollWidth"),
-                    total_height=await self.page.evaluate("document.documentElement.scrollHeight"),
+                    total_width=await self.page.evaluate(
+                        "document.documentElement.scrollWidth"
+                    ),
+                    total_height=await self.page.evaluate(
+                        "document.documentElement.scrollHeight"
+                    ),
                 ),
                 tabs=[
                     TabsData(
@@ -193,7 +224,9 @@ class BrowserDriver(AsyncResource):
             raise InvalidURLError(url=url)
         try:
             _ = await self.page.goto(url, timeout=self._playwright.config.goto_timeout)
-            await self.page.wait_for_load_state(timeout=self._playwright.config.goto_timeout)
+            await self.page.wait_for_load_state(
+                timeout=self._playwright.config.goto_timeout
+            )
         except Exception as e:
             raise PageLoadingError(url=url) from e
         await self.long_wait()

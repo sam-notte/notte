@@ -44,16 +44,23 @@ class BaseActionSpace(ABC, BaseModel):
 
     @abstractmethod
     def actions(
-        self, status: AllActionStatus = "valid", role: AllActionRole = "all", include_browser: bool = True
+        self,
+        status: AllActionStatus = "valid",
+        role: AllActionRole = "all",
+        include_browser: bool = True,
     ) -> Sequence[BaseAction]:
         raise NotImplementedError("actions should be implemented by the subclass")
 
     @abstractmethod
     def browser_actions(self) -> Sequence[BrowserAction]:
-        raise NotImplementedError("browser_actions should be implemented by the subclass")
+        raise NotImplementedError(
+            "browser_actions should be implemented by the subclass"
+        )
 
     @abstractmethod
-    def markdown(self, status: AllActionStatus = "valid", include_browser: bool = True) -> str:
+    def markdown(
+        self, status: AllActionStatus = "valid", include_browser: bool = True
+    ) -> str:
         pass
 
     def sample(
@@ -72,7 +79,9 @@ class ActionSpace(BaseActionSpace):
     action_map: dict[str, type[BaseAction]] = Field(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
-        self.action_map = {action_cls.name(): action_cls for action_cls in ActionSpace.action_classes()}
+        self.action_map = {
+            action_cls.name(): action_cls for action_cls in ActionSpace.action_classes()
+        }
         disabled_actions = [
             "browser",
             "interaction",
@@ -90,7 +99,11 @@ class ActionSpace(BaseActionSpace):
                 set(
                     sub
                     for sub in cls.__subclasses__()
-                    + [subsub for sub in cls.__subclasses__() for subsub in get_all_subclasses(sub)]
+                    + [
+                        subsub
+                        for sub in cls.__subclasses__()
+                        for subsub in get_all_subclasses(sub)
+                    ]
                 )
             )
 
@@ -98,7 +111,10 @@ class ActionSpace(BaseActionSpace):
 
     @override
     def actions(
-        self, status: AllActionStatus = "valid", role: AllActionRole = "all", include_browser: bool = True
+        self,
+        status: AllActionStatus = "valid",
+        role: AllActionRole = "all",
+        include_browser: bool = True,
     ) -> Sequence[BaseAction]:
         # this dose not work because we need actual paramters to create actions
         # action_cls() for action_cls in self.action_classes()
@@ -112,22 +128,32 @@ class ActionSpace(BaseActionSpace):
         return []
 
     @override
-    def markdown(self, status: AllActionStatus = "valid", include_browser: bool = True) -> str:
+    def markdown(
+        self, status: AllActionStatus = "valid", include_browser: bool = True
+    ) -> str:
         """Returns a markdown formatted description of all available actions."""
         descriptions: list[str] = []
 
         for action_name, action_cls in self.action_map.items():
             try:
                 # Get schema and safely remove common fields
-                skip_keys = action_cls.non_agent_fields().difference(set(["description"]))
+                skip_keys = action_cls.non_agent_fields().difference(
+                    set(["description"])
+                )
                 sub_skip_keys = ["title", "$ref"]
                 schema = {
-                    k: {sub_k: sub_v for sub_k, sub_v in v.items() if sub_k not in sub_skip_keys}
+                    k: {
+                        sub_k: sub_v
+                        for sub_k, sub_v in v.items()
+                        if sub_k not in sub_skip_keys
+                    }
                     for k, v in action_cls.model_json_schema()["properties"].items()
                     if k not in skip_keys
                 }
                 # schema['id'] = schema['id']['default']
-                __description: dict[str, str] = schema.pop("description", "No description available")  # type: ignore
+                __description: dict[str, str] = schema.pop(
+                    "description", "No description available"
+                )  # type: ignore
                 if "default" not in __description:
                     raise InvalidInternalCheckError(
                         check=f"description should have a default value for {action_cls.__name__}",
@@ -144,6 +170,8 @@ class ActionSpace(BaseActionSpace):
 """
                 descriptions.append(description)
             except Exception as e:
-                descriptions.append(f"Error getting schema for {action_cls.__name__}: {str(e)}")
+                descriptions.append(
+                    f"Error getting schema for {action_cls.__name__}: {str(e)}"
+                )
 
         return "".join(descriptions)

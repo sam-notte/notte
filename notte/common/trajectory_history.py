@@ -24,7 +24,9 @@ class TrajectoryHistory(BaseModel):
     max_error_length: int | None = None
 
     def perceive(self) -> str:
-        steps = "\n".join([self.perceive_step(step, step_idx=i) for i, step in enumerate(self.steps)])
+        steps = "\n".join(
+            [self.perceive_step(step, step_idx=i) for i, step in enumerate(self.steps)]
+        )
         return f"""
 [Start of action execution history memory]
 {steps or self.start_rules()}
@@ -61,8 +63,15 @@ THIS SHOULD BE THE LAST RESORT.
         step_idx: int = 0,
         include_ids: bool = False,
     ) -> str:
-        action_msg = "\n".join(["  - " + result.input.dump_str() for result in step.results])
-        status_msg = "\n".join(["  - " + self.perceive_step_result(result, include_ids) for result in step.results])
+        action_msg = "\n".join(
+            ["  - " + result.input.dump_str() for result in step.results]
+        )
+        status_msg = "\n".join(
+            [
+                "  - " + self.perceive_step_result(result, include_ids)
+                for result in step.results
+            ]
+        )
         return f"""
 # Execution step {step_idx}
 * state: {step.agent_response.state.model_dump_json()}

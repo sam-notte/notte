@@ -82,7 +82,10 @@ def mock_context() -> ProcessedBrowserSnapshot:
 
 @pytest.mark.parametrize(
     "parser,mock_response",
-    [(ActionListingParser.MARKDOWN, "action_list_answer"), (ActionListingParser.TABLE, "action_table_answer")],
+    [
+        (ActionListingParser.MARKDOWN, "action_list_answer"),
+        (ActionListingParser.TABLE, "action_table_answer"),
+    ],
 )
 def test_listing_pipe(
     mock_context: ProcessedBrowserSnapshot,
@@ -107,7 +110,9 @@ homepage
 """
     )
 
-    pipe: MarkdownTableActionListingPipe = MarkdownTableActionListingPipe(llmserve=llm_service)
+    pipe: MarkdownTableActionListingPipe = MarkdownTableActionListingPipe(
+        llmserve=llm_service
+    )
     pipe.parser = parser
     actions = pipe.forward(context=mock_context).actions
 

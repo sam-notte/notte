@@ -51,32 +51,38 @@ from notte.sdk.types import (
 
 
 class SimpleActionResolutionPipe:
-
     @staticmethod
-    def forward(action: BaseAction, context: ProcessedBrowserSnapshot | None = None) -> BaseAction:
+    def forward(
+        action: BaseAction, context: ProcessedBrowserSnapshot | None = None
+    ) -> BaseAction:
         if not isinstance(action, InteractionAction) or context is None:
             # no need to resolve
             return action
         if isinstance(action, SelectDropdownOptionAction):
             return SimpleActionResolutionPipe.resolve_selector_locators(action, context)
-        selector_map: dict[str, InteractionDomNode] = {inode.id: inode for inode in context.interaction_nodes()}
+        selector_map: dict[str, InteractionDomNode] = {
+            inode.id: inode for inode in context.interaction_nodes()
+        }
         if action.id not in selector_map:
-            raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
+            raise InvalidActionError(
+                action_id=action.id,
+                reason=f"action '{action.id}' not found in page context.",
+            )
         node = selector_map[action.id]
         if node.computed_attributes.selectors is None:
             raise InvalidInternalCheckError(
                 check=f"No selector found for action {action.id}",
                 url=None,
                 dev_advice=(
-                    (
-                        "This technnically should never happen. There is likely an issue during playright "
-                        "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
-                    )
+                    "This technnically should never happen. There is likely an issue during playright "
+                    "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
                 ),
             )
         selectors = node.computed_attributes.selectors
         if selectors.in_shadow_root:
-            logger.info(f"🔍 Resolving shadow root selectors for {node.id} ({node.text})")
+            logger.info(
+                f"🔍 Resolving shadow root selectors for {node.id} ({node.text})"
+            )
             selectors = selectors_through_shadow_dom(node)
         action.selector = selectors
         action.text_label = node.text
@@ -98,23 +104,32 @@ class SimpleActionResolutionPipe:
         inodes = context.node.interaction_nodes()
         snode = None
         for node in inodes:
-            if node.get_role_str() in [NodeRole.COMBOBOX.value, NodeRole.LISTBOX.value, NodeRole.LIST.value]:
+            if node.get_role_str() in [
+                NodeRole.COMBOBOX.value,
+                NodeRole.LISTBOX.value,
+                NodeRole.LIST.value,
+            ]:
                 snode = node
             if (action.option_id is not None and node.id == action.option_id) or (
-                action.value is not None and node.text == action.value and node.get_role_str() == NodeRole.OPTION.value
+                action.value is not None
+                and node.text == action.value
+                and node.get_role_str() == NodeRole.OPTION.value
             ):
                 if snode is None:
-                    raise ValueError(f"No select html element found for {action.option_id} or {action.value}")
+                    raise ValueError(
+                        f"No select html element found for {action.option_id} or {action.value}"
+                    )
 
-                if node.computed_attributes.selectors is None or snode.computed_attributes.selectors is None:
+                if (
+                    node.computed_attributes.selectors is None
+                    or snode.computed_attributes.selectors is None
+                ):
                     raise InvalidInternalCheckError(
                         check=f"Cannot find associated selector element for option node {node.id}",
                         url=None,
                         dev_advice=(
-                            (
-                                "This technnically should never happen. There is likely an issue during playright "
-                                "conflict resolution pipe, i.e `SimpleActionResolutionPipe`."
-                            )
+                            "This technnically should never happen. There is likely an issue during playright "
+                            "conflict resolution pipe, i.e `SimpleActionResolutionPipe`."
                         ),
                     )
                 selectors = snode.computed_attributes.selectors
@@ -132,10 +147,8 @@ class SimpleActionResolutionPipe:
             check=f"No select html element found for {action.option_id} or {action.value}",
             url=None,
             dev_advice=(
-                (
-                    "This technnically should never happen. There is likely an issue during playright "
-                    "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
-                )
+                "This technnically should never happen. There is likely an issue during playright "
+                "conflict resolution pipeline, i.e `notte.pipe.preprocessing.a11y.conflict_resolution.py`."
             ),
         )
 
@@ -166,19 +179,27 @@ class NotteEnv(AsyncResource):
         llmserve: LLMService | None = None,
     ) -> None:
         if config is not None:
-            logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
+            logger.info(
+                f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}"
+            )
         if llmserve is None:
             llmserve = LLMService()
         self.config: NotteEnvConfig = config or NotteEnvConfig()
         self.config.browser.headless = headless
-        self._browser: BrowserDriver = browser or BrowserDriver(pool=pool, config=self.config.browser)
+        self._browser: BrowserDriver = browser or BrowserDriver(
+            pool=pool, config=self.config.browser
+        )
         super().__init__(self._browser)
         self.controller: BrowserController = BrowserController(self._browser)
 
         self.trajectory: list[TrajectoryStep] = []
         self._context: ProcessedBrowserSnapshot | None = None
-        self._action_space_pipe: BaseActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
-        self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, browser=self._browser)
+        self._action_space_pipe: BaseActionSpacePipe = MainActionSpacePipe(
+            llmserve=llmserve, config=self.config.action
+        )
+        self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(
+            llmserve=llmserve, browser=self._browser
+        )
 
     @property
     def context(self) -> ProcessedBrowserSnapshot:
@@ -217,7 +238,9 @@ class NotteEnv(AsyncResource):
     def _preobserve(self, snapshot: BrowserSnapshot, action: BaseAction) -> Observation:
         if len(self.trajectory) >= self.config.max_steps:
             raise MaxStepsReachedError(max_steps=self.config.max_steps)
-        self._context = ProcessedSnapshotPipe.forward(snapshot, type=self.config.processing_type)
+        self._context = ProcessedSnapshotPipe.forward(
+            snapshot, type=self.config.processing_type
+        )
         preobs = Observation.from_snapshot(snapshot, progress=self.progress())
         self.trajectory.append(TrajectoryStep(obs=preobs, action=action))
         return preobs
@@ -246,8 +269,13 @@ class NotteEnv(AsyncResource):
             )
             check_snapshot = await self._browser.snapshot(screenshot=False)
             if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
-                logger.warning("Snapshot changed since the beginning of the action listing, retrying to observe again")
-                _ = self._preobserve(check_snapshot, action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)))
+                logger.warning(
+                    "Snapshot changed since the beginning of the action listing, retrying to observe again"
+                )
+                _ = self._preobserve(
+                    check_snapshot,
+                    action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)),
+                )
                 return await self._observe(retry=retry - 1, pagination=pagination)
 
         if (
@@ -256,7 +284,9 @@ class NotteEnv(AsyncResource):
             and self.obs.space.category.is_data()
             and not self.obs.has_data()
         ):
-            self.obs.data = await self._data_scraping_pipe.forward(self.context, self.config.scraping)
+            self.obs.data = await self._data_scraping_pipe.forward(
+                self.context, self.config.scraping
+            )
         return self.obs
 
     @timeit("goto")
@@ -271,8 +301,12 @@ class NotteEnv(AsyncResource):
         **pagination: Unpack[PaginationObserveRequestDict],
     ) -> Observation:
         _ = await self.goto(url)
-        logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-        logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+        logger.debug(
+            f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}"
+        )
+        logger.debug(
+            f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}"
+        )
         return await self._observe(
             pagination=PaginationParams.model_validate(pagination),
             retry=self.config.observe_max_retry_after_snapshot_update,
@@ -290,11 +324,16 @@ class NotteEnv(AsyncResource):
             if action_id == BrowserActionId.SCRAPE:
                 return await self.scrape()
         elif action_id not in [inode.id for inode in self.context.interaction_nodes()]:
-            raise InvalidActionError(action_id=action_id, reason=f"action '{action_id}' not found in page context.")
+            raise InvalidActionError(
+                action_id=action_id,
+                reason=f"action '{action_id}' not found in page context.",
+            )
         action, _params = self._parse_env(action_id, params)
 
         enter = enter if enter is not None else action.id.startswith("I")
-        exec_action = await ActionNodeResolutionPipe(self._browser).forward(action, _params, self.context)
+        exec_action = await ActionNodeResolutionPipe(self._browser).forward(
+            action, _params, self.context
+        )
         browser_action = NotteActionProxy.forward(exec_action, enter=enter)
         snapshot = await self.controller.execute(browser_action)
         obs = self._preobserve(snapshot, action=browser_action)
@@ -328,8 +367,12 @@ class NotteEnv(AsyncResource):
         **pagination: Unpack[PaginationObserveRequestDict],
     ) -> Observation:
         _ = await self.execute(action_id, params, enter=enter)
-        logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-        logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+        logger.debug(
+            f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}"
+        )
+        logger.debug(
+            f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}"
+        )
         return await self._observe(
             pagination=PaginationParams.model_validate(pagination),
             retry=self.config.observe_max_retry_after_snapshot_update,
@@ -355,12 +398,16 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("god")
-    async def god(self, url: str | None = None, **pagination: Unpack[PaginationObserveRequestDict]) -> Observation:
+    async def god(
+        self, url: str | None = None, **pagination: Unpack[PaginationObserveRequestDict]
+    ) -> Observation:
         if url is not None:
             _ = await self.goto(url)
         _pagination = PaginationParams.model_validate(pagination)
         space, data = await asyncio.gather(
-            self._action_space_pipe.forward_async(self.context, self.previous_actions, pagination=_pagination),
+            self._action_space_pipe.forward_async(
+                self.context, self.previous_actions, pagination=_pagination
+            ),
             self._data_scraping_pipe.forward_async(self.context, self.config.scraping),
         )
         self.obs.space = space

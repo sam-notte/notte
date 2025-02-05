@@ -19,7 +19,9 @@ def as_dict(node: A11yNode | DOMBaseNode) -> A11yNode:
     return {
         "role": node.role,
         "name": node.name,
-        "is_interactive": node.is_interactive if isinstance(node, DOMElementNode) else False,
+        "is_interactive": node.is_interactive
+        if isinstance(node, DOMElementNode)
+        else False,
         "children": [as_dict(child) for child in node.children],
     }
 
@@ -37,7 +39,9 @@ def get_children(node: A11yNode | DOMBaseNode) -> list[A11yNode] | list[DOMBaseN
     return node.children
 
 
-def generate_sequential_ids(root: A11yNode, only_for: set[str] | None = None) -> A11yNode:
+def generate_sequential_ids(
+    root: A11yNode, only_for: set[str] | None = None
+) -> A11yNode:
     """
     Generates sequential IDs for interactive elements in the accessibility tree
     using depth-first search.
@@ -55,7 +59,10 @@ def generate_sequential_ids(root: A11yNode, only_for: set[str] | None = None) ->
             )
         elif (  # images nodes can have empty names
             node.get("is_interactive", False)
-            or (len(node["name"].strip()) > 0 or role.value in NodeCategory.IMAGE.roles())
+            or (
+                len(node["name"].strip()) > 0
+                or role.value in NodeCategory.IMAGE.roles()
+            )
         ) and (only_for is None or role.value in only_for):
             id = role.short_id()
             # logger.info(f"Generating ID: {id} for {role} with name {_node['name']}")
@@ -117,7 +124,9 @@ def sync_ids_between_trees(target: A11yNode, source: A11yNode) -> A11yNode:
                     "does not have an ID. This cannot happen."
                 )
             )
-        matches = find_all_paths_by_role_and_name(target, reference_node["role"], reference_node["name"])
+        matches = find_all_paths_by_role_and_name(
+            target, reference_node["role"], reference_node["name"]
+        )
         if len(matches) == 0:
             raise InconsistentInteractionsNodesInAxTrees(
                 check=(

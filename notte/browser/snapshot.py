@@ -59,5 +59,7 @@ class BrowserSnapshot:
         new_inodes = set_of_interactive_nodes(other.a11y_tree.simple)
         identical = inodes == new_inodes
         if not identical:
-            logger.warning(f"Interactive nodes changed: {new_inodes.difference(inodes)}")
+            logger.warning(
+                f"Interactive nodes changed: {new_inodes.difference(inodes)}"
+            )
         return identical

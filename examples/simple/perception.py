@@ -48,14 +48,18 @@ Interactive elements from current page view:
         px_above = obs.metadata.viewport.pixels_above
         px_below = obs.metadata.viewport.pixels_below
 
-        more_above = f"... {px_above} pixels above - scroll or scrape content to see more ..."
-        more_below = f"... {px_below} pixels below - scroll or scrape content to see more ..."
+        more_above = (
+            f"... {px_above} pixels above - scroll or scrape content to see more ..."
+        )
+        more_below = (
+            f"... {px_below} pixels below - scroll or scrape content to see more ..."
+        )
 
         return f"""
 [Start of page]
-{more_above if px_above > 0 else ''}
-{obs.space.description or 'No content to display'}
-{more_below if px_below > 0 else ''}
+{more_above if px_above > 0 else ""}
+{obs.space.description or "No content to display"}
+{more_below if px_below > 0 else ""}
 [End of page]
 
 """
@@ -66,5 +70,5 @@ Interactive elements from current page view:
         return f"""
 Data scraped from current page view:
 
-{obs.data.markdown or 'No data to display'}
+{obs.data.markdown or "No data to display"}
 """

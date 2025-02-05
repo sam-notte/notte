@@ -123,7 +123,9 @@ def test_generate_ids_with_unsupported_role():
     tree: A11yNode = {
         "role": "main",
         "name": "Main",
-        "children": [{"role": "unsupported_role", "name": "Test", "children": []}],  # Invalid role
+        "children": [
+            {"role": "unsupported_role", "name": "Test", "children": []}
+        ],  # Invalid role
     }
 
     # Should not raise an error, but log a warning

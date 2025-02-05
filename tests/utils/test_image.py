@@ -2,7 +2,9 @@ from notte.utils.image import construct_image_url
 
 
 def test_construct_image_url() -> None:
-    base_url = "https://www.hbs.edu/news/articles/Pages/awa-ambra-seck-profile-2024.aspx"
+    base_url = (
+        "https://www.hbs.edu/news/articles/Pages/awa-ambra-seck-profile-2024.aspx"
+    )
 
     # Different types of image sources
     cases = [

@@ -79,7 +79,9 @@ def session_response_dict(session_id: str, close: bool = False) -> SessionRespon
     }
 
 
-def _start_session(mock_post: MagicMock, client: NotteClient, session_id: str) -> SessionResponse:
+def _start_session(
+    mock_post: MagicMock, client: NotteClient, session_id: str
+) -> SessionResponse:
     mock_response: SessionResponseDict = session_response_dict(session_id)
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = mock_response
@@ -87,7 +89,9 @@ def _start_session(mock_post: MagicMock, client: NotteClient, session_id: str) -
 
 
 @patch("requests.post")
-def test_start_session(mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str) -> None:
+def test_start_session(
+    mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str
+) -> None:
     session_data: SessionRequestDict = {
         "session_id": None,
         "keep_alive": True,
@@ -108,7 +112,9 @@ def test_start_session(mock_post: MagicMock, client: NotteClient, api_key: str, 
 
 
 @patch("requests.post")
-def test_close_session(mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str) -> None:
+def test_close_session(
+    mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str
+) -> None:
     client.session_id = session_id
 
     mock_response: SessionResponseDict = session_response_dict(session_id, close=True)
@@ -135,7 +141,9 @@ def test_close_session(mock_post: MagicMock, client: NotteClient, api_key: str, 
 
 
 @patch("requests.post")
-def test_scrape(mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str) -> None:
+def test_scrape(
+    mock_post: MagicMock, client: NotteClient, api_key: str, session_id: str
+) -> None:
     mock_response = {
         "metadata": {
             "title": "Test Page",
@@ -150,7 +158,10 @@ def test_scrape(mock_post: MagicMock, client: NotteClient, api_key: str, session
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = mock_response
 
-    observe_data: ObserveRequestDict = {"url": "https://example.com", "session_id": session_id}
+    observe_data: ObserveRequestDict = {
+        "url": "https://example.com",
+        "session_id": session_id,
+    }
     observation = client.scrape(**observe_data)
 
     assert isinstance(observation, Observation)
@@ -162,7 +173,9 @@ def test_scrape(mock_post: MagicMock, client: NotteClient, api_key: str, session
 
 
 @patch("requests.post")
-def test_scrape_without_url_or_session_id(mock_post: MagicMock, client: NotteClient) -> None:
+def test_scrape_without_url_or_session_id(
+    mock_post: MagicMock, client: NotteClient
+) -> None:
     observe_data: ObserveRequestDict = {
         "url": None,
         "session_id": None,
@@ -170,13 +183,21 @@ def test_scrape_without_url_or_session_id(mock_post: MagicMock, client: NotteCli
         "session_timeout_minutes": DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES,
         "screenshot": True,
     }
-    with pytest.raises(ValueError, match="Either url or session_id needs to be provided"):
+    with pytest.raises(
+        ValueError, match="Either url or session_id needs to be provided"
+    ):
         client.scrape(**observe_data)
 
 
 @pytest.mark.parametrize("start_session", [True, False])
 @patch("requests.post")
-def test_observe(mock_post: MagicMock, client: NotteClient, api_key: str, start_session: bool, session_id: str) -> None:
+def test_observe(
+    mock_post: MagicMock,
+    client: NotteClient,
+    api_key: str,
+    start_session: bool,
+    session_id: str,
+) -> None:
     if start_session:
         _ = _start_session(mock_post, client, session_id)
     mock_response = {
@@ -215,7 +236,13 @@ def test_observe(mock_post: MagicMock, client: NotteClient, api_key: str, start_
 
 @pytest.mark.parametrize("start_session", [True, False])
 @patch("requests.post")
-def test_step(mock_post: MagicMock, client: NotteClient, api_key: str, start_session: bool, session_id: str) -> None:
+def test_step(
+    mock_post: MagicMock,
+    client: NotteClient,
+    api_key: str,
+    start_session: bool,
+    session_id: str,
+) -> None:
     if start_session:
         _ = _start_session(mock_post, client, session_id)
     mock_response = {

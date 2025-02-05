@@ -8,7 +8,9 @@ from tests.mock.mock_service import MockLLMService
 
 @pytest.fixture
 def llm_service():
-    return MockLLMService(mock_response="<data-extraction> # Hello World </data-extraction>")
+    return MockLLMService(
+        mock_response="<data-extraction> # Hello World </data-extraction>"
+    )
 
 
 def test_browser_actions_list():
@@ -47,7 +49,9 @@ async def test_browser_actions_execution(llm_service: MockLLMService):
     """Test the execution of various special actions"""
     async with NotteEnv(headless=True, llmserve=llm_service, screenshot=False) as env:
         # Test S1: Go to URL
-        obs = await env.execute(action_id=BrowserActionId.GOTO, params={"url": "https://notte.cc/"})
+        obs = await env.execute(
+            action_id=BrowserActionId.GOTO, params={"url": "https://notte.cc/"}
+        )
         assert obs.clean_url == "notte.cc"
 
         # Test S2: Scrape data
@@ -60,7 +64,9 @@ async def test_browser_actions_execution(llm_service: MockLLMService):
         assert obs.screenshot is not None
 
         # Test S4: Go back
-        obs = await env.execute(action_id=BrowserActionId.GOTO, params={"url": "https://google.com/"})
+        obs = await env.execute(
+            action_id=BrowserActionId.GOTO, params={"url": "https://google.com/"}
+        )
         assert obs.clean_url == "google.com"
         obs = await env.execute(action_id=BrowserActionId.GO_BACK)
         assert obs.clean_url == "notte.cc"
@@ -84,11 +90,15 @@ async def test_special_action_validation(llm_service: MockLLMService):
     async with NotteEnv(headless=True, llmserve=llm_service) as env:
         _ = await env.goto("https://notte.cc/")
         # Test S1 requires URL parameter
-        with pytest.raises(ValueError, match=f"Action with id '{BrowserActionId.GOTO}' is invalid"):
+        with pytest.raises(
+            ValueError, match=f"Action with id '{BrowserActionId.GOTO}' is invalid"
+        ):
             _ = await env.execute(action_id=BrowserActionId.GOTO)
 
         # Test S7 requires wait time parameter
-        with pytest.raises(ValueError, match=f"Action with id '{BrowserActionId.WAIT}' is invalid"):
+        with pytest.raises(
+            ValueError, match=f"Action with id '{BrowserActionId.WAIT}' is invalid"
+        ):
             _ = await env.execute(action_id=BrowserActionId.WAIT)
 
         # Test invalid special action

@@ -4,7 +4,9 @@ from playwright.async_api import FrameLocator, Locator, Page
 from notte.browser.dom_tree import DomNode, NodeSelectors
 
 
-async def locale_element_in_iframes(page: Page, selectors: NodeSelectors) -> FrameLocator | Page:
+async def locale_element_in_iframes(
+    page: Page, selectors: NodeSelectors
+) -> FrameLocator | Page:
     if not selectors.in_iframe:
         raise ValueError("Node is not in an iframe")
 
@@ -25,11 +27,16 @@ async def locale_element(page: Page, selectors: NodeSelectors) -> Locator:
         frame = await locale_element_in_iframes(page, selectors)
     # regular case, locate element + scroll into view if needed
 
-    for selector in [f"css={selectors.css_selector}", f"xpath={selectors.xpath_selector}"]:
+    for selector in [
+        f"css={selectors.css_selector}",
+        f"xpath={selectors.xpath_selector}",
+    ]:
         locator = frame.locator(selector)
         count = await locator.count()
         if count > 1:
-            logger.warning(f"Found {count} elements for '{selector}'. Check out the dom tree for more details.")
+            logger.warning(
+                f"Found {count} elements for '{selector}'. Check out the dom tree for more details."
+            )
         elif count == 1:
             _ = await locator.scroll_into_view_if_needed()
             return locator

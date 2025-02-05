@@ -26,7 +26,12 @@ class InvalidAPIKeyError(LLMProviderError):
 
 
 class ContextWindowExceededError(LLMProviderError):
-    def __init__(self, provider: str, current_size: int | None = None, max_size: int | None = None) -> None:
+    def __init__(
+        self,
+        provider: str,
+        current_size: int | None = None,
+        max_size: int | None = None,
+    ) -> None:
         size_info = ""
         if current_size is not None and max_size is not None:
             size_info = f" Current size: {current_size}, Maximum size: {max_size}."

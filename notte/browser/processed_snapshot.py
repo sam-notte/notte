@@ -15,10 +15,15 @@ class ProcessedBrowserSnapshot:
     def interaction_nodes(self) -> list[InteractionDomNode]:
         return self.node.interaction_nodes()
 
-    def subgraph_without(self, actions: list[Action]) -> "ProcessedBrowserSnapshot | None":
-
+    def subgraph_without(
+        self, actions: list[Action]
+    ) -> "ProcessedBrowserSnapshot | None":
         id_existing_actions = set([action.id for action in actions])
-        failed_actions = {node.id for node in self.interaction_nodes() if node.id not in id_existing_actions}
+        failed_actions = {
+            node.id
+            for node in self.interaction_nodes()
+            if node.id not in id_existing_actions
+        }
 
         def only_failed_actions(node: DomNode) -> bool:
             return len(set(node.subtree_ids).intersection(failed_actions)) > 0

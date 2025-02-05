@@ -8,7 +8,9 @@ from notte.browser.node_type import NodeCategory
 MatchingFt = Callable[[A11yNode], bool]
 
 
-def find_node_path_by_predicate(node: A11yNode, matching_ft: MatchingFt) -> list[A11yNode] | None:
+def find_node_path_by_predicate(
+    node: A11yNode, matching_ft: MatchingFt
+) -> list[A11yNode] | None:
     if matching_ft(node):
         return [node]
     for child in node.get("children", []):
@@ -19,15 +21,18 @@ def find_node_path_by_predicate(node: A11yNode, matching_ft: MatchingFt) -> list
     return None
 
 
-def find_node_path_by_role_and_name(node: A11yNode, role: str, name: str) -> list[A11yNode] | None:
+def find_node_path_by_role_and_name(
+    node: A11yNode, role: str, name: str
+) -> list[A11yNode] | None:
     def matching_ft(node: A11yNode) -> bool:
         return node["role"] == role and node["name"] == name
 
     return find_node_path_by_predicate(node, matching_ft)
 
 
-def find_all_paths_by_role_and_name(node: A11yNode, role: str, name: str) -> list[list[A11yNode]]:
-
+def find_all_paths_by_role_and_name(
+    node: A11yNode, role: str, name: str
+) -> list[list[A11yNode]]:
     if node["role"] == role and node["name"] == name:
         return [[node]]
     all_results: list[list[A11yNode]] = []
@@ -46,7 +51,9 @@ def find_node_path_by_id(node: A11yNode, notte_id: str) -> list[A11yNode] | None
     return find_node_path_by_predicate(node, matching_ft)
 
 
-def find_all_matching_subtrees_with_parents(node: A11yNode, role: str, name: str | None = None) -> list[A11yNode]:
+def find_all_matching_subtrees_with_parents(
+    node: A11yNode, role: str, name: str | None = None
+) -> list[A11yNode]:
     if node["role"] == role and (name is None or node["name"] == name):
         return [node]
 
@@ -67,10 +74,12 @@ def list_interactive_nodes(
     only_with_id: bool = False,
     include_id: bool = True,
 ) -> list[A11yNode]:
-
     interactions: list[A11yNode] = []
     id = ax_tree.get("id")
-    if ax_tree["role"] in NodeCategory.INTERACTION.roles() and len(ax_tree["name"].strip()) > 0:
+    if (
+        ax_tree["role"] in NodeCategory.INTERACTION.roles()
+        and len(ax_tree["name"].strip()) > 0
+    ):
         node: A11yNode = {
             "role": ax_tree["role"],
             "name": ax_tree["name"],
@@ -92,7 +101,9 @@ def list_interactive_nodes(
         if parent_path is not None:
             parent_path = ":".join([parent_path, ax_tree["role"], ax_tree["name"]])
         interactions.extend(
-            list_interactive_nodes(child, parent_path, only_with_id=only_with_id, include_id=include_id)
+            list_interactive_nodes(
+                child, parent_path, only_with_id=only_with_id, include_id=include_id
+            )
         )
 
     return interactions
@@ -107,7 +118,9 @@ def list_image_nodes(ax_tree: A11yNode) -> list[A11yNode]:
     return images
 
 
-def interactive_list_to_set(interactions: list[A11yNode], with_id: bool = False) -> set[tuple[str, str, str]]:
+def interactive_list_to_set(
+    interactions: list[A11yNode], with_id: bool = False
+) -> set[tuple[str, str, str]]:
     return set(
         (
             interaction.get("id", "") if with_id else "",

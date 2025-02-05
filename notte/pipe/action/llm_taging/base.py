@@ -18,13 +18,14 @@ from notte.llms.service import LLMService
 
 
 class BaseActionListingPipe(ABC):
-
     def __init__(self, llmserve: LLMService) -> None:
         self.llmserve: LLMService = llmserve
 
     @abstractmethod
     def forward(
-        self, context: ProcessedBrowserSnapshot, previous_action_list: list[Action] | None = None
+        self,
+        context: ProcessedBrowserSnapshot,
+        previous_action_list: list[Action] | None = None,
     ) -> PossibleActionSpace:
         pass
 
@@ -62,7 +63,9 @@ class RetryPipeWrapper(BaseActionListingPipe):
 
     @override
     def forward(
-        self, context: ProcessedBrowserSnapshot, previous_action_list: list[Action] | None = None
+        self,
+        context: ProcessedBrowserSnapshot,
+        previous_action_list: list[Action] | None = None,
     ) -> PossibleActionSpace:
         errors: list[str] = []
         last_error: Exception | None = None
@@ -93,7 +96,9 @@ class RetryPipeWrapper(BaseActionListingPipe):
                             f"Failed to parse context size from error message: {str(e)}. Please fix this ASAP."
                         )
                     raise ContextSizeTooLargeError(size=size, max_size=max_size) from e
-                logger.warning(f"failed to parse action list but retrying. Start of error msg: {str(e)[:200]}...")
+                logger.warning(
+                    f"failed to parse action list but retrying. Start of error msg: {str(e)[:200]}..."
+                )
                 errors.append(str(e))
         self.tracer.trace(
             status="failure",
@@ -116,7 +121,9 @@ class RetryPipeWrapper(BaseActionListingPipe):
                 return self.pipe.forward_incremental(context, previous_action_list)
             except Exception:
                 pass
-        logger.error("Failed to get action list after max tries => returning previous action list")
+        logger.error(
+            "Failed to get action list after max tries => returning previous action list"
+        )
         return PossibleActionSpace(
             # TODO: get description from previous action list
             description="",

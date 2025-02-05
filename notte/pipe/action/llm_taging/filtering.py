@@ -6,9 +6,10 @@ from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 
 @final
 class ActionFilteringPipe:
-
     @staticmethod
-    def forward(context: ProcessedBrowserSnapshot, actions: list[Action]) -> list[Action]:
+    def forward(
+        context: ProcessedBrowserSnapshot, actions: list[Action]
+    ) -> list[Action]:
         for action in actions:
             if ActionFilteringPipe.exclude_actions_with_invalid_params(action):
                 action.status = "excluded"

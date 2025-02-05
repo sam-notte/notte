@@ -21,7 +21,6 @@ llamux_config = os.getenv("LLAMUX_CONFIG_PATH", str(LLAMUX_CONFIG))
 
 
 class LLMService:
-
     def __init__(self, base_model: str | None = None) -> None:
         self.lib: PromptLibrary = PromptLibrary(str(PROMPT_DIR))
         path = Path(llamux_config)
@@ -40,12 +39,19 @@ class LLMService:
             base_model = f"{provider}/{model}"
         else:
             base_model = self.base_model
-        token_len = self.estimate_tokens(text="\n".join([m["content"] for m in messages]))
-        logger.debug(f"llm router '{router}' selected '{base_model}' for approx {token_len} tokens")
+        token_len = self.estimate_tokens(
+            text="\n".join([m["content"] for m in messages])
+        )
+        logger.debug(
+            f"llm router '{router}' selected '{base_model}' for approx {token_len} tokens"
+        )
         return base_model, eid
 
     def estimate_tokens(
-        self, text: str | None = None, prompt_id: str | None = None, variables: dict[str, Any] | None = None
+        self,
+        text: str | None = None,
+        prompt_id: str | None = None,
+        variables: dict[str, Any] | None = None,
     ) -> int:
         if text is None:
             if prompt_id is None or variables is None:

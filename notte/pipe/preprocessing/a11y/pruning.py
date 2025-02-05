@@ -21,7 +21,9 @@ class PruningConfig:
     prune_empty_structurals: bool = True
     # TODO: revisif this assumption
     prune_iframes: bool = True
-    prune_roles: set[str] = field(default_factory=lambda: set(["InlineTextBox", "ListMarker", "LineBreak"]))
+    prune_roles: set[str] = field(
+        default_factory=lambda: set(["InlineTextBox", "ListMarker", "LineBreak"])
+    )
 
     def should_prune(self, node: A11yNode) -> bool:
         """
@@ -102,7 +104,9 @@ def get_subtree_roles(node: A11yNode, include_root_role: bool = True) -> set[str
 def prune_non_dialogs_if_present(node: A11yNode) -> A11yNode:
     dialogs = find_all_matching_subtrees_with_parents(node, "dialog")
     # filter those that are not interactive
-    interactive_dialogs = [dialog for dialog in dialogs if len(list_interactive_nodes(dialog)) > 0]
+    interactive_dialogs = [
+        dialog for dialog in dialogs if len(list_interactive_nodes(dialog)) > 0
+    ]
 
     if len(interactive_dialogs) == 0:
         # no dialogs found, return node
@@ -129,7 +133,9 @@ def prune_empty_links(node: A11yNode, config: PruningConfig) -> A11yNode | None:
             for child in node.get("children", []):
                 if child["role"] in NodeCategory.IMAGE.roles():
                     return node
-        logger.warning(f"Pruning empty link {node['name']} with nb children {len(node.get('children', []))}")
+        logger.warning(
+            f"Pruning empty link {node['name']} with nb children {len(node.get('children', []))}"
+        )
         return None
 
     children: list[A11yNode] = []
@@ -146,7 +152,11 @@ def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
     allowed_roles.update(NodeCategory.PARAMETERS.roles())
 
     children: list[A11yNode] = node.get("children", [])
-    if node["role"] in NodeCategory.INTERACTION.roles() and len(children) >= 1 and len(node["name"]) > 0:
+    if (
+        node["role"] in NodeCategory.INTERACTION.roles()
+        and len(children) >= 1
+        and len(node["name"]) > 0
+    ):
         # we can prune the whole subtree if it has only text children
         # and children[0]["role"] in NodeCategory.TEXT.roles()
         other_than_text = get_subtree_roles(node, include_root_role=False).difference(
@@ -166,13 +176,19 @@ def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
                 )
             )
 
-    node["children"] = [prune_text_child_in_interaction_nodes(child) for child in children]
+    node["children"] = [
+        prune_text_child_in_interaction_nodes(child) for child in children
+    ]
     return node
 
 
 def fold_link_button(node: A11yNode) -> A11yNode:
     children: list[A11yNode] = node.get("children", [])
-    if node["role"] == "link" and len(children) == 1 and children[0]["role"] == "button":
+    if (
+        node["role"] == "link"
+        and len(children) == 1
+        and children[0]["role"] == "button"
+    ):
         node["children"] = []
         return node
 
@@ -200,7 +216,9 @@ def fold_button_in_button(node: A11yNode) -> A11yNode:
 #     return len([child for child in node.get("children", []) if is_interesting(child, config)])
 
 
-def prune_non_interesting_nodes(node: A11yNode, config: PruningConfig) -> A11yNode | None:
+def prune_non_interesting_nodes(
+    node: A11yNode, config: PruningConfig
+) -> A11yNode | None:
     children: list[A11yNode] = []
     for child in node.get("children", []):
         pruned_child = prune_non_interesting_nodes(child, config)
@@ -220,7 +238,9 @@ def deep_copy_node(node: A11yNode) -> A11yNode:
     return deepcopy(node)
 
 
-def simple_processing_accessiblity_tree(node: A11yNode, config: PruningConfig | None = None) -> A11yNode | None:
+def simple_processing_accessiblity_tree(
+    node: A11yNode, config: PruningConfig | None = None
+) -> A11yNode | None:
     node = deep_copy_node(node)
     _config = config or PruningConfig()
     pipe = [
@@ -243,11 +263,15 @@ def simple_processing_accessiblity_tree(node: A11yNode, config: PruningConfig | 
     return _node
 
 
-def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig | None = None) -> A11yNode:
+def complex_processing_accessiblity_tree(
+    node: A11yNode, config: PruningConfig | None = None
+) -> A11yNode:
     node = deep_copy_node(node)
     _config = config or PruningConfig()
 
-    def add_children_to_pruned_node(node: A11yNode, children: list[A11yNode]) -> A11yNode:
+    def add_children_to_pruned_node(
+        node: A11yNode, children: list[A11yNode]
+    ) -> A11yNode:
         node["children"] = children
         # TODO: #12
         # return group_a11y_node(node)
@@ -284,11 +308,9 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
         raise InvalidInternalCheckError(
             check=f"No priority found for {node_role} and {child_role}",
             dev_advice=(
-                (
-                    "Priority rules defined which node (child or parent) should be kept around when a parent "
-                    "only has one child. This errors occurs because a new edge case has been discovered. "
-                    "Please add a new priority rule."
-                )
+                "Priority rules defined which node (child or parent) should be kept around when a parent "
+                "only has one child. This errors occurs because a new edge case has been discovered. "
+                "Please add a new priority rule."
             ),
             url=None,
         )
@@ -302,7 +324,11 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
         return base
 
     # if there is only one child and the note is not interesting, skip it
-    pruned_children = [complex_processing_accessiblity_tree(child, _config) for child in children if keep_node(child)]
+    pruned_children = [
+        complex_processing_accessiblity_tree(child, _config)
+        for child in children
+        if keep_node(child)
+    ]
     # scond round of filtrering
     pruned_children = [child for child in pruned_children if keep_node(child)]
 
@@ -316,7 +342,9 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
                     f"parent node(role='{node['role']}', name='{node['name']}') should have already been "
                     "pruned before reaching this point. "
                 ),
-                dev_advice=("This should not happen. Please check the node and the tree to see why this is happening."),
+                dev_advice=(
+                    "This should not happen. Please check the node and the tree to see why this is happening."
+                ),
                 url=None,
             )
             # Vestige of the old code (check if we can remove it)
@@ -335,7 +363,11 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
             return base
         # if the node is a link and the child is a button
         # with same text => return button
-        if base["role"] == "link" and child["role"] == "button" and child["name"] == base["name"]:
+        if (
+            base["role"] == "link"
+            and child["role"] == "button"
+            and child["name"] == base["name"]
+        ):
             node["children"] = []
             return node
         # skip list node
@@ -344,7 +376,10 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
 
         # skip the structural node
         if child["role"] in NodeCategory.STRUCTURAL.roles():
-            if not child.get("children") and child.get("nb_pruned_children") in [None, 0]:
+            if not child.get("children") and child.get("nb_pruned_children") in [
+                None,
+                0,
+            ]:
                 raise InvalidInternalCheckError(
                     check=(
                         "structural nodes should have children but node "

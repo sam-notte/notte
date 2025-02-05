@@ -70,14 +70,16 @@ async def test_resource_cleanup(pool: BrowserPool):
         # Browser count should decrease when all its contexts are closed
         remaining_contexts = 5 - i
         if remaining_contexts == 0:
-            assert (
-                stats["open_browsers"] == 0
-            ), f"Expected 0 open browsers for {remaining_contexts} contexts, got {stats['open_browsers']}"
+            assert stats["open_browsers"] == 0, (
+                f"Expected 0 open browsers for {remaining_contexts} contexts, got {stats['open_browsers']}"
+            )
         else:
             assert stats["open_browsers"] in [
                 1,
                 2,
-            ], f"Expected 1 or 2 open browsers for {remaining_contexts} contexts, got {stats['open_browsers']}"
+            ], (
+                f"Expected 1 or 2 open browsers for {remaining_contexts} contexts, got {stats['open_browsers']}"
+            )
 
 
 @pytest.mark.asyncio
@@ -202,9 +204,13 @@ async def test_error_handling(pool: BrowserPool):
     """Test error handling scenarios"""
 
     # Try to release non-existent resource
-    with pytest.raises(ValueError, match="Browser 'fake' not found in available browsers"):
+    with pytest.raises(
+        ValueError, match="Browser 'fake' not found in available browsers"
+    ):
         await pool.release_browser_resource(
-            BrowserResource(page=None, browser_id="fake", context_id="fake", headless=True)  # type: ignore
+            BrowserResource(
+                page=None, browser_id="fake", context_id="fake", headless=True
+            )  # type: ignore
         )
 
     # Create and release same resource twice

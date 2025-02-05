@@ -23,21 +23,31 @@ async def _test_action_node_resolution_pipe(url: str) -> None:
                 id=node.id,
                 description="does not matter",
                 category="interaction",
-                params=[] if not node.id.startswith("I") else [ActionParameter(name="some_param", type="string")],
+                params=[]
+                if not node.id.startswith("I")
+                else [ActionParameter(name="some_param", type="string")],
             )
             param_values = (
                 []
                 if not node.id.startswith("I")
-                else [ActionParameterValue(value="some_value", parameter_name="some_param")]
+                else [
+                    ActionParameterValue(
+                        value="some_value", parameter_name="some_param"
+                    )
+                ]
             )
             try:
-                action = await action_node_resolution_pipe.forward(action, param_values, env.context)
+                action = await action_node_resolution_pipe.forward(
+                    action, param_values, env.context
+                )
             except Exception as e:
                 errors.append(f"Error for node {node.id}: {e}")
 
     assert total_count > 0, "No nodes found"
     error_text = "\n".join(errors)
-    assert len(error_text) == 0, f"Percentage of errors: {len(errors) / total_count * 100:.2f}%\n Errors:\n{error_text}"
+    assert len(error_text) == 0, (
+        f"Percentage of errors: {len(errors) / total_count * 100:.2f}%\n Errors:\n{error_text}"
+    )
 
 
 async def test_phantombuster() -> None:

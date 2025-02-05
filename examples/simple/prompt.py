@@ -17,7 +17,6 @@ system_prompt_file = Path(__file__).parent / "system_prompt.md"
 
 
 class SimplePrompt:
-
     def __init__(self, max_actions_per_step: int):
         self.system_prompt: str = system_prompt_file.read_text()
         self.max_actions_per_step: int = max_actions_per_step
@@ -30,14 +29,22 @@ class SimplePrompt:
 
     def example_form_filling(self) -> str:
         return self._json_dump(
-            [FillAction(id="I1", value="username"), FillAction(id="I2", value="password"), ClickAction(id="B1")]
+            [
+                FillAction(id="I1", value="username"),
+                FillAction(id="I2", value="password"),
+                ClickAction(id="B1"),
+            ]
         )
 
     def example_navigation_and_extraction(self) -> str:
-        return self._json_dump([GotoAction(url="https://www.google.com"), ScrapeAction()])
+        return self._json_dump(
+            [GotoAction(url="https://www.google.com"), ScrapeAction()]
+        )
 
     def completion_example(self) -> str:
-        return self._json_dump([CompletionAction(success=True, answer="<answer to the task>")])
+        return self._json_dump(
+            [CompletionAction(success=True, answer="<answer to the task>")]
+        )
 
     def example_step(self) -> str:
         return """

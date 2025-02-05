@@ -20,7 +20,6 @@ class ProxyObservation(BaseModel):
 
 
 class BaseProxy(ABC):
-
     @abstractmethod
     def step(self, text: str) -> ProxyObservation:
         raise NotImplementedError
@@ -96,7 +95,9 @@ class NotteProxy:
                     raise ValueError("No URL provided")
                 obs = await self.env.scrape(params.scrape_request.url)
             case _:
-                logger.debug(f"Unknown provided endpoint: {params.endpoint} so we'll just recap the rules...")
+                logger.debug(
+                    f"Unknown provided endpoint: {params.endpoint} so we'll just recap the rules..."
+                )
         return ProxyObservation(
             obs=self.perceive(obs),
             output=params.output,

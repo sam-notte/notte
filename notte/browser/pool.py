@@ -33,7 +33,9 @@ class BrowserResource:
 class BrowserPoolConfig:
     # Memory allocations in MB
     CONTAINER_MEMORY = int(os.getenv("CONTAINER_MEMORY_MB", "4096"))  # Default 4GB
-    SYSTEM_RESERVED = int(os.getenv("SYSTEM_RESERVED_MB", "1024"))  # Default 1GB reserved
+    SYSTEM_RESERVED = int(
+        os.getenv("SYSTEM_RESERVED_MB", "1024")
+    )  # Default 1GB reserved
 
     # Base memory requirements (headless mode)
     BASE_BROWSER_MEMORY = int(os.getenv("BASE_BROWSER_MEMORY_MB", "150"))
@@ -112,7 +114,9 @@ class BrowserPool:
         self._browsers: dict[str, BrowserWithContexts] = {}
         self._playwright: Playwright | None = None
 
-    def available_browsers(self, headless: bool | None = None) -> dict[str, BrowserWithContexts]:
+    def available_browsers(
+        self, headless: bool | None = None
+    ) -> dict[str, BrowserWithContexts]:
         if headless is None:
             return {**self._headless_browsers, **self._browsers}
         elif headless:
@@ -136,7 +140,9 @@ class BrowserPool:
 
         return {
             "open_browsers": len(self.available_browsers()),
-            "open_contexts": sum(len(browser.contexts) for browser in self.available_browsers().values()),
+            "open_contexts": sum(
+                len(browser.contexts) for browser in self.available_browsers().values()
+            ),
         }
 
     def check_memory_usage(self) -> dict[str, float]:
@@ -169,7 +175,9 @@ class BrowserPool:
         # Check if we can create more browsers
         if len(self.available_browsers()) >= self.max_browsers:
             # Could implement browser reuse strategy here
-            raise BrowserResourceLimitError(f"Maximum number of browsers ({self.max_browsers}) reached")
+            raise BrowserResourceLimitError(
+                f"Maximum number of browsers ({self.max_browsers}) reached"
+            )
 
         # Calculate unique debug port for this browser
         # current_debug_port = self.base_debug_port + len(self.available_browsers())
@@ -203,7 +211,9 @@ class BrowserPool:
         self.available_browsers(headless)[browser_id] = _browser
         return _browser
 
-    async def _find_browser_with_space(self, headless: bool) -> BrowserWithContexts | None:
+    async def _find_browser_with_space(
+        self, headless: bool
+    ) -> BrowserWithContexts | None:
         """Find a browser with available space for a new context"""
         browsers = self.available_browsers(headless)
         for browser in browsers.values():
@@ -225,10 +235,15 @@ class BrowserPool:
         try:
             async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
                 context = await browser.browser.new_context()
-                browser.contexts[context_id] = TimeContext(context_id=context_id, context=context)
+                browser.contexts[context_id] = TimeContext(
+                    context_id=context_id, context=context
+                )
                 page = await context.new_page()
                 return BrowserResource(
-                    page=page, context_id=context_id, browser_id=browser.browser_id, headless=headless
+                    page=page,
+                    context_id=context_id,
+                    browser_id=browser.browser_id,
+                    headless=headless,
                 )
         except Exception as e:
             logger.error(f"Failed to create browser resource: {e}")
@@ -265,12 +280,14 @@ class BrowserPool:
         if len(resource_browser.contexts) == 0:
             await self._close_browser(resource.browser_id, resource.headless)
 
-    async def _close_browser(self, browser_id: str, headless: bool, force: bool = True) -> None:
+    async def _close_browser(
+        self, browser_id: str, headless: bool, force: bool = True
+    ) -> None:
         logger.info(f"Closing browser {browser_id}")
         browsers = self.available_browsers(headless)
-        if not force and (dt.datetime.now() - browsers[browser_id].timestamp) < dt.timedelta(
-            seconds=self.BROWSER_CREATION_TIMEOUT_SECONDS
-        ):
+        if not force and (
+            dt.datetime.now() - browsers[browser_id].timestamp
+        ) < dt.timedelta(seconds=self.BROWSER_CREATION_TIMEOUT_SECONDS):
             if self.verbose:
                 logger.info(
                     (
@@ -286,7 +303,9 @@ class BrowserPool:
             logger.error(f"Failed to close browser: {e}")
         del browsers[browser_id]
 
-    async def cleanup(self, except_resources: list[BrowserResource] | None = None, force: bool = True) -> None:
+    async def cleanup(
+        self, except_resources: list[BrowserResource] | None = None, force: bool = True
+    ) -> None:
         """Cleanup all browser instances"""
 
         except_resources_ids: dict[str, set[str]] = {
@@ -298,17 +317,21 @@ class BrowserPool:
         for browser in self.available_browsers().values():
             if browser.browser_id not in except_resources_ids:
                 if except_resources is not None:
-                    logger.info(f"Closing browser {browser.browser_id} because it is not in except_resources")
-                await self._close_browser(browser.browser_id, browser.headless, force=force)
+                    logger.info(
+                        f"Closing browser {browser.browser_id} because it is not in except_resources"
+                    )
+                await self._close_browser(
+                    browser.browser_id, browser.headless, force=force
+                )
             else:
                 # close all contexts except the ones in except_resources_ids[browser.browser_id]
                 context_ids = list(browser.contexts.keys())
                 for context_id in context_ids:
                     if context_id not in except_resources_ids[browser.browser_id]:
                         context = browser.contexts[context_id]
-                        should_skip = not force and (dt.datetime.now() - context.timestamp) < dt.timedelta(
-                            seconds=self.BROWSER_CREATION_TIMEOUT_SECONDS
-                        )
+                        should_skip = not force and (
+                            dt.datetime.now() - context.timestamp
+                        ) < dt.timedelta(seconds=self.BROWSER_CREATION_TIMEOUT_SECONDS)
                         if should_skip:
                             if self.verbose:
                                 logger.info(

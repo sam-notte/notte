@@ -33,7 +33,9 @@ class BaseParser(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def example_format(self, endpoint: Literal["observe", "step", "scrape"]) -> str | None:
+    def example_format(
+        self, endpoint: Literal["observe", "step", "scrape"]
+    ) -> str | None:
         raise NotImplementedError
 
     @staticmethod
@@ -63,16 +65,17 @@ class NotteParser(BaseParser):
     done_tag: ClassVar[str] = "done"
 
     @override
-    def example_format(self, endpoint: Literal["observe", "step", "scrape", "done", "error"]) -> str | None:
+    def example_format(
+        self, endpoint: Literal["observe", "step", "scrape", "done", "error"]
+    ) -> str | None:
         match endpoint:
             case "observe":
                 return "<url>https://www.example.com</url>"
             case "step":
                 return f"""
 <{self.step_tag}>
-{
-"action_id": "<YOUR_ACTION_ID>",
-"params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
+{"action_id": "<YOUR_ACTION_ID>",
+"params": {"<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
 }
 </{self.step_tag}>
 """
@@ -81,8 +84,7 @@ class NotteParser(BaseParser):
             case "done":
                 return f"""
 <{self.done_tag}>
-{
-    "success": "true",
+{"success": "true",
     "answer": "<YOUR_ANSWER>"
 }
 </{self.done_tag}>
@@ -90,8 +92,7 @@ class NotteParser(BaseParser):
             case "error":
                 return f"""
 <{self.done_tag}>
-{
-    "success": "false",
+{"success": "false",
     "answer": "<REASON_FOR_FAILURE>"
 }
 </{self.done_tag}>
@@ -145,5 +146,7 @@ class NotteParser(BaseParser):
         return ObserveRequest(url=url)
 
     def parse_step(self, text: str) -> StepRequest | None:
-        action_dict: StepRequest = StepRequest.model_validate(self.parse_json(text, NotteParser.step_tag))
+        action_dict: StepRequest = StepRequest.model_validate(
+            self.parse_json(text, NotteParser.step_tag)
+        )
         return action_dict

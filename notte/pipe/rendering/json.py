@@ -4,7 +4,6 @@ from notte.browser.dom_tree import A11yNode, DomNode
 
 
 class JsonDomNodeRenderingPipe:
-
     @staticmethod
     def _dom_node_to_dict(
         node: DomNode,
@@ -26,7 +25,10 @@ class JsonDomNodeRenderingPipe:
         # add children
         if len(node.children) > 0:
             _dict["children"] = [
-                JsonDomNodeRenderingPipe._dom_node_to_dict(child, include_ids, include_links) for child in node.children
+                JsonDomNodeRenderingPipe._dom_node_to_dict(
+                    child, include_ids, include_links
+                )
+                for child in node.children
             ]
         return _dict  # type: ignore
 

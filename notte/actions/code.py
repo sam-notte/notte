@@ -19,7 +19,9 @@ class LocatorResult:
     selector: str
 
 
-def generate_playwright_code(action: ExecutableAction, context: ProcessedBrowserSnapshot) -> str:
+def generate_playwright_code(
+    action: ExecutableAction, context: ProcessedBrowserSnapshot
+) -> str:
     raise NotImplementedError("Not implemented")
 
 
@@ -43,10 +45,15 @@ ActionType = Literal["click", "fill", "check", "select_option"]
 
 
 def get_playwright_action(action: ExecutableAction) -> ActionType:
-
     if action.locator is None:
-        raise InvalidActionError(action.id, "locator is to be able to execute an interaction action")
-    role_str = action.locator.role if isinstance(action.locator.role, str) else action.locator.role.value
+        raise InvalidActionError(
+            action.id, "locator is to be able to execute an interaction action"
+        )
+    role_str = (
+        action.locator.role
+        if isinstance(action.locator.role, str)
+        else action.locator.role.value
+    )
     match (action.id[0], role_str, action.locator.is_editable):
         case ("B", "button", _) | ("L", "link", _):
             return "click"
@@ -62,7 +69,9 @@ def get_playwright_action(action: ExecutableAction) -> ActionType:
             raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
 
 
-def get_action_params(action_type: ActionType, parameters: list[ActionParameterValue]) -> str:
+def get_action_params(
+    action_type: ActionType, parameters: list[ActionParameterValue]
+) -> str:
     parameter_str = "timeout={TIMEOUT_MS}"
     match action_type:
         case "fill" | "select_option":
@@ -112,17 +121,13 @@ def compute_playwright_code(
     if locator is None:
         raise InvalidInternalCheckError(
             check=(
-                (
-                    f"Target Notte node resolution error for action {action.id}. "
-                    "Target node must be provided to create an executable action."
-                )
+                f"Target Notte node resolution error for action {action.id}. "
+                "Target node must be provided to create an executable action."
             ),
             url="unknown url",
             dev_advice=(
-                (
-                    "The node resolution pipeline should always be run before creating an executable action. "
-                    "Check the code in `notte.pipe.resolution.py`."
-                )
+                "The node resolution pipeline should always be run before creating an executable action. "
+                "Check the code in `notte.pipe.resolution.py`."
             ),
         )
 

@@ -15,7 +15,6 @@ class AgentOutput:
 
 
 class BaseAgent(ABC):
-
     @abstractmethod
     async def run(self, task: str, url: str | None = None) -> AgentOutput:
         pass

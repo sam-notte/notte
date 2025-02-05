@@ -49,12 +49,18 @@ def prune_text_field_already_contained_in_parent_name(node: A11yNode) -> A11yNod
         # IIF this occurs at least once in a real case environment, we should add it here
         if child["role"] == "text":
             if child["name"] in parent_name or child["name"] in DISABLED_TEXT_FIELDS:
-                logger.debug(f"Pruning text field '{child['name']}' already contained in parent name '{parent_name}'")
+                logger.debug(
+                    f"Pruning text field '{child['name']}' already contained in parent name '{parent_name}'"
+                )
             else:
                 pruned_children.append(child)
         else:
-            pruned_children.append(prune_text_field_already_contained_in_parent_name(child))
-    if len(pruned_children) == 0 or (len(pruned_children) == 1 and pruned_children[0]["role"] == "LineBreak"):
+            pruned_children.append(
+                prune_text_field_already_contained_in_parent_name(child)
+            )
+    if len(pruned_children) == 0 or (
+        len(pruned_children) == 1 and pruned_children[0]["role"] == "LineBreak"
+    ):
         del node["children"]
     else:
         node["children"] = pruned_children
@@ -78,13 +84,19 @@ def fold_paragraph_single_text_node(node: A11yNode) -> A11yNode:
     if "children" not in node:
         return node
     children: list[A11yNode] = node["children"]
-    if node["role"] == "paragraph" and len(children) == 1 and children[0]["role"] == "text":
+    if (
+        node["role"] == "paragraph"
+        and len(children) == 1
+        and children[0]["role"] == "text"
+    ):
         # Change
         node["name"] = children[0]["name"] + "\n"
         node["role"] = "text"
         del node["children"]
     else:
-        node["children"] = [fold_paragraph_single_text_node(child) for child in children]
+        node["children"] = [
+            fold_paragraph_single_text_node(child) for child in children
+        ]
 
     return node
 

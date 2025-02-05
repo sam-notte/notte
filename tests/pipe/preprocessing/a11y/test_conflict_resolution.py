@@ -94,14 +94,17 @@ def node() -> A11yNode:
 
 
 def test_format_path_for_conflict_resolution() -> None:
-
     with pytest.raises(ValueError, match="Node path is None"):
         _ = format_path_for_conflict_resolution(None)
 
     with pytest.raises(ValueError, match="Node path should have at least two nodes"):
-        _ = format_path_for_conflict_resolution([A11yNode(role="WebArea", name="", children=[])])
+        _ = format_path_for_conflict_resolution(
+            [A11yNode(role="WebArea", name="", children=[])]
+        )
 
-    with pytest.raises(ValueError, match="The first node in the node path should be the root node"):
+    with pytest.raises(
+        ValueError, match="The first node in the node path should be the root node"
+    ):
         _ = format_path_for_conflict_resolution(
             [
                 A11yNode(role="group", name="", children=[]),

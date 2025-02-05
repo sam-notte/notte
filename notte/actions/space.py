@@ -45,7 +45,11 @@ class ActionSpace(BaseActionSpace):
     def __post_init__(self) -> None:
         # filter out special actions
         nb_originalraw_actions = len(self.raw_actions)
-        self.raw_actions = [action for action in self.raw_actions if not BrowserAction.is_special(action.id)]
+        self.raw_actions = [
+            action
+            for action in self.raw_actions
+            if not BrowserAction.is_special(action.id)
+        ]
         if len(self.raw_actions) != nb_originalraw_actions:
             logger.warning(
                 (
@@ -63,7 +67,10 @@ class ActionSpace(BaseActionSpace):
                 )
             # check 2: actions should have description
             if len(action.description) == 0:
-                raise InvalidActionError(action.id, "actions listed in action space should have a description.")
+                raise InvalidActionError(
+                    action.id,
+                    "actions listed in action space should have a description.",
+                )
 
     @override
     def actions(
@@ -78,9 +85,15 @@ class ActionSpace(BaseActionSpace):
             case ("all", _):
                 actions = [action for action in self.raw_actions if action.role == role]
             case (_, "all"):
-                actions = [action for action in self.raw_actions if action.status == status]
+                actions = [
+                    action for action in self.raw_actions if action.status == status
+                ]
             case (_, _):
-                actions = [action for action in self.raw_actions if action.status == status and action.role == role]
+                actions = [
+                    action
+                    for action in self.raw_actions
+                    if action.status == status and action.role == role
+                ]
 
         if include_browser:
             actions += BrowserAction.list()  # type: ignore
@@ -90,7 +103,9 @@ class ActionSpace(BaseActionSpace):
     def browser_actions(self) -> Sequence[BrowserAction]:
         return BrowserAction.list()  # type: ignore
 
-    def search(self, query: str, threshold: float = 0.60, max_results: int = 1) -> list[Action]:
+    def search(
+        self, query: str, threshold: float = 0.60, max_results: int = 1
+    ) -> list[Action]:
         check_embedding_imports()
 
         if self._embeddings is None:
@@ -103,9 +118,9 @@ class ActionSpace(BaseActionSpace):
         query_embedding = ActionEmbedding().embed_query(query)
 
         # Calculate cosine similarities
-        similarities: "npt.NDArray[np.float32]" = np.dot(action_embs, query_embedding) / (
-            np.linalg.norm(action_embs, axis=1) * np.linalg.norm(query_embedding)
-        )
+        similarities: "npt.NDArray[np.float32]" = np.dot(
+            action_embs, query_embedding
+        ) / (np.linalg.norm(action_embs, axis=1) * np.linalg.norm(query_embedding))
 
         # Get indices of actions above threshold, sorted by similarity
         valid_indices = np.where(similarities >= threshold)[0]
@@ -116,7 +131,9 @@ class ActionSpace(BaseActionSpace):
         return [self.actions("valid")[i] for i in result_indices]
 
     @override
-    def markdown(self, status: AllActionStatus = "valid", include_browser: bool = True) -> str:
+    def markdown(
+        self, status: AllActionStatus = "valid", include_browser: bool = True
+    ) -> str:
         # Get actions with requested status
         actions_to_format = self.actions(status, include_browser=include_browser)
 

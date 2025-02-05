@@ -11,7 +11,9 @@ class MarkdownDomNodeRenderingPipe:
         include_ids: bool,
         include_images: bool,
     ) -> str:
-        logger.info(f"Dom Node markdown rendering with include_ids={include_ids} and include_images={include_images}")
+        logger.info(
+            f"Dom Node markdown rendering with include_ids={include_ids} and include_images={include_images}"
+        )
         return MarkdownDomNodeRenderingPipe.format(
             node,
             indent_level=0,
@@ -31,7 +33,8 @@ class MarkdownDomNodeRenderingPipe:
         # Start with role and optional text
         id_str = ""
         if node.id is not None and (
-            include_ids or (include_images and node.get_role_str() in NodeCategory.IMAGE.roles())
+            include_ids
+            or (include_images and node.get_role_str() in NodeCategory.IMAGE.roles())
         ):
             id_str = f" {node.id}"
 
@@ -41,7 +44,10 @@ class MarkdownDomNodeRenderingPipe:
 
         # iterate dom attributes
         if node.attributes is not None:
-            dom_attrs = [f"{key}={value}" for key, value in node.attributes.relevant_attrs().items()]
+            dom_attrs = [
+                f"{key}={value}"
+                for key, value in node.attributes.relevant_attrs().items()
+            ]
 
             if dom_attrs:
                 # TODO: prompt engineering to select the most readable format
@@ -53,7 +59,10 @@ class MarkdownDomNodeRenderingPipe:
             result += " {\n"
             for child in node.children:
                 result += MarkdownDomNodeRenderingPipe.format(
-                    child, indent_level + 1, include_ids=include_ids, include_images=include_images
+                    child,
+                    indent_level + 1,
+                    include_ids=include_ids,
+                    include_images=include_images,
                 )
             result += indent + "}\n"
         else:

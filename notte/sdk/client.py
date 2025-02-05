@@ -49,7 +49,11 @@ class NotteClient:
 
     @property
     def session_id(self) -> str | None:
-        return self._base_session_request.session_id if self._base_session_request is not None else None
+        return (
+            self._base_session_request.session_id
+            if self._base_session_request is not None
+            else None
+        )
 
     @session_id.setter
     def session_id(self, value: str | None) -> None:
@@ -62,7 +66,9 @@ class NotteClient:
         logger.info(
             f"Request to `{path}` with {', '.join([f'{k}={data[k]}' for k in SessionRequest.model_fields.keys()])}"
         )
-        response = requests.post(f"{self.server_url}/{path}", headers=headers, json=data)
+        response = requests.post(
+            f"{self.server_url}/{path}", headers=headers, json=data
+        )
         # check common errors
         response_dict: dict[str, Any] = response.json()  # type:ignore
         if response.status_code != 200 or "detail" in response_dict:
@@ -78,8 +84,13 @@ class NotteClient:
         return data
 
     def start(self, **data: Unpack[SessionRequestDict]) -> SessionResponse:
-        if self._base_session_request is not None and self._base_session_request.session_id is not None:
-            logger.warning("One Notte session already exists. Closing it before starting a new one...")
+        if (
+            self._base_session_request is not None
+            and self._base_session_request.session_id is not None
+        ):
+            logger.warning(
+                "One Notte session already exists. Closing it before starting a new one..."
+            )
             _ = self.close()
         if "keep_alive" not in data:
             logger.info(
@@ -91,13 +102,17 @@ class NotteClient:
             data["keep_alive"] = True
         self._base_session_request = SessionRequest(**data)
         request = SessionRequest(**self._format_session_args(data))
-        response = SessionResponse.model_validate(self._request("session/start", request))
+        response = SessionResponse.model_validate(
+            self._request("session/start", request)
+        )
         self.session_id = response.session_id
         return response
 
     def close(self, **data: Unpack[SessionRequestDict]) -> SessionResponse:
         request = SessionRequest(**self._format_session_args(data))
-        response = SessionResponse.model_validate(self._request("session/close", request))
+        response = SessionResponse.model_validate(
+            self._request("session/close", request)
+        )
         self.session_id = None
         return response
 
@@ -123,7 +138,9 @@ class NotteClient:
                 else ActionSpace(
                     description=response.space.description,
                     _actions=response.space.actions,
-                    category=None if response.space.category is None else SpaceCategory(response.space.category),
+                    category=None
+                    if response.space.category is None
+                    else SpaceCategory(response.space.category),
                     _embeddings=None,
                 )
             ),
@@ -132,8 +149,12 @@ class NotteClient:
                 if response.data is None
                 else DataSpace(
                     markdown=response.data.markdown,
-                    images=(None if response.data.images is None else response.data.images),
-                    structured=None if response.data.structured is None else response.data.structured,
+                    images=(
+                        None if response.data.images is None else response.data.images
+                    ),
+                    structured=None
+                    if response.data.structured is None
+                    else response.data.structured,
                 )
             ),
         )

@@ -14,7 +14,9 @@ def a11tree_to_tree_string(
     # Add node content
     group_role_str = "" if "group_role" not in node else f" as {node['group_role']}"
     notte_id_str = "" if "id" not in node else f" ({node['id']})"
-    node_text = f"[{node['role']}{group_role_str}] '{node.get('name', '')}' {notte_id_str}"
+    node_text = (
+        f"[{node['role']}{group_role_str}] '{node.get('name', '')}' {notte_id_str}"
+    )
     if node.get("selected"):
         node_text += " (selected)"
     result += node_text + "\n"
@@ -68,7 +70,9 @@ def a11tree_to_markdown(node: A11yNode, heading_level: int = 1) -> str:
     elif role == "text" and name:
         markdown += f"{name} "
 
-    elif role not in ["", "none", "group"] and (len(name) > 1 or (len(name) == 1 and name.isalnum())):
+    elif role not in ["", "none", "group"] and (
+        len(name) > 1 or (len(name) == 1 and name.isalnum())
+    ):
         last_line = markdown.split("\n")[-1]
         if not last_line.startswith("#") and not markdown.endswith("\n\n"):
             markdown += "\n"

@@ -35,7 +35,9 @@ def check_interactions_consistency_accross_ax_trees(
     only_with_id: bool = False,
 ) -> bool:
     ax_tree_interactions = list_interactive_nodes(ax_tree, only_with_id=only_with_id)
-    other_ax_tree_interactions = list_interactive_nodes(other_ax_tree, only_with_id=only_with_id)
+    other_ax_tree_interactions = list_interactive_nodes(
+        other_ax_tree, only_with_id=only_with_id
+    )
     if len(ax_tree_interactions) != len(other_ax_tree_interactions) and raise_error:
         iset = interactive_list_to_set(other_ax_tree_interactions)
         oset = interactive_list_to_set(ax_tree_interactions)
