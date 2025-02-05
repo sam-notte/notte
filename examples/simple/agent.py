@@ -8,7 +8,7 @@ from notte.common.agent import AgentOutput, BaseAgent
 from notte.common.conversation import Conversation
 from notte.common.safe_executor import SafeActionExecutor
 from notte.common.trajectory_history import TrajectoryHistory
-from notte.common.validator import StepValidator
+from notte.common.validator import TaskOutputValidator
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
 from notte.pipe.action.pipe import ActionSpaceType, MainActionSpaceConfig
@@ -64,7 +64,7 @@ class SimpleAgent(BaseAgent):
             headless=headless,
             config=config,
         )
-        self.validator: StepValidator = StepValidator(llm=self.llm)
+        self.validator: TaskOutputValidator = TaskOutputValidator(llm=self.llm)
         self.prompt: SimplePrompt = SimplePrompt(max_actions_per_step)
         self.conv: Conversation = Conversation(
             max_tokens=max_history_tokens,

@@ -118,6 +118,10 @@ class LLMEngine:
             ) from e
 
 
+# TODO:
+# $\boxed{\{ ... }}$
+
+
 @dataclass
 class StructuredContent:
     """Defines how to extract structured content from LLM responses"""

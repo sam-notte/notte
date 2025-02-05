@@ -132,14 +132,17 @@ class BrowserDriver(AsyncResource):
                 await self.short_wait()
             else:
                 raise UnexpectedBrowserError(url=self.page.url) from e
-        if dom_node is None:
-            raise UnexpectedBrowserError(url=self.page.url)
-        if a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
+        if dom_node is None or a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
             logger.warning(f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms")
             await self.page.wait_for_timeout(self._playwright.config.goto_retry_timeout)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
         take_screenshot = screenshot if screenshot is not None else self._playwright.config.screenshot
-        snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
+        try:
+            snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
+        except PlaywrightTimeoutError:
+            logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
+            return await self.snapshot(screenshot=screenshot, retries=retries - 1)
+
         return BrowserSnapshot(
             metadata=SnapshotMetadata(
                 title=await self.page.title(),

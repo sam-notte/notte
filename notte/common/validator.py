@@ -27,10 +27,7 @@ CRITICAL: Return the JSON object inside a JSON code block (i.e. ```json ... ```)
 
 Example:
 ```json
-{
-    "is_valid": false,
-    "reason": "The user wanted to search for "cat photos", but the agent searched for "dog photos" instead."
-}
+{{example}}
 ```
 
 Your turn:
@@ -38,12 +35,12 @@ Your turn:
 
 
 class ValidationResult(BaseModel):
-    valid: bool
+    is_valid: bool
     reason: str
 
 
 @final
-class StepValidator:
+class TaskOutputValidator:
     def __init__(
         self,
         llm: LLMEngine,
@@ -56,6 +53,13 @@ class StepValidator:
         self.conv: Conversation = Conversation()
         self.perception: SimplePerception = SimplePerception()
 
+    @staticmethod
+    def example() -> ValidationResult:
+        return ValidationResult(
+            is_valid=False,
+            reason="The user wanted to search for 'cat photos', but the agent searched for 'dog photos' instead.",
+        )
+
     def validation_message(
         self,
         output: TaskOutput,
@@ -66,9 +70,9 @@ Last observation:
 {self.perception.perceive(step.obs)}
 
 Last action:
-{'No action' if step.action is None else step.action.model_dump_json(exclude_unset=True)}
+{step.action.model_dump_json(exclude_unset=True)}
 
-Task output:
+Agent task output:
 {output}
 """
 
@@ -80,13 +84,11 @@ Task output:
     ) -> bool:
         """Validate the output of the last action is what the user wanted"""
         self.conv.clear()
-        system_prompt = chevron.render(system_rules, {"task": task})
+        system_prompt = chevron.render(system_rules, {"task": task, "example": self.example().model_dump_json()})
         self.conv.add_system_message(content=system_prompt)
         self.conv.add_user_message(content=self.validation_message(output, step))
 
         answer: ValidationResult = self.llm.structured_completion(self.conv.messages(), ValidationResult)
-        if not answer.valid:
-            logger.info(f"❌ Validator decision: {answer.reason}")
-        else:
-            logger.info(f"✅ Validator decision: {answer.reason}")
-        return answer.valid
+        emoji = "✅" if answer.is_valid else "❌"
+        logger.info(f"{emoji} Validator reason: {answer.reason}")
+        return answer.is_valid

@@ -186,7 +186,7 @@ class PressKeyAction(BrowserAction):
 
     @override
     def execution_message(self) -> str:
-        return "Pressed the keyboard key: {self.key}"
+        return f"Pressed the keyboard key: {self.key}"
 
 
 class ScrollUpAction(BrowserAction):
