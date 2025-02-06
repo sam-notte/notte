@@ -1,14 +1,14 @@
 import datetime as dt
-from base64 import b64encode
-from typing import Annotated, Any, Literal, TypedDict
+from collections.abc import Sequence
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-from notte.actions.base import Action, SpecialAction
-from notte.actions.space import ActionSpace
-from notte.browser.observation import Observation
+from notte.browser.observation import Observation, TrajectoryProgress
 from notte.browser.snapshot import SnapshotMetadata
-from notte.data.space import DataSpace, ImageData
+from notte.controller.actions import BaseAction, BrowserAction
+from notte.controller.space import BaseActionSpace
+from notte.data.space import DataSpace
 
 # ############################################################
 # Session Management
@@ -107,7 +107,7 @@ class PaginationObserveRequestDict(TypedDict, total=False):
     max_nb_actions: int
 
 
-class PaginationObserveRequest(BaseModel):
+class PaginationParams(BaseModel):
     min_nb_actions: Annotated[
         int | None,
         Field(
@@ -128,7 +128,7 @@ class PaginationObserveRequest(BaseModel):
     ] = DEFAULT_MAX_NB_ACTIONS
 
 
-class ObserveRequest(SessionRequest, PaginationObserveRequest):
+class ObserveRequest(SessionRequest, PaginationParams):
     url: Annotated[str | None, Field(description="The URL to observe. If not provided, uses the current page URL.")] = (
         None
     )
@@ -140,13 +140,18 @@ class ObserveRequestDict(SessionRequestDict, PaginationObserveRequestDict, total
 
 class ScrapeRequestDict(SessionRequestDict, total=False):
     scrape_images: bool
+    scrape_links: bool
     only_main_content: bool
 
 
-class ScrapeRequest(ObserveRequest):
+class ScrapeParams(BaseModel):
     scrape_images: Annotated[
         bool, Field(description="Whether to scrape images from the page. Images are not scraped by default.")
     ] = False
+
+    scrape_links: Annotated[
+        bool, Field(description="Whether to scrape links from the page. Links are scraped by default.")
+    ] = True
 
     only_main_content: Annotated[
         bool,
@@ -158,7 +163,11 @@ class ScrapeRequest(ObserveRequest):
     ] = True
 
 
-class StepRequest(SessionRequest, PaginationObserveRequest):
+class ScrapeRequest(ObserveRequest, ScrapeParams):
+    pass
+
+
+class StepRequest(SessionRequest, PaginationParams):
     action_id: Annotated[str, Field(description="The ID of the action to execute")]
 
     value: Annotated[str | None, Field(description="The value to input for form actions")] = None
@@ -174,68 +183,35 @@ class StepRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=Fa
 
 class ActionSpaceResponse(BaseModel):
     markdown: Annotated[str | None, Field(description="Markdown representation of the action space")] = None
-    description: Annotated[str, Field(description="Human-readable description of the current web page")]
-
-    actions: Annotated[list[Action], Field(description="List of available actions in the current state")]
-    special_actions: Annotated[list[SpecialAction], Field(description="List of special actions, i.e browser actions")]
-
-    category: Annotated[
-        str | None, Field(description="Category of the action space (e.g., 'homepage', 'search-results', 'item)")
-    ] = None
+    actions: Annotated[Sequence[BaseAction], Field(description="List of available actions in the current state")]
+    browser_actions: Annotated[
+        Sequence[BrowserAction], Field(description="List of special actions, i.e browser actions")
+    ]
+    # TODO: ActionSpaceResponse should be a subclass of ActionSpace
+    description: str
+    category: str | None = None
 
     @staticmethod
-    def from_space(space: ActionSpace | None) -> "ActionSpaceResponse | None":
+    def from_space(space: BaseActionSpace | None) -> "ActionSpaceResponse | None":
         if space is None:
             return None
 
         return ActionSpaceResponse(
             markdown=space.markdown(),
             description=space.description,
-            category=space.category.value if space.category is not None else None,
+            category=space.category,
             actions=space.actions(),
-            special_actions=space.special_actions(),
-        )
-
-
-class DataSpaceResponse(BaseModel):
-    markdown: Annotated[str | None, Field(description="Markdown representation of the extracted data")] = None
-
-    images: Annotated[
-        list[ImageData] | None, Field(description="List of images extracted from the page (ID and download link)")
-    ] = None
-
-    structured: Annotated[
-        list[dict[str, Any]] | None, Field(description="Structured data extracted from the page in JSON format")
-    ] = None
-
-    @staticmethod
-    def from_data(data: DataSpace | None) -> "DataSpaceResponse | None":
-        if data is None:
-            return None
-        return DataSpaceResponse(
-            markdown=data.markdown,
-            images=data.images,
-            structured=data.structured,
+            browser_actions=space.browser_actions(),
         )
 
 
 class ObserveResponse(BaseModel):
     session: Annotated[SessionResponse, Field(description="Browser session information")]
-    metadata: Annotated[
-        SnapshotMetadata, Field(description="Metadata of the current page, i.e url, page title, snapshot timestamp.")
-    ]
-
-    screenshot: Annotated[bytes | None, Field(description="Base64 encoded screenshot of the current page")] = None
-
-    data: Annotated[DataSpaceResponse | None, Field(description="Extracted data from the page")] = None
-
     space: Annotated[ActionSpaceResponse | None, Field(description="Available actions in the current state")] = None
-
-    model_config = {
-        "json_encoders": {
-            bytes: lambda v: b64encode(v).decode("utf-8") if v else None,
-        }
-    }
+    metadata: SnapshotMetadata
+    screenshot: bytes | None
+    data: DataSpace | None
+    progress: TrajectoryProgress | None
 
     @staticmethod
     def from_obs(
@@ -246,6 +222,7 @@ class ObserveResponse(BaseModel):
             session=session,
             metadata=obs.metadata,
             screenshot=obs.screenshot,
-            data=DataSpaceResponse.from_data(obs.data),
-            space=ActionSpaceResponse.from_space(obs.space if obs.has_space() else None),
+            data=obs.data,
+            space=ActionSpaceResponse.from_space(obs.space),
+            progress=obs.progress,
         )

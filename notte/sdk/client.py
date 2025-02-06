@@ -5,8 +5,9 @@ import requests
 from loguru import logger
 from typing_extensions import final
 
-from notte.actions.space import ActionSpace, SpaceCategory
+from notte.actions.space import ActionSpace
 from notte.browser.observation import Observation
+from notte.controller.space import SpaceCategory
 from notte.data.space import DataSpace
 from notte.errors.sdk import AuthenticationError, InvalidRequestError, NotteAPIError
 from notte.sdk.types import (
@@ -117,12 +118,12 @@ class NotteClient:
         return Observation(
             metadata=response.metadata,
             screenshot=response.screenshot,
-            _space=(
+            space=(
                 None
                 if response.space is None
                 else ActionSpace(
                     description=response.space.description,
-                    _actions=response.space.actions,
+                    raw_actions=response.space.actions,  # type: ignore
                     category=None if response.space.category is None else SpaceCategory(response.space.category),
                     _embeddings=None,
                 )
