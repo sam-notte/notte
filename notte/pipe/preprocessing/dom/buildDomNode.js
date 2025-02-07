@@ -270,6 +270,104 @@
 			style.display !== 'none';
 	}
 
+	/**
+	 * Creates an instance that can be used to hit–test elements
+	 * that are offscreen, without affecting the visible document.
+	 */
+	function createElementOnTopFinder() {
+	  const realDoc = document;
+
+	  // Create an offscreen iframe
+	  const iframe = realDoc.createElement('iframe');
+	  iframe.id = 'offscreen-decide-topelement-iframe';
+	  iframe.style.position = 'absolute';
+	  iframe.style.top = '-10000px';
+	  iframe.style.left = '-10000px';
+	  iframe.style.width = window.innerWidth + 'px';
+	  iframe.style.height = window.innerHeight + 'px';
+	  iframe.style.border = 'none';
+	  realDoc.body.appendChild(iframe);
+
+	  // Clone the current document into the iframe
+	  const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+	  iDoc.open();
+	  iDoc.write(realDoc.documentElement.outerHTML);
+	  iDoc.close();
+
+	  /**
+	   * Returns the element that is on top of the given element.
+	   * If the element is fully visible in the real viewport, it uses
+	   * the real document's elementFromPoint. Otherwise, it finds the
+	   * corresponding element in the clone and simulates scrolling the iframe.
+	   *
+	   * @param {Element} element - The element to hit–test.
+	   * @return {Element|null} - The element on top, or null if not found.
+	   */
+	  function findElementOnTop(element) {
+	    // Get the element's bounding rectangle (relative to the viewport)
+	    const rect = element.getBoundingClientRect();
+
+	    // If the element is fully in view, use the real document’s hit–test.
+	    if (
+	      rect.top >= 0 &&
+	      rect.left >= 0 &&
+	      rect.bottom <= window.innerHeight &&
+	      rect.right <= window.innerWidth
+	    ) {
+	      const x = rect.left + rect.width / 2;
+	      const y = rect.top + rect.height / 2;
+	      return realDoc.elementFromPoint(x, y);
+	    }
+
+	    // For offscreen elements, find the corresponding element in the clone.
+	    // If the element does not have an id, temporarily assign one.
+	    let temporaryId = false;
+	    if (!element.id) {
+	      element.id = 'temp-element-' + Date.now() + '-' + Math.random().toString(36).substring(2);
+	      temporaryId = true;
+	    }
+
+	    const clonedEl = iDoc.getElementById(element.id);
+	    if (!clonedEl) {
+	      if (temporaryId) {
+		element.removeAttribute('id');
+	      }
+	      return null;
+	    }
+
+	    // Get the cloned element’s bounding rectangle in the iframe.
+	    const clonedRect = clonedEl.getBoundingClientRect();
+
+	    // Scroll the iframe so that the cloned element is in view.
+	    // (We scroll so that the top-left of the element is at the top-left of the iframe viewport.)
+	    iDoc.defaultView.scrollTo(clonedRect.left, clonedRect.top);
+
+	    // Now determine a point inside the element (we use its center)
+	    const centerX = clonedRect.left + clonedRect.width / 2;
+	    const centerY = clonedRect.top + clonedRect.height / 2;
+
+	    // Use the clone’s elementFromPoint to perform the hit–test.
+	    const topElement = iDoc.elementFromPoint(centerX, centerY);
+
+	    // Clean up the temporary id if one was assigned.
+	    if (temporaryId) {
+	      element.removeAttribute('id');
+	    }
+	    return topElement;
+	  }
+
+	  /**
+	   * Clean up the instance by removing the offscreen iframe.
+	   */
+	  function close() {
+	    realDoc.body.removeChild(iframe);
+	  }
+
+	  // Return an object exposing the find and cleanup functions.
+	  return { findElementOnTop, close };
+	}
+
+
 	// Helper function to check if element is the top element at its position
 	function isTopElement(element) {
 		// Find the correct document context and root element
@@ -335,21 +433,22 @@
 
 		// For elements within expanded viewport, check if they're the top element
 		try {
-			const centerX = rect.left + rect.width / 2;
-			const centerY = rect.top + rect.height / 2;
-
-			// Only clamp the point if it's outside the actual document
-			const point = {
-				x: centerX,
-				y: centerY
-			};
-
-			if (point.x < 0 || point.x >= window.innerWidth ||
-				point.y < 0 || point.y >= window.innerHeight) {
-				return true; // Consider elements with center outside viewport as visible
-			}
-
-			const topEl = document.elementFromPoint(point.x, point.y);
+			//const centerX = rect.left + rect.width / 2;
+			//const centerY = rect.top + rect.height / 2;
+			//
+			//// Only clamp the point if it's outside the actual document
+			//const point = {
+			//	x: centerX,
+			//	y: centerY
+			//};
+			//
+			//if (point.x < 0 || point.x >= window.innerWidth ||
+			//	point.y < 0 || point.y >= window.innerHeight) {
+			//	return true; // Consider elements with center outside viewport as visible
+			//}
+			//
+			//const topEl = document.elementFromPoint(point.x, point.y);
+			const topEl = finder.findElementOnTop(element);
 			if (!topEl) return false;
 
 			let current = topEl;
@@ -382,6 +481,11 @@
 
 	// Function to traverse the DOM and create nested JSON
 	function buildDomTree(node, parentIframe = null) {
+
+	        if(node.id == 'offscreen-decide-topelement-iframe'){
+			return null;
+		}
+
 		if (!node) return null;
 
 		// Special case for text nodes
@@ -486,5 +590,9 @@
 	}
 
 
-	return buildDomTree(document.body);
+	const finder = createElementOnTopFinder();
+
+	const retval =  buildDomTree(document.body);
+	finder.close();
+	return retval;
 }
