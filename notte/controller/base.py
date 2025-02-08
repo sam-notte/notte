@@ -76,11 +76,6 @@ class BrowserController:
             #     return await self.driver.snapshot(screenshot=True)
             case ScrapeAction():
                 raise NotImplementedError("Scrape action is not supported in the browser controller")
-            case CompletionAction(success=success, answer=answer):
-                snapshot = await self.driver.snapshot()
-                logger.info(f"Completion action: status={'success' if success else 'failure'} with answer = {answer}")
-                await self.driver.close()
-                return snapshot
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
 
@@ -141,21 +136,36 @@ class BrowserController:
     async def execute(self, action: BaseAction) -> BrowserSnapshot:
         context = self.page.context
         num_pages = len(context.pages)
-        if isinstance(action, InteractionAction):
-            retval = await self.execute_interaction_action(action)
-        else:
-            retval = await self.execute_browser_action(action)
-
-        if len(context.pages) > num_pages:
-            page = context.pages[-1]
-            await page.bring_to_front()
-            await page.wait_for_load_state()
-            self.page = page
-
-        if retval is not None:
+        match action:
+            case InteractionAction():
+                retval = await self.execute_interaction_action(action)
+            case CompletionAction(success=success, answer=answer):
+                snapshot = await self.driver.snapshot()
+                logger.info(f"Completion action: status={'success' if success else 'failure'} with answer = {answer}")
+                await self.driver.close()
+                return snapshot
+            case _:
+                retval = await self.execute_browser_action(action)
+        # add short wait before we check for new tabs to make sure that
+        # the page has time to be created
+        await self.driver.short_wait()
+        if len(context.pages) != num_pages:
+            new_page = context.pages[-1]
+            logger.info(
+                (
+                    f"🪦 Action {action.id} "
+                    f"{('created a new tab' if len(context.pages) > num_pages else 'closed a tab')}"
+                    f". Current tab is now {len(context.pages) -1} with url: {new_page.url}"
+                )
+            )
+            await new_page.bring_to_front()
+            await new_page.wait_for_load_state()
+            self.page = new_page
+        elif retval is not None:
+            # only return snapshot if we didn't switch to a new tab
+            # otherwise, the snapshot is out of date and we need to take a new one
             return retval
 
-        await self.driver.short_wait()
         return await self.driver.snapshot()
 
     async def execute_multiple(self, actions: list[BaseAction]) -> list[BrowserSnapshot]:
