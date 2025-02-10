@@ -24,6 +24,7 @@ from notte.controller.actions import (
     SelectDropdownOptionAction,
     WaitAction,
 )
+from notte.errors.handler import capture_playwright_errors
 from notte.pipe.preprocessing.dom.dropdown_menu import dropdown_menu_options
 from notte.pipe.preprocessing.dom.locate import locale_element
 
@@ -133,6 +134,7 @@ class BrowserController:
         # perform snapshot in execute
         return None
 
+    @capture_playwright_errors
     async def execute(self, action: BaseAction) -> BrowserSnapshot:
         context = self.page.context
         num_pages = len(context.pages)
