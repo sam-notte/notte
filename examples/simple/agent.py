@@ -75,13 +75,16 @@ class SimpleAgent(BaseAgent):
         """Execute the task with maximum number of steps"""
         # change this to DEV if you want more explicit error messages
         # when you are developing your own agent
-        notte.set_error_mode("agent")
+        # notte.set_error_mode("agent")
+        notte.set_error_mode("developer")
         system_msg, task_msg = self.prompt.system(), self.prompt.task(task)
         self.conv.add_system_message(content=system_msg)
         _ = self.conv.add_user_message(content=task_msg)
 
         max_steps = self.env.config.max_steps
         last_obs: OpenAIMessageContent | None = None
+        validator_feedback: OpenAIMessageContent | None = None
+
         # Loop through the steps
         async with self.env:
             for step in range(max_steps):
@@ -96,13 +99,21 @@ class SimpleAgent(BaseAgent):
                     logger.info(f"🔍 Trajectory history:\n{traj_msg}")
                     _ = self.conv.add_user_message(content=traj_msg)
                     # Add the last observation
-                    if last_obs is not None:
-                        _ = self.conv.add_user_message(content=last_obs)
+                    for message in [last_obs, validator_feedback]:
+                        if message is not None:
+                            _ = self.conv.add_user_message(content=message)
 
                 # Let the LLM Agent think about the next action
                 # logger.info(
                 #     "\n\n".join([f"# Message {i}: {m.role}\n{m.content}" for i, m in enumerate(self.conv.messages())])
                 # )
+
+                import logging
+                import json
+                logging.warning(f"Messages so far:")
+                for message in self.conv.messages()[1:]:
+                    logging.warning(f"{message['role']}: {message['content']}")
+
                 response: StepAgentOutput = self.llm.structured_completion(
                     self.conv.messages(), response_format=StepAgentOutput
                 )
@@ -117,9 +128,14 @@ class SimpleAgent(BaseAgent):
                     # Sucessful execution and LLM output is not None
                     # Need to validate the output
                     logger.info(f"🔥 Validating agent output:\n{response.output.model_dump_json()}")
-                    if not self.validator.validate(task, response.output, self.env.trajectory[-1]):
-                        # TODO handle that differently
-                        raise ValueError(f"Validation failed for task {task} with output {response.output}")
+
+                    validation_result = self.validator.validate(task, response.output, self.env.trajectory[-1])
+                    if not validation_result.is_valid:
+                        validator_feedback = self.conv.add_user_message(
+                            content=f"Previous output was invalid because: {validation_result.reason}. Please correct the output"
+                        )
+                        continue
+
                     logger.info("✅ Task completed successfully")
                     return AgentOutput(
                         answer=response.output.answer,

@@ -68,7 +68,6 @@ THIS SHOULD BE THE LAST RESORT.
 * state:
     - page_summary: {step.agent_response.state.page_summary}
     - previous_goal_status: {step.agent_response.state.previous_goal_status}
-    - previous_goal_eval: {step.agent_response.state.previous_goal_eval}
     - memory: {step.agent_response.state.memory}
     - next_goal: {step.agent_response.state.next_goal}
 * selected actions:
@@ -77,10 +76,10 @@ THIS SHOULD BE THE LAST RESORT.
 {status_msg}"""
 
     def add_step(self, output: StepAgentOutput, step: ExecutionStepStatus) -> None:
-        if len(self.steps) == 0 or self.steps[-1].agent_response != output:
-            self.steps.append(TrajectoryStep(agent_response=output, results=[step]))
-        else:
-            self.steps[-1].results.append(step)
+        # if len(self.steps) == 0 or self.steps[-1].agent_response != output:
+        self.steps.append(TrajectoryStep(agent_response=output, results=[step]))
+        # else:
+        #     self.steps[-1].results.append(step)
 
     def last_obs(self) -> Observation | None:
         for step in self.steps[::-1]:

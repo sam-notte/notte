@@ -66,24 +66,27 @@ class SimplePrompt:
     def completion_example(self) -> str:
         return self._json_dump([CompletionAction(success=True, answer="<answer to the task>")])
 
+    def failure_completion_example(self) -> str:
+        return self._json_dump([CompletionAction(success=False, answer="<reason for failure>")])
+
     def example_step(self) -> str:
-        goal_eval = (
-            "Analyze the current elements and the image to check if the previous goals/actions"
-            " are successful like intended by the task. Ignore the action result. The website is the ground truth. "
-            "Also mention if something unexpected happened like new suggestions in an input field. "
-            "Shortly state why/why not"
-        )
+        # goal_eval = (
+        #     "Analyze the current elements and the image to check if the previous goals/actions"
+        #     " are successful like intended by the task. Ignore the action result. The website is the ground truth. "
+        #     "Also mention if something unexpected happened like new suggestions in an input field. "
+        #     "Shortly state why/why not"
+        # )
         return chevron.render(
             """
 {
   "state": {
-    "page_summary": "On the page are company a,b,c wtih their revenue 1,2,3.",
+    "page_summary": "Summary of the current page, and what is useful for the next goal",
     "previous_goal_status": "success|failure|unknown",
-    "previous_goal_eval": {{goal_eval}},
     "memory": "Description of what has been done and what you need to remember until the end of the task",
-    "next_goal": "What needs to be done with the next actions"
+    "next_goal": "An clear actionable goal given your possible actions. The action you take should be a guarateed step towards it."
   },
   "actions": [
+  // the action has to be one of the provided actions
    { "one_action_name": {
       // action-specific parameter
       ...
@@ -92,19 +95,20 @@ class SimplePrompt:
   ]
 }
 """,
-            {"goal_eval": goal_eval},
+            {},
         )
 
     def system(self) -> str:
         return chevron.render(
             self.system_prompt,
             {
-                "timstamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "max_actions_per_step": self.max_actions_per_step,
                 "action_description": self.space.markdown(),
                 "example_form_filling": self.example_form_filling(),
                 "example_step": self.example_step(),
                 "completion_example": self.completion_example(),
+                "failure_completion_example": self.failure_completion_example(),
                 "completion_action_name": CompletionAction.name(),
                 "goto_action_name": GotoAction.name(),
                 "example_navigation_and_extraction": self.example_navigation_and_extraction(),

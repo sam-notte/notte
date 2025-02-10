@@ -13,7 +13,6 @@ class AgentState(BaseModel):
 
     page_summary: str
     previous_goal_status: Literal["success", "failure", "unknown"]
-    previous_goal_eval: str
     memory: str
     next_goal: str
 
@@ -94,12 +93,6 @@ class StepAgentOutput(BaseModel):
         """Log the agent's output with descriptive emojis for better visualization"""
         # Log previous goal evaluation
         logger.debug(f"🤖 Page summary: {self.state.page_summary}")
-        eval_emoji: Literal["👍", "⚠️", "🤔"] = (
-            "👍"
-            if "Success" in self.state.previous_goal_eval
-            else "⚠️" if "Failed" in self.state.previous_goal_eval else "🤔"
-        )
-        logger.info(f"{eval_emoji} previous goal evaluation: {self.state.previous_goal_eval}")
 
         # Log memory state
         logger.info(f"💭 Memory: {self.state.memory}")

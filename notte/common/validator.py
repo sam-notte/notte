@@ -13,7 +13,8 @@ from notte.llms.engine import LLMEngine
 system_rules = """
 You are a validator of an agent who interacts with a browser.
 Validate if the output of last action is what the user wanted and if the task is completed.
-If the task is unclear defined, you can let it pass.
+If the task is not clearly defined, you can let it pass.
+If the output does not prove the task is completed, but the context you are given matches the task, you can let it pass.
 But if something is missing or the image does not show what was requested dont let it pass.
 Try to understand the page and help the model with suggestions like scroll, do x, ... to get the solution right.
 
@@ -79,7 +80,7 @@ Agent task output:
         task: str,
         output: TaskOutput,
         step: TrajectoryStep,
-    ) -> bool:
+    ) -> ValidationResult:
         """Validate the output of the last action is what the user wanted"""
         self.conv.clear()
         system_prompt = chevron.render(system_rules, {"task": task, "example": self.example().model_dump_json()})
@@ -89,4 +90,4 @@ Agent task output:
         answer: ValidationResult = self.llm.structured_completion(self.conv.messages(), ValidationResult)
         emoji = "✅" if answer.is_valid else "❌"
         logger.info(f"{emoji} Validator reason: {answer.reason}")
-        return answer.is_valid
+        return answer 
