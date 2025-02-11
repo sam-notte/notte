@@ -99,6 +99,12 @@ class BrowserController:
                 await locator.click()
             case FillAction(value=value):
                 await locator.fill(value)
+                await self.page.wait_for_timeout(1000)
+                # try:
+                #     await expect(locator).to_have_value(value, timeout=200)
+                # except AssertionError:
+                #     # Check if the value appears in the element's inner text
+                #     await expect(locator).to_contain_text(value, timeout=200)
             case CheckAction(value=value):
                 if value:
                     await locator.check()
