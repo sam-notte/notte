@@ -2,7 +2,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from typing_extensions import override
@@ -87,6 +87,9 @@ class BaseAction(BaseModel, ABC):
         """Return the message to be displayed when the action is executed."""
         return f"🚀 Successfully executed action: {self.description}"
 
+    def dump_dict(self) -> dict[str, dict[str, Any]]:
+        return {self.name(): self.model_dump(exclude=self.non_agent_fields())}
+
     def dump_str(self) -> str:
         params = json.dumps(self.model_dump(exclude=self.non_agent_fields()))
         return "{" + f'"{self.name()}": {params}' + "}"
@@ -135,7 +138,13 @@ class SwitchTabAction(BrowserAction):
 
 class ScrapeAction(BrowserAction):
     id: BrowserActionId = BrowserActionId.SCRAPE
-    description: str = "Scrape the current page data in text format"
+    description: str = (
+        "Scrape the current page data in text format. "
+        "If `instructions` is null then the whole page will be scraped. "
+        "Otherwise, only the data that matches the instructions will be scraped. "
+        "Instructions should be given as natural language, e.g. 'Extract the title and the price of the product'"
+    )
+    instructions: str | None = None
 
     @override
     def execution_message(self) -> str:
