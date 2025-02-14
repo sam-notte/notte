@@ -490,6 +490,8 @@ class DomNode:
                 if filtered_child is not None:
                     filtered_children.append(filtered_child)
                     # need copy the parent
+            if node.id is None and len(filtered_children) == 0 and node.text.strip() == "":
+                return None
             return DomNode(
                 id=node.id,
                 type=node.type,

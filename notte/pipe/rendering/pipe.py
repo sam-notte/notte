@@ -1,12 +1,14 @@
 from enum import StrEnum
 from typing import final
 
+from loguru import logger
 from pydantic import BaseModel
 
 from notte.browser.dom_tree import DomNode
 from notte.pipe.rendering.interaction_only import InteractionOnlyDomNodeRenderingPipe
 from notte.pipe.rendering.json import JsonDomNodeRenderingPipe
 from notte.pipe.rendering.markdown import MarkdownDomNodeRenderingPipe
+from notte.pipe.rendering.pruning import prune_dom_tree
 
 
 class DomNodeRenderingType(StrEnum):
@@ -40,6 +42,7 @@ class DomNodeRenderingConfig(BaseModel):
     max_len_per_attribute: int | None = 60
     include_text: bool = True
     include_links: bool = True
+    prune_dom_tree: bool = True
 
 
 @final
@@ -47,6 +50,11 @@ class DomNodeRenderingPipe:
 
     @staticmethod
     def forward(node: DomNode, config: DomNodeRenderingConfig) -> str:
+
+        if config.prune_dom_tree and config.type != DomNodeRenderingType.INTERACTION_ONLY:
+            logger.info("🫧 Pruning DOM tree...")
+            node = prune_dom_tree(node)
+
         # Exclude images if requested
         match config.type:
             case DomNodeRenderingType.INTERACTION_ONLY:
