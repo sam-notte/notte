@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
-from notte.browser.dom_tree import ResolvedLocator
+from notte.browser.dom_tree import DomNode
 from notte.controller.actions import ActionRole, ActionStatus, BaseAction
 from notte.controller.actions import BrowserAction as _BrowserAction
-from notte.controller.actions import BrowserActionId
+from notte.controller.actions import BrowserActionId, InteractionAction
 from notte.errors.actions import InvalidActionError, MoreThanOneParameterActionError
 
 
@@ -86,7 +86,7 @@ class Action(BaseAction, PossibleAction):
         return f"Sucessfully executed: '{self.description}'"
 
 
-class ExecutableAction(Action):
+class ExecutableAction(Action, InteractionAction):
     """
     An action that can be executed by the proxy.
     """
@@ -94,14 +94,14 @@ class ExecutableAction(Action):
     # description is not needed for the proxy
     category: str = "Executable Actions"
     description: str = "Executable action"
-    locator: ResolvedLocator | None = None
     params_values: list[ActionParameterValue] = Field(default_factory=list)
-    code: str | None = None
+    node: DomNode | None = None
 
     @staticmethod
     def parse(
         action_id: str,
         params: dict[str, str] | str | None = None,
+        enter: bool | None = None,
     ) -> "ExecutableAction":
         if isinstance(params, str):
             params = {"value": params}
@@ -122,6 +122,8 @@ class ExecutableAction(Action):
                 )
                 for name, value in params.items()
             ]
+        # TODO: reneble if needed
+        # enter = enter if enter is not None else action_id.startswith("I")
         return ExecutableAction(
             id=action_id,
             description="ID only",
@@ -129,6 +131,7 @@ class ExecutableAction(Action):
             status="valid",
             params=_params,
             params_values=_param_values,
+            press_enter=enter,
         )
 
 

@@ -1,16 +1,12 @@
 import time
-from collections.abc import Awaitable
 
 from loguru import logger
 from patchright.async_api import Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 from pydantic import BaseModel
 
-from notte.actions.base import ExecutableAction
-from notte.actions.executor import ActionExecutor, get_executor
 from notte.browser.dom_tree import A11yNode, A11yTree, DomNode
 from notte.browser.pool import BrowserPool, BrowserResource
-from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import (
     BrowserSnapshot,
     SnapshotMetadata,
@@ -18,7 +14,6 @@ from notte.browser.snapshot import (
     ViewportData,
 )
 from notte.common.resource import AsyncResource
-from notte.errors.actions import ActionExecutionError
 from notte.errors.browser import (
     BrowserExpiredError,
     BrowserNotStartedError,
@@ -202,70 +197,4 @@ class BrowserDriver(AsyncResource):
         except Exception as e:
             raise PageLoadingError(url=url) from e
         await self.long_wait()
-        return await self.snapshot()
-
-    async def handle_possible_new_tab(
-        self,
-        action_executor: ActionExecutor,
-    ) -> tuple[bool, Page | None]:
-        """
-        Executes an action and handles potential new tab creation.
-
-        Args:
-            page: Current page
-            action: Async function to execute that might open a new tab
-            timeout: Maximum time to wait for new tab in milliseconds
-
-        Returns:
-            Tuple of (action result, active page to use for next actions)
-        """
-        try:
-            # Start listening for new pages
-            new_page_promise: Awaitable[Page] = self.page.context.wait_for_event(
-                "page", timeout=self._playwright.config.step_timeout
-            )
-
-            # Execute the action that might open a new tab
-            success = await action_executor(self.page)
-
-            try:
-                # Wait to see if a new page was created
-                new_page: Page = await new_page_promise
-                await new_page.wait_for_load_state()
-                return success, new_page
-            except TimeoutError:
-                # No new page was created, continue with current page
-                return success, None
-
-        except TimeoutError:
-            # No new page was created, continue with current page
-            return False, None
-
-    async def execute_action(
-        self,
-        action: ExecutableAction,
-        context: ProcessedBrowserSnapshot,
-        enter: bool = False,
-    ) -> BrowserSnapshot:
-        """Execute action in async mode"""
-        if not self.page:
-            raise BrowserNotStartedError()
-        if self.page.url != context.snapshot.metadata.url:
-            raise ActionExecutionError(
-                action_id=action.id,
-                url=self.page.url,
-                reason=(
-                    "browser is not on the correct page. Use `goto` to navigate to "
-                    f"{context.snapshot.metadata.url} and retry the action execution."
-                ),
-            )
-        action_executor = get_executor(action)
-        is_success = await action_executor(self.page)
-        if not is_success:
-            logger.error(f"Execution code that failed: {action.code}")
-            raise ActionExecutionError(action_id=action.id, url=self.page.url)
-        # TODO: find a better way to wait for the page to be updated
-        await self.short_wait()
-        if enter:
-            return await self.press("Enter")
         return await self.snapshot()

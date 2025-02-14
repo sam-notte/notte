@@ -223,8 +223,8 @@ class NotteEnv(AsyncResource):
         if action_id == BrowserActionId.SCRAPE.value:
             # Scrape action is a special case
             return await self.scrape()
-        exec_action = ExecutableAction.parse(action_id, params)
-        action = await self._node_resolution_pipe.forward(exec_action, self._context, enter=enter)
+        exec_action = ExecutableAction.parse(action_id, params, enter=enter)
+        action = await self._node_resolution_pipe.forward(exec_action, self._context)
         snapshot = await self.controller.execute(action)
         obs = self._preobserve(snapshot, action=action)
         return obs

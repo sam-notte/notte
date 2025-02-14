@@ -18,13 +18,11 @@ class GufoPrompt:
     def env_rules(self) -> str:
         return f"""
 Hi there! I am the Notte web environment, and will help you navigate the internet.
-# How it works
+# How it works:
 * Provide me with a URL. I will respond with the actions you can take on that page.
 * You are NOT allowed to provide me with more than one URL.
 * Important: Make sure to use the **exact format** below when sending me a URL:
-
 {self.parser.example_format("observe")}
-
 > So, where would you like to go?
 """
 

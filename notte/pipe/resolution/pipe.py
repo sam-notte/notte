@@ -22,7 +22,6 @@ class NodeResolutionPipe:
         self,
         action: BaseAction,
         context: ProcessedBrowserSnapshot | None,
-        enter: bool | None = None,
     ) -> InteractionAction | BrowserAction:
         match self.type:
             case PreprocessingType.A11Y:
@@ -32,9 +31,10 @@ class NodeResolutionPipe:
                         " pipe."
                     )
                 exec_action = await self.complex.forward(action, context=context)
-                enter = enter if enter is not None else exec_action.id.startswith("I")
-                return NotteActionProxy.forward(exec_action, enter=enter)
+                return NotteActionProxy.forward(exec_action)
             case PreprocessingType.DOM:
                 if isinstance(action, ExecutableAction):
-                    action = NotteActionProxy.forward(action, enter=enter)
-                return SimpleActionResolutionPipe.forward(action, context=context)
+                    if action.node is None and context is not None:
+                        action.node = context.node.find(action.id)
+                    action = NotteActionProxy.forward(action)
+                return SimpleActionResolutionPipe.forward(action, context=context)  # type: ignore

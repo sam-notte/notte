@@ -29,10 +29,6 @@ class GufoParser(BaseParser):
     id="<YOUR_ACTION_ID>",
     params_values=[ActionParameterValue(name="<YOUR_PARAM_NAME>", value="<YOUR_PARAM_VALUE>")]
 ).dump_str(name=False)}
-{
-"action_id": "<YOUR_ACTION_ID>",
-"params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
-}
 </{self.step_tag}>
 """
             case "scrape":

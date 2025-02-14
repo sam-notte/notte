@@ -70,9 +70,10 @@ class GufoAgent(BaseAgent):
 
     async def step(self) -> CompletionAction | None:
         # Processes the conversation history through the LLM to decide the next action.
+        logger.info(f"🤖 LLM prompt:\n{self.conv.messages()}")
         response: str = self.llm.single_completion(self.conv.messages())
         self.conv.add_assistant_message(content=response)
-        logger.info(f"🤖 {response}")
+        logger.info(f"🤖 LLM response:\n{response}")
         # Ask Notte to perform the selected action
         parsed_response = self.parser.parse(response)
         if parsed_response is None or parsed_response.action is None:
@@ -84,7 +85,11 @@ class GufoAgent(BaseAgent):
         obs: Observation = await self.env.act(parsed_response.action)
         text_obs = self.perception.perceive(obs)
         self.conv.add_user_message(
-            content=text_obs,
+            content=f"""
+{text_obs}
+{self.prompt.select_action_rules()}
+{self.prompt.completion_rules()}
+""",
             image=obs.screenshot if self.config.include_screenshot else None,
         )
         logger.info(f"🌌 Action successfully executed:\n{text_obs}")

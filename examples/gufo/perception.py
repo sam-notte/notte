@@ -31,7 +31,6 @@ Webpage information:
             raise ValueError("No scraping data found")
         return f"""
 Here is some data that has been extracted from this page:
-
 <data>
 {obs.data.markdown if obs.data is not None else "No data available"}
 </data>
@@ -54,7 +53,7 @@ Here are the available actions you can take on this page:
         if not obs.has_data() and not obs.has_space():
             raise ValueError("No data or actions found")
         return f"""
-{self.perceive_metadata(obs)}
-{self.perceive_data(obs) if obs.has_data() else ""}
-{self.perceive_actions(obs) if obs.has_space() else ""}
+{self.perceive_metadata(obs).strip()}
+{self.perceive_data(obs).strip() if obs.has_data() else ""}
+{self.perceive_actions(obs).strip() if obs.has_space() else ""}
 """
