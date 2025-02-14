@@ -2,9 +2,9 @@ from typing import ClassVar, Literal
 
 from typing_extensions import override
 
+from notte.actions.base import ActionParameterValue, ExecutableAction
 from notte.common.agent.parser import BaseParser, NotteStepAgentOutput
 from notte.controller.actions import CompletionAction, GotoAction, ScrapeAction
-from notte.sdk.types import StepRequest
 
 
 class GufoParser(BaseParser):
@@ -25,6 +25,10 @@ class GufoParser(BaseParser):
             case "step":
                 return f"""
 <{self.step_tag}>
+{ExecutableAction(
+    id="<YOUR_ACTION_ID>",
+    params_values=[ActionParameterValue(name="<YOUR_PARAM_NAME>", value="<YOUR_PARAM_VALUE>")]
+).dump_str(name=False)}
 {
 "action_id": "<YOUR_ACTION_ID>",
 "params": { "<YOUR_PARAM_NAME>": "<YOUR_PARAM_VALUE>" }
@@ -63,7 +67,7 @@ class GufoParser(BaseParser):
                 )
             case (False, True, False, False):
                 return NotteStepAgentOutput(
-                    step=self.parse_step(text),
+                    step=ExecutableAction.model_validate(self.parse_json(text, GufoParser.step_tag)),
                 )
             case (False, False, True, False):
                 return NotteStepAgentOutput(
@@ -75,7 +79,3 @@ class GufoParser(BaseParser):
                 )
             case _:
                 return None
-
-    def parse_step(self, text: str) -> StepRequest | None:
-        action_dict: StepRequest = StepRequest.model_validate(self.parse_json(text, GufoParser.step_tag))
-        return action_dict

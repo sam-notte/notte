@@ -92,6 +92,7 @@ class ExecutableAction(Action):
     """
 
     # description is not needed for the proxy
+    category: str = "Executable Actions"
     description: str = "Executable action"
     locator: ResolvedLocator | None = None
     params_values: list[ActionParameterValue] = Field(default_factory=list)

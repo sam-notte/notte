@@ -5,18 +5,18 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from notte.actions.base import ExecutableAction
 from notte.controller.actions import (
     BaseAction,
     CompletionAction,
     GotoAction,
     ScrapeAction,
 )
-from notte.sdk.types import StepRequest
 
 
 class NotteStepAgentOutput(BaseModel):
     observe: GotoAction | None = None
-    step: StepRequest | None = None
+    step: ExecutableAction | None = None
     scrape: ScrapeAction | None = None
     completion: CompletionAction | None = None
 

@@ -71,8 +71,13 @@ class BaseAction(BaseModel, ABC):
             "press_enter",
             "option_selector",
             "text_label",
+            # executable action fields
+            "params",
+            "code",
+            "status",
+            "locator",
         }
-        if "selector" in cls.model_fields:
+        if "selector" in cls.model_fields or "locator" in cls.model_fields:
             fields.remove("id")
         return fields
 
