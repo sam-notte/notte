@@ -1,6 +1,5 @@
 from notte.actions.base import ExecutableAction
 from notte.controller.actions import (
-    BaseAction,
     BrowserAction,
     BrowserActionId,
     CheckAction,
@@ -104,7 +103,7 @@ class NotteActionProxy:
                 raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
 
     @staticmethod
-    def forward(action: ExecutableAction, enter: bool | None = None) -> BaseAction:
+    def forward(action: ExecutableAction, enter: bool | None = None) -> InteractionAction | BrowserAction:
         match action.role:
             case "button" | "link":
                 if action.locator is None:

@@ -87,12 +87,17 @@ class BaseAction(BaseModel, ABC):
         """Return the message to be displayed when the action is executed."""
         return f"🚀 Successfully executed action: {self.description}"
 
-    def dump_dict(self) -> dict[str, dict[str, Any]]:
-        return {self.name(): self.model_dump(exclude=self.non_agent_fields())}
+    def dump_dict(self, name: bool = True) -> dict[str, dict[str, Any]]:
+        body = self.model_dump(exclude=self.non_agent_fields())
+        if name:
+            return {self.name(): body}
+        return body
 
-    def dump_str(self) -> str:
+    def dump_str(self, name: bool = True) -> str:
         params = json.dumps(self.model_dump(exclude=self.non_agent_fields()))
-        return "{" + f'"{self.name()}": {params}' + "}"
+        if name:
+            return "{" + f'"{self.name()}": {params}' + "}"
+        return params
 
 
 class BrowserAction(BaseAction):

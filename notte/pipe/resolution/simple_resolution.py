@@ -4,7 +4,7 @@ from notte.browser.dom_tree import InteractionDomNode
 from notte.browser.node_type import NodeRole
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.controller.actions import (
-    BaseAction,
+    BrowserAction,
     InteractionAction,
     SelectDropdownOptionAction,
 )
@@ -16,7 +16,9 @@ from notte.pipe.preprocessing.dom.locate import selectors_through_shadow_dom
 class SimpleActionResolutionPipe:
 
     @staticmethod
-    def forward(action: BaseAction, context: ProcessedBrowserSnapshot | None = None) -> BaseAction:
+    def forward(
+        action: InteractionAction | BrowserAction, context: ProcessedBrowserSnapshot | None = None
+    ) -> InteractionAction | BrowserAction:
         if not isinstance(action, InteractionAction) or context is None:
             # no need to resolve
             return action

@@ -29,7 +29,7 @@ class PromptType(StrEnum):
                 return system_prompt_dir / "system_prompt_multi_action.md"
 
 
-class SimplePrompt:
+class FalcoPrompt:
 
     def __init__(
         self,

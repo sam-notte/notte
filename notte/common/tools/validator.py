@@ -3,9 +3,9 @@ from typing import final
 import chevron
 from pydantic import BaseModel
 
-from examples.simple.perception import SimplePerception
-from notte.common.conversation import Conversation
-from notte.common.parser import TaskOutput
+from notte.common.agent.perception import BasePerception
+from notte.common.tools.conversation import Conversation
+from notte.controller.actions import CompletionAction
 from notte.env import TrajectoryStep
 from notte.llms.engine import LLMEngine
 
@@ -31,16 +31,17 @@ Your turn:
 """
 
 
-class ValidationResult(BaseModel):
+class CompletionValidation(BaseModel):
     is_valid: bool
     reason: str
 
 
 @final
-class TaskOutputValidator:
+class CompletionValidator:
     def __init__(
         self,
         llm: LLMEngine,
+        perception: BasePerception,
         use_vision: bool = True,
         include_attributes: bool = True,
     ):
@@ -48,18 +49,18 @@ class TaskOutputValidator:
         self.include_attributes = include_attributes
         self.llm: LLMEngine = llm
         self.conv: Conversation = Conversation()
-        self.perception: SimplePerception = SimplePerception()
+        self.perception: BasePerception = perception
 
     @staticmethod
-    def example() -> ValidationResult:
-        return ValidationResult(
+    def example() -> CompletionValidation:
+        return CompletionValidation(
             is_valid=False,
             reason="The user wanted to search for 'cat photos', but the agent searched for 'dog photos' instead.",
         )
 
     def validation_message(
         self,
-        output: TaskOutput,
+        output: CompletionAction,
         step: TrajectoryStep,
     ) -> str:
         return f"""
@@ -76,14 +77,14 @@ Agent task output:
     def validate(
         self,
         task: str,
-        output: TaskOutput,
+        output: CompletionAction,
         step: TrajectoryStep,
-    ) -> ValidationResult:
+    ) -> CompletionValidation:
         """Validate the output of the last action is what the user wanted"""
         self.conv.reset()
         system_prompt = chevron.render(system_rules, {"task": task, "example": self.example().model_dump_json()})
         self.conv.add_system_message(content=system_prompt)
         self.conv.add_user_message(content=self.validation_message(output, step))
 
-        answer: ValidationResult = self.llm.structured_completion(self.conv.messages(), ValidationResult)
+        answer: CompletionValidation = self.llm.structured_completion(self.conv.messages(), CompletionValidation)
         return answer

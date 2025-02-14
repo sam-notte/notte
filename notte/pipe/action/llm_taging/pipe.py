@@ -6,9 +6,11 @@ from typing_extensions import override
 
 from notte.actions.base import Action, PossibleAction
 from notte.actions.space import ActionSpace
+from notte.browser.node_type import NodeCategory
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.errors.actions import NotEnoughActionsListedError
 from notte.errors.base import UnexpectedBehaviorError
+from notte.errors.processing import NodeFilteringResultsInEmptyGraph
 from notte.llms.service import LLMService
 from notte.pipe.action.base import BaseActionSpacePipe
 from notte.pipe.action.llm_taging.base import BaseActionListingPipe
@@ -28,6 +30,7 @@ class LlmActionSpaceConfig(BaseModel):
     # completion config
     required_action_coverage: float = 0.95
     max_listing_trials: int = 3
+    include_images: bool = False
 
     def __post_init__(self):
         if self.required_action_coverage > 1.0 or self.required_action_coverage < 0.0:
@@ -149,6 +152,16 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         previous_action_list: Sequence[Action] | None,  # type: ignore
         pagination: PaginationParams,
     ) -> ActionSpace:
+        if not self.config.include_images:
+            logger.info("🏞️ Excluding images from the action tagging process")
+            _context = context.subgraph_without(actions=[], roles=NodeCategory.IMAGE.roles())
+            if _context is None:
+                raise NodeFilteringResultsInEmptyGraph(
+                    url=context.snapshot.metadata.url,
+                    operation=f"subtree_without(roles={NodeCategory.IMAGE.roles()})",
+                )
+            context = _context
+
         space = self.forward_unfiltered(
             context,
             previous_action_list,

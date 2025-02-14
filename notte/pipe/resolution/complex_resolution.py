@@ -3,7 +3,7 @@ from typing import final
 from loguru import logger
 from patchright.async_api import Locator
 
-from notte.actions.base import Action, ActionParameterValue, ExecutableAction
+from notte.actions.base import ExecutableAction
 from notte.browser.dom_tree import DomNode, NodeSelectors, ResolvedLocator
 from notte.browser.driver import BrowserDriver
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
@@ -27,8 +27,7 @@ class ComplexActionNodeResolutionPipe:
 
     async def forward(
         self,
-        action: Action,
-        params_values: list[ActionParameterValue],
+        action: ExecutableAction,
         context: ProcessedBrowserSnapshot | None,
     ) -> ExecutableAction:
         resolved_locator = None
@@ -64,16 +63,8 @@ class ComplexActionNodeResolutionPipe:
                 )
 
             resolved_locator = await self.compute_attributes(node, context.snapshot)
-        return ExecutableAction(
-            id=action.id,
-            description=action.description,
-            category=action.category,
-            params=action.params,
-            params_values=params_values,
-            status="valid",
-            code=None,
-            locator=resolved_locator,
-        )
+        action.locator = resolved_locator
+        return action
 
     async def fill_node_selectors(self, node: DomNode, snapshot: BrowserSnapshot) -> None:
         selectors = node.computed_attributes.selectors

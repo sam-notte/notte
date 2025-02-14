@@ -1,7 +1,6 @@
 from loguru import logger
 
 from notte.browser.dom_tree import DomNode
-from notte.browser.node_type import NodeCategory
 
 
 class MarkdownDomNodeRenderingPipe:
@@ -9,30 +8,21 @@ class MarkdownDomNodeRenderingPipe:
     def forward(
         node: DomNode,
         include_ids: bool,
-        include_images: bool,
     ) -> str:
-        logger.info(f"Dom Node markdown rendering with include_ids={include_ids} and include_images={include_images}")
+        logger.info(f"Dom Node markdown rendering with include_ids={include_ids}")
         return MarkdownDomNodeRenderingPipe.format(
             node,
             indent_level=0,
             include_ids=include_ids,
-            include_images=include_images,
         )
 
     @staticmethod
-    def format(
-        node: DomNode,
-        indent_level: int = 0,
-        include_ids: bool = True,
-        include_images: bool = False,
-    ) -> str:
+    def format(node: DomNode, indent_level: int = 0, include_ids: bool = True) -> str:
         indent = "  " * indent_level
 
         # Start with role and optional text
         id_str = ""
-        if node.id is not None and (
-            include_ids or (include_images and node.get_role_str() in NodeCategory.IMAGE.roles())
-        ):
+        if node.id is not None and include_ids:
             id_str = f" {node.id}"
 
         result = f"{indent}{node.get_role_str()}{id_str}"
@@ -52,9 +42,7 @@ class MarkdownDomNodeRenderingPipe:
         if len(node.children) > 0:
             result += " {\n"
             for child in node.children:
-                result += MarkdownDomNodeRenderingPipe.format(
-                    child, indent_level + 1, include_ids=include_ids, include_images=include_images
-                )
+                result += MarkdownDomNodeRenderingPipe.format(child, indent_level + 1, include_ids=include_ids)
             result += indent + "}\n"
         else:
             result += "\n"

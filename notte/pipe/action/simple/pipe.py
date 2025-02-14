@@ -20,10 +20,7 @@ from notte.sdk.types import PaginationParams
 
 
 class SimpleActionSpaceConfig(BaseModel):
-    rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(
-        type=DomNodeRenderingType.INTERACTION_ONLY,
-        include_images=True,
-    )
+    rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(type=DomNodeRenderingType.INTERACTION_ONLY)
 
 
 class SimpleActionSpacePipe(BaseActionSpacePipe):
@@ -50,7 +47,7 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
             ),
             params_values=[
                 ActionParameterValue(
-                    parameter_name="value",
+                    name="value",
                     value="<sample_value>",
                 )
             ],

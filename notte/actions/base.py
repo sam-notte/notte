@@ -22,7 +22,7 @@ class ActionParameter(BaseModel):
 
 
 class ActionParameterValue(BaseModel):
-    parameter_name: str
+    name: str
     value: str
 
 
@@ -87,9 +87,48 @@ class Action(BaseAction, PossibleAction):
 
 
 class ExecutableAction(Action):
+    """
+    An action that can be executed by the proxy.
+    """
+
+    # description is not needed for the proxy
+    description: str = "Executable action"
     locator: ResolvedLocator | None = None
     params_values: list[ActionParameterValue] = Field(default_factory=list)
     code: str | None = None
+
+    @staticmethod
+    def parse(
+        action_id: str,
+        params: dict[str, str] | str | None = None,
+    ) -> "ExecutableAction":
+        if isinstance(params, str):
+            params = {"value": params}
+        _param_values: list[ActionParameterValue] = []
+        _params: list[ActionParameter] = []
+        if params is not None:
+            _param_values = [
+                ActionParameterValue(
+                    name=name,
+                    value=value,
+                )
+                for name, value in params.items()
+            ]
+            _params = [
+                ActionParameter(
+                    name=name,
+                    type=type(value).__name__,
+                )
+                for name, value in params.items()
+            ]
+        return ExecutableAction(
+            id=action_id,
+            description="ID only",
+            category="",
+            status="valid",
+            params=_params,
+            params_values=_param_values,
+        )
 
 
 class BrowserAction(Action, _BrowserAction):

@@ -3,11 +3,11 @@ from typing import final
 from typing_extensions import override
 
 from notte.browser.observation import Observation
-from notte.common.perception import BasePerception
+from notte.common.agent.perception import BasePerception
 
 
 @final
-class SimplePerception(BasePerception):
+class FalcoPerception(BasePerception):
     def __init__(
         self,
         include_step_info: bool = True,
@@ -16,6 +16,7 @@ class SimplePerception(BasePerception):
         self.include_attributes = include_attributes
         self.include_step_info = include_step_info
 
+    @override
     def perceive_metadata(self, obs: Observation) -> str:
         if obs.progress is None:
             raise ValueError("Observation has no progress")
@@ -39,6 +40,7 @@ Interactive elements from current page view:
 {self.perceive_data(obs)}
 """
 
+    @override
     def perceive_actions(self, obs: Observation) -> str:
         if not obs.has_space():
             return "Empty page"
@@ -58,6 +60,7 @@ Interactive elements from current page view:
 
 """
 
+    @override
     def perceive_data(self, obs: Observation, raw: bool = True) -> str:
         if not obs.has_data() or obs.data is None:
             return ""

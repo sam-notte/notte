@@ -3,7 +3,6 @@ from typing import Any, Literal, TypeVar
 from loguru import logger
 from pydantic import BaseModel, Field, create_model, field_serializer
 
-from notte.common.parser import TaskOutput
 from notte.controller.actions import BaseAction, ClickAction, CompletionAction
 from notte.controller.space import ActionSpace
 
@@ -73,10 +72,10 @@ class StepAgentOutput(BaseModel):
         return [action.to_action().dump_dict() for action in actions]
 
     @property
-    def output(self) -> TaskOutput | None:
+    def output(self) -> CompletionAction | None:
         last_action: CompletionAction | None = getattr(self.actions[-1], CompletionAction.name())
         if last_action is not None:
-            return TaskOutput(success=last_action.success, answer=last_action.answer)
+            return CompletionAction(success=last_action.success, answer=last_action.answer)
         return None
 
     def get_actions(self, max_actions: int | None = None) -> list[BaseAction]:

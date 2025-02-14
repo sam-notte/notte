@@ -6,7 +6,7 @@ from typing import Unpack
 from loguru import logger
 from pydantic import BaseModel
 
-from notte.actions.base import Action, ActionParameter, ActionParameterValue
+from notte.actions.base import ExecutableAction
 from notte.browser.driver import BrowserConfig, BrowserDriver
 from notte.browser.observation import Observation, TrajectoryProgress
 from notte.browser.pool import BrowserPool
@@ -22,7 +22,6 @@ from notte.controller.actions import (
     WaitAction,
 )
 from notte.controller.base import BrowserController
-from notte.controller.proxy import NotteActionProxy
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
@@ -33,8 +32,7 @@ from notte.pipe.action.pipe import (
     MainActionSpacePipe,
 )
 from notte.pipe.preprocessing.pipe import PreprocessingType, ProcessedSnapshotPipe
-from notte.pipe.resolution.complex_resolution import ComplexActionNodeResolutionPipe
-from notte.pipe.resolution.simple_resolution import SimpleActionResolutionPipe
+from notte.pipe.resolution.pipe import NodeResolutionPipe
 from notte.pipe.scraping.pipe import DataScrapingPipe, ScrapingConfig, ScrapingType
 from notte.sdk.types import (
     DEFAULT_MAX_NB_STEPS,
@@ -46,7 +44,7 @@ from notte.sdk.types import (
 
 class NotteEnvConfig(BaseModel):
     max_steps: int = DEFAULT_MAX_NB_STEPS
-    processing_type: PreprocessingType = PreprocessingType.A11Y
+    processing_type: PreprocessingType = PreprocessingType.DOM
     browser: BrowserConfig = BrowserConfig()
     scraping: ScrapingConfig = ScrapingConfig()
     action: MainActionSpaceConfig = MainActionSpaceConfig()
@@ -55,13 +53,19 @@ class NotteEnvConfig(BaseModel):
     auto_scrape: bool = True
 
     @staticmethod
-    def llm_tagging() -> "NotteEnvConfig":
-        return NotteEnvConfig()
+    def llm_tagging(max_steps: int | None = None) -> "NotteEnvConfig":
+        return NotteEnvConfig(max_steps=max_steps or DEFAULT_MAX_NB_STEPS)
 
     @staticmethod
-    def simple() -> "NotteEnvConfig":
+    def llm_tagging_a11y(max_steps: int | None = None) -> "NotteEnvConfig":
         return NotteEnvConfig(
-            max_steps=20,
+            max_steps=max_steps or DEFAULT_MAX_NB_STEPS, auto_scrape=False, processing_type=PreprocessingType.A11Y
+        )
+
+    @staticmethod
+    def simple(max_steps: int | None = None) -> "NotteEnvConfig":
+        return NotteEnvConfig(
+            max_steps=max_steps or DEFAULT_MAX_NB_STEPS,
             auto_scrape=False,
             processing_type=PreprocessingType.DOM,
             scraping=ScrapingConfig(type=ScrapingType.SIMPLE),
@@ -97,6 +101,9 @@ class NotteEnv(AsyncResource):
         self._context: ProcessedBrowserSnapshot | None = None
         self._action_space_pipe: BaseActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, browser=self._browser)
+        self._node_resolution_pipe: NodeResolutionPipe = NodeResolutionPipe(
+            browser=self._browser, type=self.config.processing_type
+        )
 
     @property
     def context(self) -> ProcessedBrowserSnapshot:
@@ -216,16 +223,14 @@ class NotteEnv(AsyncResource):
         if action_id == BrowserActionId.SCRAPE.value:
             # Scrape action is a special case
             return await self.scrape()
-        action, _params = self._parse_env(action_id, params)
-
-        enter = enter if enter is not None else action.id.startswith("I")
-        exec_action = await ComplexActionNodeResolutionPipe(self._browser).forward(action, _params, self._context)
-        browser_action = NotteActionProxy.forward(exec_action, enter=enter)
-        snapshot = await self.controller.execute(browser_action)
-        obs = self._preobserve(snapshot, action=browser_action)
+        exec_action = ExecutableAction.parse(action_id, params)
+        action = await self._node_resolution_pipe.forward(exec_action, self._context, enter=enter)
+        snapshot = await self.controller.execute(action)
+        obs = self._preobserve(snapshot, action=action)
         return obs
 
-    async def raw_step(
+    @timeit("act")
+    async def act(
         self,
         action: BaseAction,
     ) -> Observation:
@@ -234,7 +239,7 @@ class NotteEnv(AsyncResource):
             # Scrape action is a special case
             # TODO: think about flow. Right now, we do scraping and observation in one step
             return await self.god(instructions=action.instructions)
-        action = SimpleActionResolutionPipe.forward(action, self._context)
+        action = await self._node_resolution_pipe.forward(action, self._context)
         snapshot = await self.controller.execute(action)
         logger.info(f"🌌 action {action.id} executed in browser. Observing page...")
         _ = self._preobserve(snapshot, action=action)
@@ -310,36 +315,3 @@ class NotteEnv(AsyncResource):
         return await self._browser.reset()
 
     # ------------------------------ Private ---------------------------------------
-
-    def _parse_env(
-        self, action_id: str, params: dict[str, str] | str | None = None
-    ) -> tuple[Action, list[ActionParameterValue]]:
-        if isinstance(params, str):
-            params = {"value": params}
-        _param_values: list[ActionParameterValue] = []
-        _params: list[ActionParameter] = []
-        if params is not None:
-            _param_values = [
-                ActionParameterValue(
-                    parameter_name=name,
-                    value=value,
-                )
-                for name, value in params.items()
-            ]
-            _params = [
-                ActionParameter(
-                    name=name,
-                    type="string",
-                )
-                for name in params.keys()
-            ]
-        return (
-            Action(
-                id=action_id,
-                description="ID only",
-                category="",
-                status="valid",
-                params=_params,
-            ),
-            _param_values,
-        )

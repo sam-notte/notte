@@ -19,7 +19,7 @@ from eval.webvoyager.load_data import (
     WebVoyagerTask,
     load_webvoyager_data,
 )
-from examples.simple.agent import SimpleAgent
+from examples.falco.agent import FalcoAgent
 from notte.browser.pool import BrowserPool
 
 
@@ -96,7 +96,7 @@ def run_agent(browser_pool: BrowserPool, agent_llm: str, task: WebVoyagerTask) -
 
     async def _async_run():
         try:
-            agent = SimpleAgent(pool=browser_pool, model=agent_llm, headless=True, raise_on_failure=False)
+            agent = FalcoAgent(pool=browser_pool, model=agent_llm, headless=True, raise_on_failure=False)
 
             _ = patcher.log_io(agent.llm, ["completion"])
 
