@@ -44,6 +44,7 @@ class HistoryType(StrEnum):
 
 
 class FalcoAgentConfig(AgentConfig):
+    env: NotteEnvConfig = NotteEnvConfig.disable_llm()
     max_actions_per_step: int = 1
     history_type: HistoryType = HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA
 
@@ -56,16 +57,14 @@ class FalcoAgent(BaseAgent):
         pool: BrowserPool | None = None,
     ):
         self.config: FalcoAgentConfig = config
-        env_config = config.update_env_config(NotteEnvConfig.simple())
 
-        if config.include_screenshot and not env_config.browser.screenshot:
+        if config.include_screenshot and not config.env.browser.screenshot:
             raise ValueError("Cannot `include_screenshot=True` if `screenshot` is not enabled in the browser config")
-        self.llm: LLMEngine = LLMEngine(model=config.model)
+        self.llm: LLMEngine = LLMEngine(model=config.reasoning_model)
         # Users should implement their own parser to customize how observations
         # and actions are formatted for their specific LLM and use case
         self.env: NotteEnv = NotteEnv(
-            headless=config.headless,
-            config=env_config,
+            config=config.env,
             pool=pool,
         )
         self.validator: CompletionValidator = CompletionValidator(llm=self.llm, perception=self.perception)
@@ -138,7 +137,7 @@ class FalcoAgent(BaseAgent):
         if last_valid_obs is not None and self.history_type is not HistoryType.FULL_CONVERSATION:
             self.conv.add_user_message(
                 content=self.perception.perceive(last_valid_obs),
-                image=last_valid_obs.screenshot if self.include_screenshot else None,
+                image=last_valid_obs.screenshot if self.config.include_screenshot else None,
             )
         return self.conv.messages()
 
@@ -153,7 +152,7 @@ class FalcoAgent(BaseAgent):
         if response.output is not None:
             return response.output
         # Execute the actions
-        for action in response.get_actions(self.max_actions_per_step):
+        for action in response.get_actions(self.config.max_actions_per_step):
             result = await self.step_executor.execute(action)
             self.trajectory.add_step(result)
             step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
@@ -174,10 +173,9 @@ class FalcoAgent(BaseAgent):
         if url is not None:
             task = f"Start on '{url}' and {task}"
 
-        max_steps = self.env.config.max_steps
         # Loop through the steps
         async with self.env:
-            for step in range(max_steps):
+            for step in range(self.env.config.max_steps):
                 logger.info(f"> step {step}: looping in")
                 output: CompletionAction | None = await self.step(task)
 
@@ -209,7 +207,7 @@ class FalcoAgent(BaseAgent):
                         )
                     )
 
-        error_msg = f"Failed to solve task in {max_steps} steps"
+        error_msg = f"Failed to solve task in {self.env.config.max_steps} steps"
         logger.info(f"🚨 {error_msg}")
         notte.set_error_mode("developer")
         return self.output(error_msg, False)

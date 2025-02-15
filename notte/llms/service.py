@@ -14,23 +14,29 @@ from notte.llms.prompt import PromptLibrary
 PROMPT_DIR = Path(__file__).parent.parent / "llms" / "prompts"
 LLAMUX_CONFIG = Path(__file__).parent.parent / "llms" / "config" / "endpoints.csv"
 
-if "LLAMUX_CONFIG_PATH" in os.environ:
-    logger.info(f"Using custom LLAMUX config path: {os.environ['LLAMUX_CONFIG_PATH']}")
-else:
-    logger.info(f"Using default LLAMUX config path: {LLAMUX_CONFIG}")
-llamux_config = os.getenv("LLAMUX_CONFIG_PATH", str(LLAMUX_CONFIG))
+
+def get_llamux_config(verbose: bool = False) -> str:
+    if "LLAMUX_CONFIG_PATH" in os.environ:
+        if verbose:
+            logger.info(f"Using custom LLAMUX config path: {os.environ['LLAMUX_CONFIG_PATH']}")
+    else:
+        if verbose:
+            logger.info(f"Using default LLAMUX config path: {LLAMUX_CONFIG}")
+    return os.getenv("LLAMUX_CONFIG_PATH", str(LLAMUX_CONFIG))
 
 
 class LLMService:
 
-    def __init__(self, base_model: str | None = None) -> None:
+    def __init__(self, base_model: str | None = None, verbose: bool = False) -> None:
         self.lib: PromptLibrary = PromptLibrary(str(PROMPT_DIR))
+        llamux_config = get_llamux_config(verbose)
         path = Path(llamux_config)
         if not path.exists():
             raise FileNotFoundError(f"LLAMUX config file not found at {path}")
         self.router: Router = Router.from_csv(llamux_config)
         self.base_model: str | None = base_model or os.getenv("NOTTE_BASE_MODEL")
         self.tokenizer: tiktoken.Encoding = tiktoken.get_encoding("cl100k_base")
+        self.verbose: bool = verbose
 
     def get_base_model(self, messages: list[dict[str, Any]]) -> tuple[str, str | None]:
         eid: str | None = None
@@ -42,7 +48,8 @@ class LLMService:
         else:
             base_model = self.base_model
         token_len = self.estimate_tokens(text="\n".join([m["content"] for m in messages]))
-        logger.debug(f"llm router '{router}' selected '{base_model}' for approx {token_len} tokens")
+        if self.verbose:
+            logger.debug(f"llm router '{router}' selected '{base_model}' for approx {token_len} tokens")
         return base_model, eid
 
     def estimate_tokens(

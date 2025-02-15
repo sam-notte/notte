@@ -96,6 +96,7 @@ class InteractionOnlyDomNodeRenderingPipe:
         node: DomNode,
         include_attributes: frozenset[str] | None = None,
         max_len_per_attribute: int | None = None,
+        verbose: bool = False,
     ) -> str:
         """Convert the processed DOM content to HTML."""
         # inodes = "\n".join([str(inode) for inode in node.interaction_nodes()])
@@ -121,5 +122,6 @@ class InteractionOnlyDomNodeRenderingPipe:
             component_node_strs.append(rendered_component)
 
         rendered_node = "\n".join(component_node_strs).strip()
-        logger.info(f"📄 Rendered node: \n{rendered_node}")
+        if verbose:
+            logger.info(f"📄 Rendered node: \n{rendered_node}")
         return rendered_node

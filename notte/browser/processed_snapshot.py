@@ -1,8 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from loguru import logger
-
 from notte.actions.base import Action
 from notte.browser.dom_tree import DomNode, InteractionDomNode
 from notte.browser.snapshot import BrowserSnapshot
@@ -34,9 +32,6 @@ class ProcessedBrowserSnapshot:
 
         filtered_graph = self.node.subtree_filter(only_failed_actions)
         if filtered_graph is None:
-            logger.error(
-                f"No nodes left in context after filtering of exesting actions for url {self.snapshot.metadata.url}"
-            )
             return None
 
         return ProcessedBrowserSnapshot(

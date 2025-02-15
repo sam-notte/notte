@@ -15,7 +15,7 @@ from notte.browser.dom_tree import NodeSelectors
 
 ActionStatus = Literal["valid", "failed", "excluded"]
 AllActionStatus = ActionStatus | Literal["all"]
-ActionRole = Literal["link", "button", "input", "special", "image", "other"]
+ActionRole = Literal["link", "button", "input", "special", "image", "option", "misc", "other"]
 AllActionRole = ActionRole | Literal["all"]
 
 

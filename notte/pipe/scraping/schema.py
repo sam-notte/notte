@@ -77,6 +77,7 @@ class SchemaScrapingPipe:
         response_format: type[TResponseFormat] | None,
         instructions: str | None,
         max_tokens: int,
+        verbose: bool = False,
     ) -> StructuredData[BaseModel]:
         # make LLM call
         document = self.clip_tokens(document, max_tokens)
@@ -95,7 +96,8 @@ class SchemaScrapingPipe:
                     },
                     response_format=StructuredData[DictBaseModel],
                 )
-                logger.info(f"LLM Structured Response with no schema:\n{structured}")
+                if verbose:
+                    logger.info(f"LLM Structured Response with no schema:\n{structured}")
                 return structured
             case (_response_format, _):
                 assert _response_format is not None
@@ -110,7 +112,8 @@ class SchemaScrapingPipe:
                         "instructions": instructions or "no additional instructions",
                     },
                 )
-                logger.info(f"LLM Structured Response with user provided schema:\n{response}")
+                if verbose:
+                    logger.info(f"LLM Structured Response with user provided schema:\n{response}")
                 return StructuredData[BaseModel](
                     success=True,
                     error=None,

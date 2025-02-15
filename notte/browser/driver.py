@@ -36,6 +36,7 @@ class BrowserConfig(BaseModel):
     short_wait_timeout: int = 500
     screenshot: bool | None = True
     empty_page_max_retry: int = 5
+    verbose: bool = False
 
 
 class PlaywrightResource:
@@ -43,12 +44,12 @@ class PlaywrightResource:
     def __init__(self, pool: BrowserPool | None, config: BrowserConfig) -> None:
         self.config: BrowserConfig = config
         self.shared_pool: bool = pool is not None
-        if not self.shared_pool:
+        if not self.shared_pool and config.verbose:
             logger.info(
                 "Using local browser pool. Con  sider using a shared pool for better "
                 "resource management and performance by setting `browser_pool=BrowserPool(verbose=True)`"
             )
-        self.browser_pool: BrowserPool = pool or BrowserPool()
+        self.browser_pool: BrowserPool = pool or BrowserPool(verbose=config.verbose)
         self._page: Page | None = None
         self._resource: BrowserResource | None = None
 
@@ -90,6 +91,10 @@ class BrowserDriver(AsyncResource):
     def page(self) -> Page:
         return self._playwright.page
 
+    @property
+    def _verbose(self) -> bool:
+        return self._playwright.config.verbose
+
     async def reset(self) -> None:
         await self.close()
         await self.start()
@@ -99,10 +104,12 @@ class BrowserDriver(AsyncResource):
         try:
             await self.page.wait_for_load_state("networkidle", timeout=self._playwright.config.goto_timeout)
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
+            if self._verbose:
+                logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
         await self.short_wait()
         # await self.page.wait_for_timeout(self._playwright.config.step_timeout)
-        logger.info(f"Waited for networkidle state for '{self.page.url}' in {time.time() - start_time:.2f}s")
+        if self._verbose:
+            logger.info(f"Waited for networkidle state for '{self.page.url}' in {time.time() - start_time:.2f}s")
 
     async def short_wait(self) -> None:
         await self.page.wait_for_timeout(self._playwright.config.short_wait_timeout)
@@ -133,14 +140,18 @@ class BrowserDriver(AsyncResource):
             else:
                 raise UnexpectedBrowserError(url=self.page.url) from e
         if dom_node is None or a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
-            logger.warning(f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms")
+            if self._verbose:
+                logger.warning(
+                    f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms"
+                )
             await self.page.wait_for_timeout(self._playwright.config.goto_retry_timeout)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
         take_screenshot = screenshot if screenshot is not None else self._playwright.config.screenshot
         try:
             snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
+            if self._verbose:
+                logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
 
         return BrowserSnapshot(

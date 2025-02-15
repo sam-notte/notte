@@ -8,8 +8,10 @@ class MarkdownDomNodeRenderingPipe:
     def forward(
         node: DomNode,
         include_ids: bool,
+        verbose: bool = False,
     ) -> str:
-        logger.info(f"Dom Node markdown rendering with include_ids={include_ids}")
+        if verbose:
+            logger.info(f"Dom Node markdown rendering with include_ids={include_ids}")
         return MarkdownDomNodeRenderingPipe.format(
             node,
             indent_level=0,
@@ -31,7 +33,11 @@ class MarkdownDomNodeRenderingPipe:
 
         # iterate dom attributes
         if node.attributes is not None:
-            dom_attrs = [f"{key}={value}" for key, value in node.attributes.relevant_attrs().items()]
+            dom_attrs = [
+                f"{key}={value}"
+                for key, value in node.attributes.relevant_attrs().items()
+                if str(value) not in node.text
+            ]
 
             if dom_attrs:
                 # TODO: prompt engineering to select the most readable format

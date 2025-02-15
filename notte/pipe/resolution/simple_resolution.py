@@ -5,6 +5,7 @@ from notte.browser.node_type import NodeRole
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.controller.actions import (
     BrowserAction,
+    ClickAction,
     InteractionAction,
     SelectDropdownOptionAction,
 )
@@ -17,13 +18,25 @@ class SimpleActionResolutionPipe:
 
     @staticmethod
     def forward(
-        action: InteractionAction | BrowserAction, context: ProcessedBrowserSnapshot | None = None
+        action: InteractionAction | BrowserAction,
+        context: ProcessedBrowserSnapshot | None = None,
+        verbose: bool = False,
     ) -> InteractionAction | BrowserAction:
         if not isinstance(action, InteractionAction) or context is None:
             # no need to resolve
             return action
         if isinstance(action, SelectDropdownOptionAction):
-            return SimpleActionResolutionPipe.resolve_selector_locators(action, context)
+            select_action = SimpleActionResolutionPipe.resolve_selector_locators(action, context, verbose)
+            if select_action is not None:
+                return select_action
+            # hack: fallback to click action if no selector is found
+            if verbose:
+                logger.warning(
+                    f"🚸 No selector found for select dropdown action with id={action.id}, falling back to click action"
+                )
+            fallback_action = ClickAction(id=action.id)
+            return SimpleActionResolutionPipe.forward(fallback_action, context, verbose)
+
         selector_map: dict[str, InteractionDomNode] = {inode.id: inode for inode in context.interaction_nodes()}
         if action.id not in selector_map:
             raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
@@ -32,7 +45,8 @@ class SimpleActionResolutionPipe:
             raise FailedSimpleNodeResolutionError(node.id)
         selectors = node.computed_attributes.selectors
         if selectors.in_shadow_root:
-            logger.info(f"🔍 Resolving shadow root selectors for {node.id} ({node.text})")
+            if verbose:
+                logger.info(f"🔍 Resolving shadow root selectors for {node.id} ({node.text})")
             selectors = selectors_through_shadow_dom(node)
         action.selector = selectors
         action.text_label = node.text
@@ -42,7 +56,8 @@ class SimpleActionResolutionPipe:
     def resolve_selector_locators(
         action: SelectDropdownOptionAction,
         context: ProcessedBrowserSnapshot,
-    ) -> SelectDropdownOptionAction:
+        verbose: bool = False,
+    ) -> SelectDropdownOptionAction | None:
         """
         Resolve the selector locators for a dropdown option.
 
@@ -66,11 +81,13 @@ class SimpleActionResolutionPipe:
                     raise FailedSimpleNodeResolutionError(action.id)
                 selectors = snode.computed_attributes.selectors
                 option_selectors = node.computed_attributes.selectors
-                logger.info(
-                    f"Resolved locators for select dropdown {snode.id} ({snode.text})"
-                    f" and option {node.id} ({node.text})"
-                )
+                if verbose:
+                    logger.info(
+                        f"Resolved locators for select dropdown {snode.id} ({snode.text})"
+                        f" and option {node.id} ({node.text})"
+                    )
                 action.option_selector = option_selectors
                 action.selector = selectors
                 return action
-        raise FailedSimpleNodeResolutionError(action.id)
+
+        return None

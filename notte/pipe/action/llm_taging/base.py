@@ -51,14 +51,11 @@ class BaseActionListingPipe(ABC):
 class RetryPipeWrapper(BaseActionListingPipe):
     tracer: ClassVar[LlmParsingErrorFileTracer] = LlmParsingErrorFileTracer()
 
-    def __init__(
-        self,
-        pipe: BaseActionListingPipe,
-        max_tries: int,
-    ):
+    def __init__(self, pipe: BaseActionListingPipe, max_tries: int, verbose: bool = False):
         super().__init__(pipe.llmserve)
         self.pipe: BaseActionListingPipe = pipe
         self.max_tries: int = max_tries
+        self.verbose: bool = verbose
 
     @override
     def forward(
@@ -89,11 +86,13 @@ class RetryPipeWrapper(BaseActionListingPipe):
                         size = int(match.group(1))
                         max_size = int(match.group(2))
                     else:
-                        logger.error(
-                            f"Failed to parse context size from error message: {str(e)}. Please fix this ASAP."
-                        )
-                    raise ContextSizeTooLargeError(size=size, max_size=max_size) from e
-                logger.warning(f"failed to parse action list but retrying. Start of error msg: {str(e)[:200]}...")
+                        if self.verbose:
+                            logger.error(
+                                f"Failed to parse context size from error message: {str(e)}. Please fix this ASAP."
+                            )
+                        raise ContextSizeTooLargeError(size=size, max_size=max_size) from e
+                if self.verbose:
+                    logger.warning(f"failed to parse action list but retrying. Start of error msg: {str(e)[:200]}...")
                 errors.append(str(e))
         self.tracer.trace(
             status="failure",
@@ -116,7 +115,8 @@ class RetryPipeWrapper(BaseActionListingPipe):
                 return self.pipe.forward_incremental(context, previous_action_list)
             except Exception:
                 pass
-        logger.error("Failed to get action list after max tries => returning previous action list")
+        if self.verbose:
+            logger.error("Failed to get action list after max tries => returning previous action list")
         return PossibleActionSpace(
             # TODO: get description from previous action list
             description="",

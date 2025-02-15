@@ -161,37 +161,35 @@ async def get_image_src(locator: Locator) -> str | None:
     return src
 
 
-class ComplexScrapingPipe:
+class LlmScrapingPipe:
     """
     Data scraping pipe that scrapes data from the page
     """
 
-    def __init__(self, llmserve: LLMService, browser: BrowserDriver) -> None:
+    def __init__(self, llmserve: LLMService, browser: BrowserDriver, config: DomNodeRenderingConfig) -> None:
         self.llmserve: LLMService = llmserve
         self.browser: BrowserDriver = browser
+        self.config: DomNodeRenderingConfig = config
 
     def _render_node(
         self,
         context: ProcessedBrowserSnapshot,
-        config: DomNodeRenderingConfig,
         max_tokens: int,
     ) -> str:
         # TODO: add DIVID & CONQUER once this is implemented
-        document = DomNodeRenderingPipe.forward(
-            node=context.node,
-            config=config,
-        )
+        document = DomNodeRenderingPipe.forward(node=context.node, config=self.config)
         if len(self.llmserve.tokenizer.encode(document)) <= max_tokens:
             return document
         # too many tokens, use simple AXT
-        logger.warning(
-            "Document too long for data extraction: "
-            f" {len(self.llmserve.tokenizer.encode(document))} tokens => use Simple AXT instead"
-        )
+        if self.config.verbose:
+            logger.warning(
+                "Document too long for data extraction: "
+                f" {len(self.llmserve.tokenizer.encode(document))} tokens => use Simple AXT instead"
+            )
         short_snapshot = A11yPreprocessingPipe.forward(context.snapshot, tree_type="simple")
         document = DomNodeRenderingPipe.forward(
             node=short_snapshot.node,
-            config=config,
+            config=self.config,
         )
         return document
 
@@ -200,18 +198,16 @@ class ComplexScrapingPipe:
         context: ProcessedBrowserSnapshot,
         only_main_content: bool,
         scrape_images: bool,
-        config: DomNodeRenderingConfig,
         max_tokens: int,
     ) -> DataSpace:
 
-        document = self._render_node(context, config, max_tokens)
+        document = self._render_node(context, max_tokens)
         # make LLM call
         prompt = "only_main_content" if only_main_content else "all_data"
         response = self.llmserve.completion(prompt_id=f"data-extraction/{prompt}", variables={"document": document})
         if response.choices[0].message.content is None:  # type: ignore
             raise LLMnoOutputCompletionError()
         response_text = str(response.choices[0].message.content)  # type: ignore
-        # logger.debug(f"ℹ️ response text: {response_text}")
         sc = StructuredContent(
             outer_tag="data-extraction",
             inner_tag="markdown",
@@ -225,9 +221,13 @@ class ComplexScrapingPipe:
             structured=None,
         )
 
-    async def _scrape_images(self, context: ProcessedBrowserSnapshot) -> list[ImageData]:
+    async def _scrape_images(
+        self,
+        context: ProcessedBrowserSnapshot,
+    ) -> list[ImageData]:
         if self.browser is None:
-            logger.error("Images cannot be scraped without a browser")
+            if self.config.verbose:
+                logger.error("Images cannot be scraped without a browser")
             return []
         image_nodes = context.node.image_nodes()
         out_images: list[ImageData] = []
@@ -235,7 +235,8 @@ class ComplexScrapingPipe:
             if node.id is not None:
                 locator = await resolve_image_conflict(self.browser.page, context.node, node.id)
                 if locator is None:
-                    logger.warning(f"No locator found for image node {node.id}")
+                    if self.config.verbose:
+                        logger.warning(f"No locator found for image node {node.id}")
                     continue
                 # if image_src is None:
                 #     logger.warning(f"No src attribute found for image node {node.id}")

@@ -32,6 +32,8 @@ def prioritize_role(parent: DomNode, child: DomNode) -> str:
             # always prioritize links, buttons and text (i.e interactive elements)
             if child.id is not None:
                 return child_role
+            if parent.id is not None:
+                return node_role
             return child_role
     return node_role
 
@@ -116,7 +118,8 @@ def prune_hidden_nodes(node: DomNode) -> bool:
 
 
 def prune_dom_tree(node: DomNode) -> DomNode:
-    fnode = node.subtree_filter(lambda n: prune_empty_texts(n) and prune_hidden_nodes(n))
+    fnode = node.subtree_filter(lambda n: prune_empty_texts(n))
+    # fnode = node.subtree_filter(lambda n: prune_empty_texts(n) and prune_hidden_nodes(n))
     if fnode is None:
         logger.warning("No node found after pruning empty texts")
         fnode = node

@@ -1,4 +1,5 @@
 from argparse import ArgumentParser, Namespace
+from collections.abc import Callable
 from typing import Any, ClassVar, get_type_hints
 
 from pydantic import BaseModel
@@ -7,21 +8,44 @@ from notte.env import NotteEnvConfig
 
 
 class AgentConfig(BaseModel):
-    model: str = "openai/gpt-4o"
-    headless: bool = False
-    max_steps: int = 20
+    env: NotteEnvConfig
+    reasoning_model: str = "openai/gpt-4o"
     include_screenshot: bool = False
     max_history_tokens: int = 16000
     max_error_length: int = 500
     raise_on_failure: bool = False
     max_consecutive_failures: int = 3
-    disable_web_security: bool = False
 
-    def update_env_config(self, env_config: NotteEnvConfig) -> NotteEnvConfig:
-        env_config.browser.disable_web_security = self.disable_web_security
-        env_config.max_steps = self.max_steps
-        env_config.browser.headless = self.headless
-        return env_config
+    @property
+    def groq(self) -> "AgentConfig":
+        self.reasoning_model = "groq/llama-3.3-70b-versatile"
+        return self
+
+    @property
+    def openai(self) -> "AgentConfig":
+        self.reasoning_model = "openai/gpt-4o"
+        return self
+
+    @property
+    def cerebras(self) -> "AgentConfig":
+        self.reasoning_model = "cerebras/llama-3.3-70b"
+        return self
+
+    @property
+    def use_vision(self) -> "AgentConfig":
+        self.include_screenshot = True
+        return self
+
+    @property
+    def dev_mode(self) -> "AgentConfig":
+        self.raise_on_failure = False
+        self.max_error_length = 1000
+        self.env = self.env.dev_mode
+        return self
+
+    def map_env(self, env: Callable[[NotteEnvConfig], NotteEnvConfig]) -> "AgentConfig":
+        self.env = env(self.env)
+        return self
 
     @staticmethod
     def _get_arg_type(python_type: Any) -> Any:

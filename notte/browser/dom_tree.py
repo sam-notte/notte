@@ -240,6 +240,7 @@ class DomAttributes:
                 "method",
                 "eid",
                 "view",
+                "pivot",
             ]
         )
 
@@ -312,6 +313,7 @@ class ComputedDomAttributes:
     in_viewport: bool = False
     is_interactive: bool = False
     is_top_element: bool = False
+    is_editable: bool = False
     shadow_root: bool = False
     highlight_index: int | None = None
     selectors: NodeSelectors | None = None
@@ -422,7 +424,7 @@ class DomNode:
             return False
         if self.type.value == NodeType.INTERACTION.value:
             return True
-        return self.role.category().value in [NodeCategory.INTERACTION.value, NodeCategory.PARAMETERS.value]
+        return self.role.category().value in [NodeCategory.INTERACTION.value]
 
     def is_image(self) -> bool:
         if isinstance(self.role, str):
@@ -478,7 +480,7 @@ class DomNode:
     def image_nodes(self) -> list["DomNode"]:
         return [node for node in self.flatten() if node.is_image()]
 
-    def subtree_filter(self, ft: Callable[["DomNode"], bool]) -> "DomNode | None":
+    def subtree_filter(self, ft: Callable[["DomNode"], bool], verbose: bool = False) -> "DomNode | None":
         def inner(node: DomNode) -> DomNode | None:
             children = node.children
             if not ft(node):
@@ -506,7 +508,8 @@ class DomNode:
         start = time.time()
         snode = inner(self)
         end = time.time()
-        logger.info(f"🔍 Filtering subtree of full graph done in {end - start:.2f} seconds")
+        if verbose:
+            logger.info(f"🔍 Filtering subtree of full graph done in {end - start:.2f} seconds")
         return snode
 
     def subtree_without(self, roles: set[str]) -> "DomNode":

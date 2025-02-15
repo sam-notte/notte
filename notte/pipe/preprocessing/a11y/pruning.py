@@ -30,8 +30,6 @@ class PruningConfig:
 
         if node["role"] in NodeCategory.INTERACTION.roles():
             return False
-        if node["role"] in NodeCategory.PARAMETERS.roles():
-            return False
         # check text and images
         if node["role"] in NodeCategory.IMAGE.roles():
             # logger.error(f"---------> pruning image {node.get('role')}")
@@ -69,7 +67,6 @@ class PruningConfig:
 
     def important_roles(self) -> set[str]:
         base = NodeCategory.INTERACTION.roles()
-        base.update(NodeCategory.PARAMETERS.roles())
         if not self.prune_texts:
             base.update(NodeCategory.TEXT.roles())
         if not self.prune_images:
@@ -141,9 +138,8 @@ def prune_empty_links(node: A11yNode, config: PruningConfig) -> A11yNode | None:
     return node
 
 
-def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
+def prune_text_child_in_interaction_nodes(node: A11yNode, verbose: bool = False) -> A11yNode:
     allowed_roles = NodeCategory.IMAGE.roles()
-    allowed_roles.update(NodeCategory.PARAMETERS.roles())
 
     children: list[A11yNode] = node.get("children", [])
     if node["role"] in NodeCategory.INTERACTION.roles() and len(children) >= 1 and len(node["name"]) > 0:
@@ -159,10 +155,11 @@ def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
             # images are allowed in interaction nodes
             return node
         else:
-            logger.warning(
-                f"Found non-text children (i.e. {other_than_text}) in interaction"
-                f" node role {node['role']} and name {node['name']}"
-            )
+            if verbose:
+                logger.warning(
+                    f"Found non-text children (i.e. {other_than_text}) in interaction"
+                    f" node role {node['role']} and name {node['name']}"
+                )
 
     node["children"] = [prune_text_child_in_interaction_nodes(child) for child in children]
     return node

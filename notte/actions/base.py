@@ -53,6 +53,10 @@ class PossibleAction(BaseModel):
                 return "button"
             case "I":
                 return "input"
+            case "O":
+                return "option"
+            case "M":
+                return "misc"
             case "F":
                 raise NotImplementedError("Image actions are not supported")
             case "S":

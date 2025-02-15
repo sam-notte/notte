@@ -88,8 +88,16 @@ class NotteActionProxy:
         if len(action.params_values) != 1:
             raise MoreThanOneParameterActionError(action.id, len(action.params_values))
         value: str = action.params_values[0].value
-        match (action.role, action.node.get_role_str()):
-            case ("input", "checkbox"):
+        match (action.role, action.node.get_role_str(), action.node.computed_attributes.is_editable):
+            case ("input", "textbox", _) | (_, _, True):
+                return FillAction(
+                    id=action.id,
+                    value=value,
+                    press_enter=action.press_enter,
+                    selector=action.selector,
+                    text_label=action.node.inner_text(),
+                )
+            case ("input", "checkbox", _):
                 return CheckAction(
                     id=action.id,
                     value=bool(value),
@@ -97,7 +105,7 @@ class NotteActionProxy:
                     selector=action.selector,
                     text_label=action.node.text,
                 )
-            case ("input", "combobox"):
+            case ("input", "combobox", _):
                 return SelectDropdownOptionAction(
                     id=action.id,
                     value=value,
@@ -105,7 +113,7 @@ class NotteActionProxy:
                     selector=action.selector,
                     text_label=action.node.text,
                 )
-            case ("input", "textbox") | ("input", _):
+            case ("input", _, _):
                 return FillAction(
                     id=action.id,
                     value=value,
@@ -126,12 +134,26 @@ class NotteActionProxy:
                     )
                 return ClickAction(
                     id=action.id,
-                    selector=action.node.computed_attributes.selectors,
                     text_label=action.node.text,
+                    selector=action.node.computed_attributes.selectors,
+                    press_enter=action.press_enter,
+                )
+            case "option":
+                if action.node is None:
+                    raise InvalidActionError(
+                        action.id, "action.node cannot be None to be able to execute an interaction action"
+                    )
+                return SelectDropdownOptionAction(
+                    id=action.id,
+                    option_id=action.node.id,
+                    selector=action.node.computed_attributes.selectors,
+                    option_selector=action.node.computed_attributes.selectors,
+                    text_label=action.node.text,
+                    press_enter=action.press_enter,
                 )
             case "input":
                 return NotteActionProxy.forward_parameter_action(action)
             case "special":
                 return NotteActionProxy.forward_special(action)
             case _:
-                raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
+                raise InvalidActionError(action.id, f"unknown action role: {action.role} with id: {action.id}")

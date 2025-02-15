@@ -19,6 +19,10 @@ from notte.llms.engine import LLMEngine
 _ = load_dotenv()
 
 
+class GufoAgentConfig(AgentConfig):
+    env: NotteEnvConfig = NotteEnvConfig.enable_llm()
+
+
 class GufoAgent(BaseAgent):
     """
     A base agent implementation that coordinates between an LLM and the Notte environment.
@@ -44,12 +48,11 @@ class GufoAgent(BaseAgent):
 
     def __init__(self, config: AgentConfig) -> None:
         self.config: AgentConfig = config
-        self.llm: LLMEngine = LLMEngine(model=config.model)
+        self.llm: LLMEngine = LLMEngine(model=config.reasoning_model)
         # Users should implement their own parser to customize how observations
         # and actions are formatted for their specific LLM and use case
         self.env: NotteEnv = NotteEnv(
-            headless=config.headless,
-            config=NotteEnvConfig.llm_tagging(config.max_steps),
+            config=config.env,
         )
         self.parser: GufoParser = GufoParser()
         self.prompt: GufoPrompt = GufoPrompt(self.parser)
@@ -111,7 +114,7 @@ class GufoAgent(BaseAgent):
         self.conv.add_user_message(self.prompt.env_rules())
         async with self.env:
 
-            for i in range(self.config.max_steps):
+            for i in range(self.config.env.max_steps):
                 logger.info(f"> step {i}: looping in")
                 output = await self.step()
                 if output is not None:
@@ -119,7 +122,7 @@ class GufoAgent(BaseAgent):
                     logger.info(f"{status} with answer: {output.answer}")
                     return self.output(output.answer, output.success)
             # If the task is not done, raise an error
-            error_msg = f"Failed to solve task in {self.config.max_steps} steps"
+            error_msg = f"Failed to solve task in {self.config.env.max_steps} steps"
             logger.info(f"🚨 {error_msg}")
             return self.output(error_msg, False)
 
