@@ -1,6 +1,6 @@
 from loguru import logger
 
-from notte.browser.dom_tree import InteractionDomNode
+from notte.browser.dom_tree import InteractionDomNode, NodeSelectors
 from notte.browser.node_type import NodeRole
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.controller.actions import (
@@ -26,7 +26,7 @@ class SimpleActionResolutionPipe:
             # no need to resolve
             return action
         if isinstance(action, SelectDropdownOptionAction):
-            select_action = SimpleActionResolutionPipe.resolve_selector_locators(action, context, verbose)
+            select_action = SimpleActionResolutionPipe.resolve_dropdown_locators(action, context, verbose)
             if select_action is not None:
                 return select_action
             # hack: fallback to click action if no selector is found
@@ -41,6 +41,12 @@ class SimpleActionResolutionPipe:
         if action.id not in selector_map:
             raise InvalidActionError(action_id=action.id, reason=f"action '{action.id}' not found in page context.")
         node = selector_map[action.id]
+        action.selector = SimpleActionResolutionPipe.resolve_selectors(node, verbose)
+        action.text_label = node.text
+        return action
+
+    @staticmethod
+    def resolve_selectors(node: InteractionDomNode, verbose: bool = False) -> NodeSelectors:
         if node.computed_attributes.selectors is None:
             raise FailedSimpleNodeResolutionError(node.id)
         selectors = node.computed_attributes.selectors
@@ -48,12 +54,10 @@ class SimpleActionResolutionPipe:
             if verbose:
                 logger.info(f"🔍 Resolving shadow root selectors for {node.id} ({node.text})")
             selectors = selectors_through_shadow_dom(node)
-        action.selector = selectors
-        action.text_label = node.text
-        return action
+        return selectors
 
     @staticmethod
-    def resolve_selector_locators(
+    def resolve_dropdown_locators(
         action: SelectDropdownOptionAction,
         context: ProcessedBrowserSnapshot,
         verbose: bool = False,

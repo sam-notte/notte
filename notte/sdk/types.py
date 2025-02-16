@@ -101,7 +101,7 @@ class SessionResponseDict(TypedDict, total=False):
 # ############################################################
 
 
-class PaginationObserveRequestDict(TypedDict, total=False):
+class PaginationParamsDict(TypedDict, total=False):
     min_nb_actions: int | None
     max_nb_actions: int
 
@@ -133,16 +133,21 @@ class ObserveRequest(SessionRequest, PaginationParams):
     )
 
 
-class ObserveRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
+class ObserveRequestDict(SessionRequestDict, PaginationParamsDict, total=False):
     url: str | None
 
 
-class ScrapeRequestDict(SessionRequestDict, total=False):
+class ScrapeParamsDict(TypedDict, total=False):
     scrape_images: bool
     scrape_links: bool
     only_main_content: bool
     response_format: type[BaseModel] | None
     instructions: str | None
+    use_llm: bool | None
+
+
+class ScrapeRequestDict(SessionRequestDict, ScrapeParamsDict, total=False):
+    pass
 
 
 class ScrapeParams(BaseModel):
@@ -168,8 +173,28 @@ class ScrapeParams(BaseModel):
     ] = None
     instructions: Annotated[str | None, Field(description="The instructions to use for the scrape.")] = None
 
+    use_llm: Annotated[
+        bool | None,
+        Field(
+            description=(
+                "Whether to use an LLM for the extraction process. This will result in a longer response time but a"
+                " better accuracy. If not provided, the default value is the same as the NotteEnv config."
+            )
+        ),
+    ] = None
+
     def requires_schema(self) -> bool:
         return self.response_format is not None or self.instructions is not None
+
+    def scrape_params_dict(self) -> ScrapeParamsDict:
+        return ScrapeParamsDict(
+            scrape_images=self.scrape_images,
+            scrape_links=self.scrape_links,
+            only_main_content=self.only_main_content,
+            response_format=self.response_format,
+            instructions=self.instructions,
+            use_llm=self.use_llm,
+        )
 
 
 class ScrapeRequest(ObserveRequest, ScrapeParams):
@@ -184,7 +209,7 @@ class StepRequest(SessionRequest, PaginationParams):
     enter: Annotated[bool | None, Field(description="Whether to press enter after inputting the value")] = None
 
 
-class StepRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
+class StepRequestDict(SessionRequestDict, PaginationParamsDict, total=False):
     action_id: str
     value: str | None
     enter: bool | None

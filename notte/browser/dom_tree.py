@@ -149,6 +149,8 @@ class DomAttributes:
     srcset: str | None
     target: str | None
     ping: str | None
+    data_src: str | None
+    data_srcset: str | None
 
     # Text attributes
     placeholder: str | None
@@ -408,9 +410,9 @@ class DomNode:
             return None
         return attr.notte_selector.split(":")[0]
 
-    def find(self, id: str) -> "DomNode | None":
+    def find(self, id: str) -> "InteractionDomNode | None":
         if self.id == id:
-            return self
+            return self.to_interaction_node()
         for child in self.children:
             found = child.find(id)
             if found:

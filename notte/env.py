@@ -25,7 +25,6 @@ from notte.controller.base import BrowserController
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
-from notte.pipe.action.base import BaseActionSpacePipe
 from notte.pipe.action.pipe import (
     ActionSpaceType,
     MainActionSpaceConfig,
@@ -36,9 +35,10 @@ from notte.pipe.resolution.pipe import NodeResolutionPipe
 from notte.pipe.scraping.pipe import DataScrapingPipe, ScrapingConfig, ScrapingType
 from notte.sdk.types import (
     DEFAULT_MAX_NB_STEPS,
-    PaginationObserveRequestDict,
     PaginationParams,
+    PaginationParamsDict,
     ScrapeParams,
+    ScrapeParamsDict,
 )
 
 
@@ -119,14 +119,14 @@ class NotteEnvConfig(BaseModel):
         self.browser.disable_web_security = True
         return self
 
-    @staticmethod
-    def enable_llm() -> "NotteEnvConfig":
-        return NotteEnvConfig().llm_data_extract.llm_action_tagging
-
     @property
     def disable_auto_scrape(self) -> "NotteEnvConfig":
         self.auto_scrape = False
         return self
+
+    @staticmethod
+    def use_llm() -> "NotteEnvConfig":
+        return NotteEnvConfig().llm_data_extract.llm_action_tagging
 
     @staticmethod
     def disable_llm() -> "NotteEnvConfig":
@@ -153,7 +153,7 @@ class NotteEnv(AsyncResource):
         if config is not None:
             if config.verbose:
                 logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
-        self.config: NotteEnvConfig = config or NotteEnvConfig.enable_llm()
+        self.config: NotteEnvConfig = config or NotteEnvConfig.use_llm()
         if llmserve is None:
             llmserve = LLMService(base_model=self.config.perception_model)
         self.config.browser.headless = headless
@@ -163,7 +163,7 @@ class NotteEnv(AsyncResource):
 
         self.trajectory: list[TrajectoryStep] = []
         self._context: ProcessedBrowserSnapshot | None = None
-        self._action_space_pipe: BaseActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
+        self._action_space_pipe: MainActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(
             llmserve=llmserve, browser=self._browser, config=self.config.scraping
         )
@@ -270,7 +270,7 @@ class NotteEnv(AsyncResource):
     async def observe(
         self,
         url: str | None = None,
-        **pagination: Unpack[PaginationObserveRequestDict],
+        **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
         _ = await self.goto(url)
         if self.config.verbose:
@@ -324,7 +324,7 @@ class NotteEnv(AsyncResource):
         action_id: str,
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
-        **pagination: Unpack[PaginationObserveRequestDict],
+        **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
         _ = await self.execute(action_id, params, enter=enter)
         if self.config.verbose:
@@ -339,19 +339,11 @@ class NotteEnv(AsyncResource):
     async def scrape(
         self,
         url: str | None = None,
-        only_main_content: bool = True,
-        scrape_images: bool = False,
-        response_format: type[BaseModel] | None = None,
-        instructions: str | None = None,
+        **scrape_params: Unpack[ScrapeParamsDict],
     ) -> Observation:
         if url is not None:
             _ = await self.goto(url)
-        params = ScrapeParams(
-            only_main_content=only_main_content,
-            scrape_images=scrape_images,
-            response_format=response_format,
-            instructions=instructions,
-        )
+        params = ScrapeParams(**scrape_params)
         self.obs.data = await self._data_scraping_pipe.forward(self.context, params)
         return self.obs
 
@@ -359,20 +351,19 @@ class NotteEnv(AsyncResource):
     async def god(
         self,
         url: str | None = None,
-        instructions: str | None = None,
-        **pagination: Unpack[PaginationObserveRequestDict],
+        **params: Unpack[ScrapeParamsDict | PaginationParamsDict],  # type: ignore
     ) -> Observation:
         if self.config.verbose:
             logger.info("🌊 God mode activated (scraping + action listing)")
         if url is not None:
             _ = await self.goto(url)
-        scraping_params = ScrapeParams(instructions=instructions)
-        _pagination = PaginationParams.model_validate(pagination)
+        scrape = ScrapeParams.model_validate(params)
+        pagination = PaginationParams.model_validate(params)
         space, data = await asyncio.gather(
             self._action_space_pipe.forward_async(
-                self.context, previous_action_list=self.previous_actions, pagination=_pagination
+                self.context, previous_action_list=self.previous_actions, pagination=pagination
             ),
-            self._data_scraping_pipe.forward_async(self.context, scraping_params),
+            self._data_scraping_pipe.forward_async(self.context, scrape),
         )
         self.obs.space = space
         self.obs.data = data

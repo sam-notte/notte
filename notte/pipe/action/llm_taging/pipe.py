@@ -153,6 +153,19 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
             space.category = self.doc_categoriser_pipe.forward(context, space)
         return space
 
+    def tagging_context(self, context: ProcessedBrowserSnapshot) -> ProcessedBrowserSnapshot:
+        if self.config.include_images:
+            return context
+        if self.config.verbose:
+            logger.info("🏞️ Excluding images from the action tagging process")
+        _context = context.subgraph_without(actions=[], roles=NodeCategory.IMAGE.roles())
+        if _context is None:
+            raise NodeFilteringResultsInEmptyGraph(
+                url=context.snapshot.metadata.url,
+                operation=f"subtree_without(roles={NodeCategory.IMAGE.roles()})",
+            )
+        return _context
+
     @override
     def forward(
         self,
@@ -160,16 +173,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         previous_action_list: Sequence[Action] | None,  # type: ignore
         pagination: PaginationParams,
     ) -> ActionSpace:
-        if not self.config.include_images:
-            if self.config.verbose:
-                logger.info("🏞️ Excluding images from the action tagging process")
-            _context = context.subgraph_without(actions=[], roles=NodeCategory.IMAGE.roles())
-            if _context is None:
-                raise NodeFilteringResultsInEmptyGraph(
-                    url=context.snapshot.metadata.url,
-                    operation=f"subtree_without(roles={NodeCategory.IMAGE.roles()})",
-                )
-            context = _context
+        context = self.tagging_context(context)
 
         space = self.forward_unfiltered(
             context,
