@@ -9,7 +9,7 @@ from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.data.space import DataSpace
 from notte.llms.service import LLMService
 from notte.pipe.rendering.pipe import DomNodeRenderingConfig, DomNodeRenderingType
-from notte.pipe.scraping.llm_scraping import LlmScrapingPipe
+from notte.pipe.scraping.llm_scraping import LlmDataScrapingPipe
 from notte.pipe.scraping.schema import SchemaScrapingPipe
 from notte.pipe.scraping.simple import SimpleScrapingPipe
 from notte.sdk.types import ScrapeParams
@@ -52,7 +52,7 @@ class DataScrapingPipe:
         browser: BrowserDriver,
         config: ScrapingConfig,
     ) -> None:
-        self.llm_pipe = LlmScrapingPipe(llmserve=llmserve, browser=browser, config=config.rendering)
+        self.llm_pipe = LlmDataScrapingPipe(llmserve=llmserve, browser=browser, config=config.rendering)
         self.schema_pipe = SchemaScrapingPipe(llmserve=llmserve)
         self.config: ScrapingConfig = config
 

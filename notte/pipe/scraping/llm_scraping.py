@@ -161,7 +161,7 @@ async def get_image_src(locator: Locator) -> str | None:
     return src
 
 
-class LlmScrapingPipe:
+class LlmDataScrapingPipe:
     """
     Data scraping pipe that scrapes data from the page
     """
