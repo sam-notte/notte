@@ -17,9 +17,14 @@ from eval.webvoyager.load_data import (
     WebVoyagerTask,
     load_webvoyager_data,
 )
-from examples.simple.agent import HistoryType, RaiseCondition, SimpleAgent
+from examples.falco.agent import (
+    FalcoAgent,
+    FalcoAgentConfig,
+    HistoryType,
+    RaiseCondition,
+)
 from notte.browser.pool import BrowserPool
-from notte.common.agent import AgentOutput
+from notte.common.agent.base import AgentOutput
 
 DISPLAY_MD_COLUMNS = [
     "task_website",
@@ -101,16 +106,14 @@ class TaskResult(BaseModel):
 
 async def run_agent(browser_pool: BrowserPool, task: WebVoyagerTask, run_parameters: RunParameters) -> bytes:
     task_str = f"Your task: {task.question}. Use {task.url or 'the web'} to answer the question."
-    agent = SimpleAgent(
-        pool=browser_pool,
-        model=run_parameters.agent_llm,
-        headless=True,
+    config = FalcoAgentConfig(
+        reasoning_model=run_parameters.agent_llm,
         raise_condition=RaiseCondition.NEVER,
         include_screenshot=run_parameters.include_screenshots,
         history_type=HistoryType(run_parameters.history_type),
-        disable_web_security=True,
     )
-
+    config.env = config.env.headless.disable_web_security
+    agent = FalcoAgent(pool=browser_pool, config=config)
     output = await agent.run(task_str)
 
     # need to do this to be able to pickle / serialize

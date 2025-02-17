@@ -5,21 +5,23 @@ from litellm import AllMessageValues, override
 from loguru import logger
 
 import notte
-from examples.simple.perception import SimplePerception
-from examples.simple.prompt import SimplePrompt
-from examples.simple.types import StepAgentOutput
 from notte.browser.observation import Observation
 from notte.browser.pool import BrowserPool
-from notte.common.agent import AgentOutput, BaseAgent
-from notte.common.conversation import Conversation
-from notte.common.parser import TaskOutput
-from notte.common.safe_executor import ExecutionStatus, SafeActionExecutor
+from notte.common.agent.base import BaseAgent
+from notte.common.agent.config import AgentConfig, RaiseCondition
+from notte.common.agent.types import AgentOutput
+from notte.common.tools.conversation import Conversation
+from notte.common.tools.safe_executor import ExecutionStatus, SafeActionExecutor
+from notte.common.tools.trajectory_history import TrajectoryHistory
+from notte.common.tools.validator import CompletionValidator
 from notte.common.tracer import LlmUsageDictTracer
-from notte.common.trajectory_history import TrajectoryHistory
-from notte.common.validator import TaskOutputValidator
 from notte.controller.actions import BaseAction, CompletionAction
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
+
+from .perception import FalcoPerception
+from .prompt import FalcoPrompt
+from .types import StepAgentOutput
 
 # TODO: list
 # handle tooling calling methods for different providers (if not supported by litellm)
@@ -43,64 +45,41 @@ class HistoryType(StrEnum):
     COMPRESSED = "compressed"
 
 
-class RaiseCondition(StrEnum):
-    """How to raise an error when the agent fails to complete a step.
-
-    Either immediately upon failure, after retry, or never.
-    """
-
-    IMMEDIATELY = "immediately"
-    RETRY = "retry"
-    NEVER = "never"
+class FalcoAgentConfig(AgentConfig):
+    env: NotteEnvConfig = NotteEnvConfig.disable_llm()
+    max_actions_per_step: int = 1
+    history_type: HistoryType = HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA
 
 
-class SimpleAgent(BaseAgent):
+class FalcoAgent(BaseAgent):
 
     def __init__(
         self,
-        model: str,
-        headless: bool,
-        include_screenshot: bool = False,
-        max_history_tokens: int = 64000,
-        max_error_length: int = 500,
-        raise_condition: RaiseCondition = RaiseCondition.RETRY,
-        max_consecutive_failures: int = 3,
-        # TODO: enable multi-action later when we have a better prompt
-        max_actions_per_step: int = 1,
-        history_type: HistoryType = HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA,
+        config: FalcoAgentConfig,
         pool: BrowserPool | None = None,
-        disable_web_security: bool = False,
     ):
-        config = NotteEnvConfig.simple()
-        config.browser.disable_web_security = disable_web_security
+        self.config: FalcoAgentConfig = config
 
-        if include_screenshot and not config.browser.screenshot:
+        if config.include_screenshot and not config.env.browser.screenshot:
             raise ValueError("Cannot `include_screenshot=True` if `screenshot` is not enabled in the browser config")
-        self.raise_condition: RaiseCondition = raise_condition
-        self.model: str = model
-        self.include_screenshot: bool = include_screenshot
-
         self.tracer: LlmUsageDictTracer = LlmUsageDictTracer()
-        self.llm: LLMEngine = LLMEngine(model=model, tracer=self.tracer)
-
+        self.llm: LLMEngine = LLMEngine(model=config.reasoning_model, tracer=self.tracer)
         # Users should implement their own parser to customize how observations
         # and actions are formatted for their specific LLM and use case
         self.env: NotteEnv = NotteEnv(
-            headless=headless,
-            config=config,
+            config=config.env,
             pool=pool,
         )
-        self.validator: TaskOutputValidator = TaskOutputValidator(llm=self.llm)
-        self.max_actions_per_step: int = max_actions_per_step
-        self.prompt: SimplePrompt = SimplePrompt(max_actions_per_step)
-        self.conv: Conversation = Conversation(max_tokens=max_history_tokens, convert_tools_to_assistant=True)
-        self.perception: SimplePerception = SimplePerception()
-        self.history_type: HistoryType = history_type
-        self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=max_error_length)
+        self.perception: FalcoPerception = FalcoPerception()
+        self.validator: CompletionValidator = CompletionValidator(llm=self.llm, perception=self.perception)
+        self.prompt: FalcoPrompt = FalcoPrompt(max_actions_per_step=config.max_actions_per_step)
+        self.conv: Conversation = Conversation(max_tokens=config.max_history_tokens, convert_tools_to_assistant=True)
+        self.history_type: HistoryType = config.history_type
+        self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=config.max_error_length)
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(
-            func=self.env.raw_step,
-            raise_on_failure=(raise_condition is RaiseCondition.IMMEDIATELY),
-            max_consecutive_failures=max_consecutive_failures,
+            func=self.env.act,
+            raise_on_failure=(self.config.raise_condition is RaiseCondition.IMMEDIATELY),
+            max_consecutive_failures=config.max_consecutive_failures,
         )
 
     async def reset(self) -> None:
@@ -150,7 +129,7 @@ class SimpleAgent(BaseAgent):
                             case (HistoryType.FULL_CONVERSATION, _):
                                 self.conv.add_user_message(
                                     content=self.perception.perceive(obs),
-                                    image=obs.screenshot if self.include_screenshot else None,
+                                    image=obs.screenshot if self.config.include_screenshot else None,
                                 )
                             case (HistoryType.SHORT_OBSERVATIONS_WITH_RAW_DATA, True):
                                 # add data if data was scraped
@@ -164,11 +143,11 @@ class SimpleAgent(BaseAgent):
         if last_valid_obs is not None and self.history_type is not HistoryType.FULL_CONVERSATION:
             self.conv.add_user_message(
                 content=self.perception.perceive(last_valid_obs),
-                image=last_valid_obs.screenshot if self.include_screenshot else None,
+                image=last_valid_obs.screenshot if self.config.include_screenshot else None,
             )
         return self.conv.messages()
 
-    async def step(self, task: str) -> TaskOutput | None:
+    async def step(self, task: str) -> CompletionAction | None:
         """Execute a single step of the agent"""
         messages = self.get_messages(task)
         logger.info(f"🔍 LLM messages:\n{messages}")
@@ -179,7 +158,7 @@ class SimpleAgent(BaseAgent):
         if response.output is not None:
             return response.output
         # Execute the actions
-        for action in response.get_actions(self.max_actions_per_step):
+        for action in response.get_actions(self.config.max_actions_per_step):
             result = await self.step_executor.execute(action)
             self.trajectory.add_step(result)
             step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
@@ -198,9 +177,9 @@ class SimpleAgent(BaseAgent):
             return await self._run(task, url=url)
 
         except Exception as e:
-            if self.raise_condition is RaiseCondition.NEVER:
+            if self.config.raise_condition is RaiseCondition.NEVER:
                 return self.output(f"Failed due to {e}", False)
-            raise
+            raise e
 
     async def _run(self, task: str, url: str | None = None) -> AgentOutput:
         """Execute the task with maximum number of steps"""
@@ -210,12 +189,11 @@ class SimpleAgent(BaseAgent):
         if url is not None:
             task = f"Start on '{url}' and {task}"
 
-        max_steps = self.env.config.max_steps
         # Loop through the steps
         async with self.env:
-            for step in range(max_steps):
+            for step in range(self.env.config.max_steps):
                 logger.info(f"> step {step}: looping in")
-                output: TaskOutput | None = await self.step(task)
+                output: CompletionAction | None = await self.step(task)
 
                 if output is None:
                     continue
@@ -238,17 +216,14 @@ class SimpleAgent(BaseAgent):
                     # add the validation result to the trajectory and continue
                     self.trajectory.add_step(
                         ExecutionStatus(
-                            input=CompletionAction(
-                                success=output.success,
-                                answer=output.answer,
-                            ),
+                            input=output,
                             output=None,
                             success=False,
                             message=failed_val_msg,
                         )
                     )
 
-        error_msg = f"Failed to solve task in {max_steps} steps"
+        error_msg = f"Failed to solve task in {self.env.config.max_steps} steps"
         logger.info(f"🚨 {error_msg}")
         notte.set_error_mode("developer")
         return self.output(error_msg, False)

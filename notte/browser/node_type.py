@@ -21,7 +21,6 @@ class NodeCategory(Enum):
     OTHER = "other"
     CODE = "code"
     TREE = "tree"
-    PARAMETERS = "parameters"
     IMAGE = "image"
 
     def roles(self, add_group_role: bool = False) -> set[str]:
@@ -44,6 +43,7 @@ class NodeCategory(Enum):
                     "menuitem",
                     "menuitemcheckbox",
                     "menuitemradio",
+                    "option",
                 }
             case NodeCategory.TEXT.value:
                 roles = {
@@ -138,8 +138,6 @@ class NodeCategory(Enum):
                 roles = {"code", "math"}
             case NodeCategory.TREE.value:
                 roles = {"tree", "treegrid", "treeitem"}
-            case NodeCategory.PARAMETERS.value:
-                roles = {"option"}
             case _:
                 raise InvalidInternalCheckError(
                     check=f"no roles for category {self}",
@@ -222,8 +220,6 @@ class NodeRole(Enum):
     MENUITEMRADIO = "menuitemradio"
     SLIDER = "slider"
     SWITCH = "switch"
-
-    # parameters
     OPTION = "option"
 
     # table
@@ -335,8 +331,6 @@ class NodeRole(Enum):
                 | NodeRole.LABELTEXT.value
             ):
                 return NodeCategory.TEXT
-            case NodeRole.OPTION.value:
-                return NodeCategory.PARAMETERS
             case (
                 NodeRole.WEBAREA.value
                 | NodeRole.GROUP.value
@@ -398,6 +392,7 @@ class NodeRole(Enum):
                 | NodeRole.MENUITEMRADIO.value
                 | NodeRole.SLIDER.value
                 | NodeRole.SWITCH.value
+                | NodeRole.OPTION.value
             ):
                 return NodeCategory.INTERACTION
             case NodeRole.CODE.value | NodeRole.MATH.value:

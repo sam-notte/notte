@@ -147,6 +147,32 @@
 		return !leafElementDenyList.has(element.tagName.toLowerCase());
 	}
 
+
+    // Add isEditable check
+    function isEditableElement(element) {
+        // Check if element is disabled
+        if (element.disabled || element.getAttribute('aria-disabled') === 'true') {
+            return false;
+        }
+
+        // Check for readonly attribute
+        const isReadonly = element.hasAttribute('readonly') ||
+                          element.getAttribute('aria-readonly') === 'true';
+
+        // For select, input, and textarea, check readonly attribute
+        if (element.tagName.toLowerCase() in {'select': 1, 'input': 1, 'textarea': 1}) {
+            return !isReadonly;
+        }
+
+        // Check contenteditable
+        if (element.hasAttribute('contenteditable') &&
+            element.getAttribute('contenteditable') !== 'false') {
+            return !isReadonly;
+        }
+
+        return false;
+    }
+
 	// Helper function to check if element is interactive
 	function isInteractiveElement(element) {
 		// Base interactive elements and roles
@@ -422,10 +448,12 @@
 			const isInteractive = isInteractiveElement(node);
 			const isVisible = isElementVisible(node);
 			const isTop = isTopElement(node);
+            const isEditable = isEditableElement(node);
 
 			nodeData.isInteractive = isInteractive;
 			nodeData.isVisible = isVisible;
 			nodeData.isTopElement = isTop;
+			nodeData.isEditable = isEditable;
 
 			// Highlight if element meets all criteria and highlighting is enabled
 			if (isInteractive && isVisible && isTop) {

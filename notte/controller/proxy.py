@@ -1,6 +1,5 @@
 from notte.actions.base import ExecutableAction
 from notte.controller.actions import (
-    BaseAction,
     BrowserAction,
     BrowserActionId,
     CheckAction,
@@ -22,7 +21,6 @@ from notte.controller.actions import (
     WaitAction,
 )
 from notte.errors.actions import InvalidActionError, MoreThanOneParameterActionError
-from notte.errors.resolution import NodeResolutionAttributeError
 
 
 class NotteActionProxy:
@@ -82,37 +80,80 @@ class NotteActionProxy:
                 )
 
     @staticmethod
-    def forward_parameter_action(action: ExecutableAction, enter: bool | None = None) -> InteractionAction:
-        if action.locator is None:
-            raise NodeResolutionAttributeError(None, "post_attributes")  # type: ignore
+    def forward_parameter_action(action: ExecutableAction) -> InteractionAction:
+        if action.node is None:
+            raise InvalidActionError(
+                action.id, reason="action.node cannot be None to be able to execute an interaction action"
+            )
         if len(action.params_values) != 1:
             raise MoreThanOneParameterActionError(action.id, len(action.params_values))
         value: str = action.params_values[0].value
-        node_role = action.locator.role if isinstance(action.locator.role, str) else action.locator.role.value
-        match (action.role, node_role, action.locator.is_editable):
-            case (_, _, True) | ("input", "textbox", _):
-                return FillAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
+        match (action.role, action.node.get_role_str(), action.node.computed_attributes.is_editable):
+            case ("input", "textbox", _) | (_, _, True):
+                return FillAction(
+                    id=action.id,
+                    value=value,
+                    press_enter=action.press_enter,
+                    selector=action.selector,
+                    text_label=action.node.inner_text(),
+                )
             case ("input", "checkbox", _):
-                return CheckAction(id=action.id, selector=action.locator.selector, value=bool(value), press_enter=enter)
+                return CheckAction(
+                    id=action.id,
+                    value=bool(value),
+                    press_enter=action.press_enter,
+                    selector=action.selector,
+                    text_label=action.node.text,
+                )
             case ("input", "combobox", _):
                 return SelectDropdownOptionAction(
-                    id=action.id, selector=action.locator.selector, value=value, press_enter=enter
+                    id=action.id,
+                    value=value,
+                    press_enter=action.press_enter,
+                    selector=action.selector,
+                    text_label=action.node.text,
                 )
             case ("input", _, _):
-                return FillAction(id=action.id, selector=action.locator.selector, value=value, press_enter=enter)
+                return FillAction(
+                    id=action.id,
+                    value=value,
+                    press_enter=action.press_enter,
+                    selector=action.selector,
+                    text_label=action.node.inner_text(),
+                )
             case _:
                 raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
 
     @staticmethod
-    def forward(action: ExecutableAction, enter: bool | None = None) -> BaseAction:
+    def forward(action: ExecutableAction) -> InteractionAction | BrowserAction:
         match action.role:
             case "button" | "link":
-                if action.locator is None:
-                    raise InvalidActionError(action.id, "locator is to be able to execute an interaction action")
-                return ClickAction(id=action.id, selector=action.locator.selector, press_enter=enter)
+                if action.node is None:
+                    raise InvalidActionError(
+                        action.id, "action.node cannot be None to be able to execute an interaction action"
+                    )
+                return ClickAction(
+                    id=action.id,
+                    text_label=action.node.text,
+                    selector=action.node.computed_attributes.selectors,
+                    press_enter=action.press_enter,
+                )
+            case "option":
+                if action.node is None:
+                    raise InvalidActionError(
+                        action.id, "action.node cannot be None to be able to execute an interaction action"
+                    )
+                return SelectDropdownOptionAction(
+                    id=action.id,
+                    option_id=action.node.id,
+                    selector=action.node.computed_attributes.selectors,
+                    option_selector=action.node.computed_attributes.selectors,
+                    text_label=action.node.text,
+                    press_enter=action.press_enter,
+                )
             case "input":
-                return NotteActionProxy.forward_parameter_action(action, enter=enter)
+                return NotteActionProxy.forward_parameter_action(action)
             case "special":
                 return NotteActionProxy.forward_special(action)
             case _:
-                raise InvalidActionError(action.id, f"unknown action type: {action.id[0]}")
+                raise InvalidActionError(action.id, f"unknown action role: {action.role} with id: {action.id}")

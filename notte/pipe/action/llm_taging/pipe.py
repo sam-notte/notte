@@ -6,9 +6,11 @@ from typing_extensions import override
 
 from notte.actions.base import Action, PossibleAction
 from notte.actions.space import ActionSpace
+from notte.browser.node_type import NodeCategory
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.errors.actions import NotEnoughActionsListedError
 from notte.errors.base import UnexpectedBehaviorError
+from notte.errors.processing import NodeFilteringResultsInEmptyGraph
 from notte.llms.service import LLMService
 from notte.pipe.action.base import BaseActionSpacePipe
 from notte.pipe.action.llm_taging.base import BaseActionListingPipe
@@ -28,6 +30,8 @@ class LlmActionSpaceConfig(BaseModel):
     # completion config
     required_action_coverage: float = 0.95
     max_listing_trials: int = 3
+    include_images: bool = False
+    verbose: bool = False
 
     def __post_init__(self):
         if self.required_action_coverage > 1.0 or self.required_action_coverage < 0.0:
@@ -51,7 +55,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         self.config: LlmActionSpaceConfig = config
         self.action_listing_pipe: BaseActionListingPipe = MainActionListingPipe(llmserve, config=self.config.listing)
         self.doc_categoriser_pipe: DocumentCategoryPipe | None = (
-            DocumentCategoryPipe(llmserve) if self.config.doc_categorisation else None
+            DocumentCategoryPipe(llmserve, verbose=self.config.verbose) if self.config.doc_categorisation else None
         )
 
     def get_n_trials(
@@ -75,7 +79,10 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         n_required = int(len(inodes_ids) * self.config.required_action_coverage)
         n_required = min(n_required, pagination.max_nb_actions)
         if n_listed >= n_required and pagination.min_nb_actions is None:
-            logger.info(f"[ActionListing] Enough actions: {n_listed} >= {n_required}. Stop action listing prematurely.")
+            if self.config.verbose:
+                logger.info(
+                    f"[ActionListing] Enough actions: {n_listed} >= {n_required}. Stop action listing prematurely."
+                )
             return True
         # for min_nb_actions, we want to check that the first min_nb_actions are in the action_list
         # /!\ the order matter here ! We want to make sure that all the early actions are in the action_list
@@ -83,21 +90,24 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         if pagination.min_nb_actions is not None:
             for i, id in enumerate(inodes_ids[: pagination.min_nb_actions]):
                 if id not in listed_ids:
-                    logger.warning(
-                        f"[ActionListing] min_nb_actions = {pagination.min_nb_actions} but action {id} "
-                        f"({i+1}th action) is not in the action list. Retry listng."
-                    )
+                    if self.config.verbose:
+                        logger.warning(
+                            f"[ActionListing] min_nb_actions = {pagination.min_nb_actions} but action {id} "
+                            f"({i+1}th action) is not in the action list. Retry listng."
+                        )
                     return False
-            logger.info(
-                f"[ActionListing] Min_nb_actions = {pagination.min_nb_actions} and all "
-                "actions are in the action list. Stop action listing prematurely."
-            )
+            if self.config.verbose:
+                logger.info(
+                    f"[ActionListing] Min_nb_actions = {pagination.min_nb_actions} and all "
+                    "actions are in the action list. Stop action listing prematurely."
+                )
             return True
 
-        logger.warning(
-            f"Not enough actions listed: {len(inodes_ids)} total, "
-            f"{n_required} required for completion but only {n_listed} listed"
-        )
+        if self.config.verbose:
+            logger.warning(
+                f"Not enough actions listed: {len(inodes_ids)} total, "
+                f"{n_required} required for completion but only {n_listed} listed"
+            )
         return False
 
     def forward_unfiltered(
@@ -125,7 +135,8 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
             )
 
         if not completed and n_trials > 0:
-            logger.info(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
+            if self.config.verbose:
+                logger.info(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
             return self.forward_unfiltered(
                 context,
                 merged_actions,
@@ -142,6 +153,19 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
             space.category = self.doc_categoriser_pipe.forward(context, space)
         return space
 
+    def tagging_context(self, context: ProcessedBrowserSnapshot) -> ProcessedBrowserSnapshot:
+        if self.config.include_images:
+            return context
+        if self.config.verbose:
+            logger.info("🏞️ Excluding images from the action tagging process")
+        _context = context.subgraph_without(actions=[], roles=NodeCategory.IMAGE.roles())
+        if _context is None:
+            raise NodeFilteringResultsInEmptyGraph(
+                url=context.snapshot.metadata.url,
+                operation=f"subtree_without(roles={NodeCategory.IMAGE.roles()})",
+            )
+        return _context
+
     @override
     def forward(
         self,
@@ -149,6 +173,8 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         previous_action_list: Sequence[Action] | None,  # type: ignore
         pagination: PaginationParams,
     ) -> ActionSpace:
+        context = self.tagging_context(context)
+
         space = self.forward_unfiltered(
             context,
             previous_action_list,
@@ -171,7 +197,12 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         actions: Sequence[PossibleAction],
         previous_action_list: Sequence[Action],
     ) -> Sequence[Action]:
-        validated_action = ActionListValidationPipe.forward(inodes_ids, actions, previous_action_list)
+        validated_action = ActionListValidationPipe.forward(
+            inodes_ids,
+            actions,
+            previous_action_list,
+            verbose=self.config.verbose,
+        )
         # we merge newly validated actions with the misses we got from previous actions!
         valided_action_ids = set([action.id for action in validated_action])
         return validated_action + [

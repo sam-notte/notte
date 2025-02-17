@@ -131,6 +131,7 @@ class DOMElementNode(DOMBaseNode):
     is_interactive: bool = False
     is_top_element: bool = False
     shadow_root: bool = False
+    is_editable: bool = False
 
     @override
     def __post_init__(self) -> None:
@@ -444,6 +445,7 @@ class DOMElementNode(DOMBaseNode):
                 in_viewport=self.is_visible,
                 is_interactive=self.is_interactive,
                 is_top_element=self.is_top_element,
+                is_editable=self.is_editable,
                 shadow_root=self.shadow_root,
                 highlight_index=self.highlight_index,
                 selectors=NodeSelectors(

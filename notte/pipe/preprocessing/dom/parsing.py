@@ -23,6 +23,7 @@ class DomTreeDict(TypedDict):
     isVisible: bool
     isInteractive: bool
     isTopElement: bool
+    isEditable: bool
     highlightIndex: int | None
     shadowRoot: bool
     children: list["DomTreeDict"]
@@ -40,6 +41,7 @@ class DomParsingConfig(BaseModel):
     highlight_elements: bool = True
     focus_element: int = -1
     viewport_expansion: int = 500  # update from 0
+    verbose: bool = False
 
 
 class ParseDomTreePipe:
@@ -56,7 +58,8 @@ class ParseDomTreePipe:
     @staticmethod
     async def parse_dom_tree(page: Page, config: DomParsingConfig) -> DOMBaseNode:
         js_code = DOM_TREE_JS_PATH.read_text()
-        logger.info(f"Parsing DOM tree for {page.url} with config: {config.model_dump()}")
+        if config.verbose:
+            logger.info(f"Parsing DOM tree for {page.url} with config: {config.model_dump()}")
         node: DomTreeDict | None = await page.evaluate(js_code, config.model_dump())  # type: ignore
         if node is None:
             raise ValueError("Failed to parse HTML to dictionary")
@@ -128,6 +131,7 @@ class ParseDomTreePipe:
             is_visible=node.get("isVisible", False),
             is_interactive=node.get("isInteractive", False),
             is_top_element=node.get("isTopElement", False),
+            is_editable=node.get("isEditable", False),
             highlight_index=node.get("highlightIndex"),
             shadow_root=shadow_root,
             in_shadow_root=in_shadow_root,

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from notte.actions.base import ActionParameterValue, ExecutableAction
-from notte.browser.dom_tree import DomNode, InteractionDomNode, ResolvedLocator
+from notte.browser.dom_tree import DomNode, InteractionDomNode
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.controller.actions import BaseAction
 from notte.controller.space import ActionSpace
@@ -20,10 +20,8 @@ from notte.sdk.types import PaginationParams
 
 
 class SimpleActionSpaceConfig(BaseModel):
-    rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(
-        type=DomNodeRenderingType.INTERACTION_ONLY,
-        include_images=True,
-    )
+    rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(type=DomNodeRenderingType.INTERACTION_ONLY)
+    verbose: bool = False
 
 
 class SimpleActionSpacePipe(BaseActionSpacePipe):
@@ -42,15 +40,16 @@ class SimpleActionSpacePipe(BaseActionSpacePipe):
             id=node.id,
             category="Interaction action",
             description=InteractionOnlyDomNodeRenderingPipe.render_node(node, self.config.rendering.include_attributes),
-            locator=ResolvedLocator(
-                selector=selectors,
-                is_editable=False,
-                input_type=None,
-                role=node.role,
-            ),
+            # node=ResolvedLocator(
+            #     selector=selectors,
+            #     is_editable=False,
+            #     input_type=None,
+            #     role=node.role,
+            # ),
+            node=node,
             params_values=[
                 ActionParameterValue(
-                    parameter_name="value",
+                    name="value",
                     value="<sample_value>",
                 )
             ],

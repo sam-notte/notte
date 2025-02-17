@@ -1,44 +1,32 @@
-from abc import ABC, abstractmethod
+from pathlib import Path
 
-from typing_extensions import override
+import chevron
 
-from notte.common.parser import NotteParser
+from .parser import GufoParser
 
-
-class BasePrompt(ABC):
-    @abstractmethod
-    def system_rules(self) -> str:
-        pass
-
-    @abstractmethod
-    def output_format_rules(self) -> str:
-        pass
-
-    @abstractmethod
-    def select_action_rules(self) -> str:
-        pass
+system_prompt_file = Path(__file__).parent / "system.md"
 
 
-class NottePrompt(BasePrompt):
-    def __init__(self, parser: NotteParser):
-        self.parser: NotteParser = parser
+class GufoPrompt:
+    def __init__(self, parser: GufoParser):
+        self.parser: GufoParser = parser
+        self.system_prompt: str = system_prompt_file.read_text()
 
-    @override
-    def system_rules(self) -> str:
+    def system(self, task: str, url: str | None = None) -> str:
+        return chevron.render(self.system_prompt, {"task": task, "url": url or "the web"}, warn=True)
+
+    def env_rules(self) -> str:
         return f"""
 Hi there! I am the Notte web environment, and will help you navigate the internet.
-# How it works
+# How it works:
 * Provide me with a URL. I will respond with the actions you can take on that page.
 * You are NOT allowed to provide me with more than one URL.
 * Important: Make sure to use the **exact format** below when sending me a URL:
-
 {self.parser.example_format("observe")}
-
 > So, where would you like to go?
 """
 
-    @override
-    def output_format_rules(self) -> str:
+    def completion_rules(self) -> str:
         return f"""
 # How to format your answer when you're done
 ## Success answer
@@ -59,7 +47,6 @@ Format your answer as follows:
 {self.parser.example_format("error")}
 """
 
-    @override
     def select_action_rules(self) -> str:
         return f"""
 # Next Action Selection

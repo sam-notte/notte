@@ -32,8 +32,9 @@ from notte.pipe.preprocessing.dom.locate import locale_element
 
 @final
 class BrowserController:
-    def __init__(self, driver: BrowserDriver) -> None:
+    def __init__(self, driver: BrowserDriver, verbose: bool = False) -> None:
         self.driver: BrowserDriver = driver
+        self.verbose: bool = verbose
 
     @property
     def page(self) -> Page:
@@ -54,7 +55,10 @@ class BrowserController:
         await tab_page.bring_to_front()
         await tab_page.wait_for_load_state()
         self.page = tab_page
-        logger.info(f"🪦 Switched to tab {tab_index} with url: {tab_page.url} ({len(context.pages)} tabs in context)")
+        if self.verbose:
+            logger.info(
+                f"🪦 Switched to tab {tab_index} with url: {tab_page.url} ({len(context.pages)} tabs in context)"
+            )
 
     async def execute_browser_action(self, action: BaseAction) -> BrowserSnapshot | None:
         match action:
@@ -134,16 +138,19 @@ class BrowserController:
 
             case ListDropdownOptionsAction():
                 options = await dropdown_menu_options(self.page, action.selector.xpath_selector)
-                logger.info(f"Dropdown options: {options}")
+                if self.verbose:
+                    logger.info(f"Dropdown options: {options}")
                 raise NotImplementedError("ListDropdownOptionsAction is not supported in the browser controller")
             case _:
                 raise ValueError(f"Unsupported action type: {type(action)}")
         if press_enter:
-            logger.info(f"🪦 Pressing enter for action {action.id}")
+            if self.verbose:
+                logger.info(f"🪦 Pressing enter for action {action.id}")
             await self.driver.short_wait()
             await self.page.keyboard.press("Enter")
         if original_url != self.page.url:
-            logger.info(f"🪦 Page navigation detected for action {action.id} waiting for networkidle")
+            if self.verbose:
+                logger.info(f"🪦 Page navigation detected for action {action.id} waiting for networkidle")
             await self.driver.long_wait()
 
         # perform snapshot in execute
@@ -158,7 +165,10 @@ class BrowserController:
                 retval = await self.execute_interaction_action(action)
             case CompletionAction(success=success, answer=answer):
                 snapshot = await self.driver.snapshot()
-                logger.info(f"Completion action: status={'success' if success else 'failure'} with answer = {answer}")
+                if self.verbose:
+                    logger.info(
+                        f"Completion action: status={'success' if success else 'failure'} with answer = {answer}"
+                    )
                 await self.driver.close()
                 return snapshot
             case _:
@@ -167,7 +177,8 @@ class BrowserController:
         # the page has time to be created
         await self.driver.short_wait()
         if len(context.pages) != num_pages:
-            logger.info(f"🪦 Action {action.id} resulted in a new tab, switched to it...")
+            if self.verbose:
+                logger.info(f"🪦 Action {action.id} resulted in a new tab, switched to it...")
             await self.switch_tab(tab_index=-1)
         elif retval is not None:
             # only return snapshot if we didn't switch to a new tab

@@ -1,16 +1,12 @@
 import time
-from collections.abc import Awaitable
 
 from loguru import logger
 from patchright.async_api import Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 from pydantic import BaseModel
 
-from notte.actions.base import ExecutableAction
-from notte.actions.executor import ActionExecutor, get_executor
 from notte.browser.dom_tree import A11yNode, A11yTree, DomNode
 from notte.browser.pool import BrowserPool, BrowserResource
-from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import (
     BrowserSnapshot,
     SnapshotMetadata,
@@ -18,7 +14,6 @@ from notte.browser.snapshot import (
     ViewportData,
 )
 from notte.common.resource import AsyncResource
-from notte.errors.actions import ActionExecutionError
 from notte.errors.browser import (
     BrowserExpiredError,
     BrowserNotStartedError,
@@ -41,6 +36,7 @@ class BrowserConfig(BaseModel):
     short_wait_timeout: int = 500
     screenshot: bool | None = True
     empty_page_max_retry: int = 5
+    verbose: bool = False
 
 
 class PlaywrightResource:
@@ -48,12 +44,12 @@ class PlaywrightResource:
     def __init__(self, pool: BrowserPool | None, config: BrowserConfig) -> None:
         self.config: BrowserConfig = config
         self.shared_pool: bool = pool is not None
-        if not self.shared_pool:
+        if not self.shared_pool and config.verbose:
             logger.info(
                 "Using local browser pool. Con  sider using a shared pool for better "
                 "resource management and performance by setting `browser_pool=BrowserPool(verbose=True)`"
             )
-        self.browser_pool: BrowserPool = pool or BrowserPool()
+        self.browser_pool: BrowserPool = pool or BrowserPool(verbose=config.verbose)
         self._page: Page | None = None
         self._resource: BrowserResource | None = None
 
@@ -95,6 +91,10 @@ class BrowserDriver(AsyncResource):
     def page(self) -> Page:
         return self._playwright.page
 
+    @property
+    def _verbose(self) -> bool:
+        return self._playwright.config.verbose
+
     async def reset(self) -> None:
         await self.close()
         await self.start()
@@ -104,10 +104,12 @@ class BrowserDriver(AsyncResource):
         try:
             await self.page.wait_for_load_state("networkidle", timeout=self._playwright.config.goto_timeout)
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
+            if self._verbose:
+                logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
         await self.short_wait()
         # await self.page.wait_for_timeout(self._playwright.config.step_timeout)
-        logger.info(f"Waited for networkidle state for '{self.page.url}' in {time.time() - start_time:.2f}s")
+        if self._verbose:
+            logger.info(f"Waited for networkidle state for '{self.page.url}' in {time.time() - start_time:.2f}s")
 
     async def short_wait(self) -> None:
         await self.page.wait_for_timeout(self._playwright.config.short_wait_timeout)
@@ -138,14 +140,18 @@ class BrowserDriver(AsyncResource):
             else:
                 raise UnexpectedBrowserError(url=self.page.url) from e
         if dom_node is None or a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
-            logger.warning(f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms")
+            if self._verbose:
+                logger.warning(
+                    f"Empty page content for {self.page.url}. Retry in {self._playwright.config.step_timeout}ms"
+                )
             await self.page.wait_for_timeout(self._playwright.config.goto_retry_timeout)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
         take_screenshot = screenshot if screenshot is not None else self._playwright.config.screenshot
         try:
             snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
+            if self._verbose:
+                logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
 
         return BrowserSnapshot(
@@ -202,70 +208,4 @@ class BrowserDriver(AsyncResource):
         except Exception as e:
             raise PageLoadingError(url=url) from e
         await self.long_wait()
-        return await self.snapshot()
-
-    async def handle_possible_new_tab(
-        self,
-        action_executor: ActionExecutor,
-    ) -> tuple[bool, Page | None]:
-        """
-        Executes an action and handles potential new tab creation.
-
-        Args:
-            page: Current page
-            action: Async function to execute that might open a new tab
-            timeout: Maximum time to wait for new tab in milliseconds
-
-        Returns:
-            Tuple of (action result, active page to use for next actions)
-        """
-        try:
-            # Start listening for new pages
-            new_page_promise: Awaitable[Page] = self.page.context.wait_for_event(
-                "page", timeout=self._playwright.config.step_timeout
-            )
-
-            # Execute the action that might open a new tab
-            success = await action_executor(self.page)
-
-            try:
-                # Wait to see if a new page was created
-                new_page: Page = await new_page_promise
-                await new_page.wait_for_load_state()
-                return success, new_page
-            except TimeoutError:
-                # No new page was created, continue with current page
-                return success, None
-
-        except TimeoutError:
-            # No new page was created, continue with current page
-            return False, None
-
-    async def execute_action(
-        self,
-        action: ExecutableAction,
-        context: ProcessedBrowserSnapshot,
-        enter: bool = False,
-    ) -> BrowserSnapshot:
-        """Execute action in async mode"""
-        if not self.page:
-            raise BrowserNotStartedError()
-        if self.page.url != context.snapshot.metadata.url:
-            raise ActionExecutionError(
-                action_id=action.id,
-                url=self.page.url,
-                reason=(
-                    "browser is not on the correct page. Use `goto` to navigate to "
-                    f"{context.snapshot.metadata.url} and retry the action execution."
-                ),
-            )
-        action_executor = get_executor(action)
-        is_success = await action_executor(self.page)
-        if not is_success:
-            logger.error(f"Execution code that failed: {action.code}")
-            raise ActionExecutionError(action_id=action.id, url=self.page.url)
-        # TODO: find a better way to wait for the page to be updated
-        await self.short_wait()
-        if enter:
-            return await self.press("Enter")
         return await self.snapshot()

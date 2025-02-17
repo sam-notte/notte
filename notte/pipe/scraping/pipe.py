@@ -9,7 +9,8 @@ from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.data.space import DataSpace
 from notte.llms.service import LLMService
 from notte.pipe.rendering.pipe import DomNodeRenderingConfig, DomNodeRenderingType
-from notte.pipe.scraping.complex import ComplexScrapingPipe
+from notte.pipe.scraping.images import ImageScrapingPipe
+from notte.pipe.scraping.llm_scraping import LlmDataScrapingPipe
 from notte.pipe.scraping.schema import SchemaScrapingPipe
 from notte.pipe.scraping.simple import SimpleScrapingPipe
 from notte.sdk.types import ScrapeParams
@@ -17,11 +18,11 @@ from notte.sdk.types import ScrapeParams
 
 class ScrapingType(StrEnum):
     SIMPLE = "simple"
-    COMPLEX = "complex"
+    LLM_EXTRACT = "llm_extract"
 
 
 class ScrapingConfig(BaseModel):
-    type: ScrapingType = ScrapingType.COMPLEX
+    type: ScrapingType = ScrapingType.LLM_EXTRACT
     rendering: DomNodeRenderingConfig = DomNodeRenderingConfig(
         type=DomNodeRenderingType.MARKDOWN,
         include_ids=False,
@@ -50,44 +51,67 @@ class DataScrapingPipe:
         self,
         llmserve: LLMService,
         browser: BrowserDriver,
+        config: ScrapingConfig,
     ) -> None:
-        self.complex_pipe = ComplexScrapingPipe(llmserve=llmserve, browser=browser)
+        self.llm_pipe = LlmDataScrapingPipe(llmserve=llmserve, config=config.rendering)
         self.schema_pipe = SchemaScrapingPipe(llmserve=llmserve)
+        self.image_pipe = ImageScrapingPipe(browser=browser, verbose=config.rendering.verbose)
+        self.config: ScrapingConfig = config
+
+    def get_scraping_type(self, params: ScrapeParams) -> ScrapingType:
+        # use_llm has priority over config.type
+        if params.use_llm is not None:
+            if self.config.rendering.verbose:
+                logger.info(f"📄 User override data scraping type: use_llm={params.use_llm}")
+            return ScrapingType.LLM_EXTRACT if params.use_llm else ScrapingType.SIMPLE
+        # otherwise, use config.type
+        if params.requires_schema():
+            return ScrapingType.SIMPLE
+        return self.config.type
 
     async def forward(
         self,
         context: ProcessedBrowserSnapshot,
-        config: ScrapingConfig,
         params: ScrapeParams,
     ) -> DataSpace:
-        match config.type:
+        match self.get_scraping_type(params):
             case ScrapingType.SIMPLE:
-                logger.info("📀 Scraping page with simple scraping pipe")
+                if self.config.rendering.verbose:
+                    logger.info("📀 Scraping page with simple scraping pipe")
                 data = SimpleScrapingPipe.forward(context, params.scrape_links)
-            case ScrapingType.COMPLEX:
-                logger.info("📀 Scraping page with complex/LLM-based scraping pipe")
-                data = await self.complex_pipe.forward(
+            case ScrapingType.LLM_EXTRACT:
+                if self.config.rendering.verbose:
+                    logger.info("📀 Scraping page with complex/LLM-based scraping pipe")
+                data = self.llm_pipe.forward(
                     context,
                     only_main_content=params.only_main_content,
-                    scrape_images=params.scrape_images,
-                    config=config.update_rendering(params),
-                    max_tokens=config.max_tokens,
+                    max_tokens=self.config.max_tokens,
                 )
-        logger.info(f"📄 Extracted page as markdown\n: {data.markdown}\n")
+        if self.config.rendering.verbose:
+            logger.info(f"📀 Extracted page as markdown\n: {data.markdown}\n")
+        # scrape images if required
+        if params.scrape_images:
+            if self.config.rendering.verbose:
+                logger.info("🏞️ Scraping images with image pipe")
+            data.images = await self.image_pipe.forward(context)
+
+        # scrape structured data if required
         if params.requires_schema() and data.markdown is not None:
+            if self.config.rendering.verbose:
+                logger.info("🎞️ Structuring data with schema pipe")
             data.structured = self.schema_pipe.forward(
                 url=context.snapshot.metadata.url,
                 document=data.markdown,
                 response_format=params.response_format,
                 instructions=params.instructions,
-                max_tokens=config.max_tokens,
+                max_tokens=self.config.max_tokens,
+                verbose=self.config.rendering.verbose,
             )
         return data
 
     async def forward_async(
         self,
         context: ProcessedBrowserSnapshot,
-        config: ScrapingConfig,
         params: ScrapeParams,
     ) -> DataSpace:
-        return await self.forward(context, config, params)
+        return await self.forward(context, params)

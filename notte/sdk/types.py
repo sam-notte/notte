@@ -1,8 +1,9 @@
 import datetime as dt
+from base64 import b64encode
 from collections.abc import Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model, field_validator
 from typing_extensions import TypedDict
 
 from notte.actions.base import Action, BrowserAction
@@ -101,7 +102,7 @@ class SessionResponseDict(TypedDict, total=False):
 # ############################################################
 
 
-class PaginationObserveRequestDict(TypedDict, total=False):
+class PaginationParamsDict(TypedDict, total=False):
     min_nb_actions: int | None
     max_nb_actions: int
 
@@ -133,16 +134,21 @@ class ObserveRequest(SessionRequest, PaginationParams):
     )
 
 
-class ObserveRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
+class ObserveRequestDict(SessionRequestDict, PaginationParamsDict, total=False):
     url: str | None
 
 
-class ScrapeRequestDict(SessionRequestDict, total=False):
+class ScrapeParamsDict(TypedDict, total=False):
     scrape_images: bool
     scrape_links: bool
     only_main_content: bool
     response_format: type[BaseModel] | None
     instructions: str | None
+    use_llm: bool | None
+
+
+class ScrapeRequestDict(SessionRequestDict, ScrapeParamsDict, total=False):
+    pass
 
 
 class ScrapeParams(BaseModel):
@@ -168,8 +174,79 @@ class ScrapeParams(BaseModel):
     ] = None
     instructions: Annotated[str | None, Field(description="The instructions to use for the scrape.")] = None
 
+    use_llm: Annotated[
+        bool | None,
+        Field(
+            description=(
+                "Whether to use an LLM for the extraction process. This will result in a longer response time but a"
+                " better accuracy. If not provided, the default value is the same as the NotteEnv config."
+            )
+        ),
+    ] = None
+
     def requires_schema(self) -> bool:
         return self.response_format is not None or self.instructions is not None
+
+    def scrape_params_dict(self) -> ScrapeParamsDict:
+        return ScrapeParamsDict(
+            scrape_images=self.scrape_images,
+            scrape_links=self.scrape_links,
+            only_main_content=self.only_main_content,
+            response_format=self.response_format,
+            instructions=self.instructions,
+            use_llm=self.use_llm,
+        )
+
+    @field_validator("response_format", mode="before")
+    @classmethod
+    def convert_response_format(cls, value: dict[str, Any] | type[BaseModel] | None) -> type[BaseModel] | None:
+        """
+        Creates a Pydantic model from a given JSON Schema.
+
+        Args:
+            schema_name: The name of the model to be created.
+            schema_json: The JSON Schema definition.
+
+        Returns:
+            The dynamically created Pydantic model class.
+        """
+        if value is None:
+            return None
+        if isinstance(value, type) and issubclass(value, BaseModel):
+            return value
+        if not isinstance(value, dict):
+            raise ValueError(f"response_format must be a BaseModel or a dict but got: {type(value)} : {value}")
+        if len(value.keys()) == 0:
+            return None
+
+        # Map JSON Schema types to Pydantic types
+        type_mapping = {
+            "string": str,
+            "integer": int,
+            "number": float,
+            "boolean": bool,
+            "array": list,
+            "object": dict,
+            "null": None,
+        }
+        if "properties" not in value:
+            raise ValueError("response_format must contain a 'properties' key")
+
+        if "$defs" in value:
+            raise ValueError("response_format currently does not support $defs")
+
+        # Extract field definitions with type annotations
+        field_definitions = {}
+        for field_name, field_schema in value["properties"].items():
+            field_type = field_schema.get("type")
+            if field_type:
+                python_type = type_mapping.get(field_type)
+                if python_type:
+                    field_definitions[field_name] = (python_type, ...)
+
+        model_name = str(value.get("title", "__DynamicResponseFormat"))
+
+        return create_model(model_name, **field_definitions)  # type: ignore
 
 
 class ScrapeRequest(ObserveRequest, ScrapeParams):
@@ -184,7 +261,7 @@ class StepRequest(SessionRequest, PaginationParams):
     enter: Annotated[bool | None, Field(description="Whether to press enter after inputting the value")] = None
 
 
-class StepRequestDict(SessionRequestDict, PaginationObserveRequestDict, total=False):
+class StepRequestDict(SessionRequestDict, PaginationParamsDict, total=False):
     action_id: str
     value: str | None
     enter: bool | None
@@ -221,6 +298,12 @@ class ObserveResponse(BaseModel):
     screenshot: bytes | None
     data: DataSpace | None
     progress: TrajectoryProgress | None
+
+    model_config = {
+        "json_encoders": {
+            bytes: lambda v: b64encode(v).decode("utf-8") if v else None,
+        }
+    }
 
     @staticmethod
     def from_obs(

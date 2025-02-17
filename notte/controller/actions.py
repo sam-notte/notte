@@ -15,7 +15,7 @@ from notte.browser.dom_tree import NodeSelectors
 
 ActionStatus = Literal["valid", "failed", "excluded"]
 AllActionStatus = ActionStatus | Literal["all"]
-ActionRole = Literal["link", "button", "input", "special", "image", "other"]
+ActionRole = Literal["link", "button", "input", "special", "image", "option", "misc", "other"]
 AllActionRole = ActionRole | Literal["all"]
 
 
@@ -71,8 +71,13 @@ class BaseAction(BaseModel, ABC):
             "press_enter",
             "option_selector",
             "text_label",
+            # executable action fields
+            "params",
+            "code",
+            "status",
+            "locator",
         }
-        if "selector" in cls.model_fields:
+        if "selector" in cls.model_fields or "locator" in cls.model_fields:
             fields.remove("id")
         return fields
 
@@ -87,12 +92,17 @@ class BaseAction(BaseModel, ABC):
         """Return the message to be displayed when the action is executed."""
         return f"🚀 Successfully executed action: {self.description}"
 
-    def dump_dict(self) -> dict[str, dict[str, Any]]:
-        return {self.name(): self.model_dump(exclude=self.non_agent_fields())}
+    def dump_dict(self, name: bool = True) -> dict[str, dict[str, Any]]:
+        body = self.model_dump(exclude=self.non_agent_fields())
+        if name:
+            return {self.name(): body}
+        return body
 
-    def dump_str(self) -> str:
+    def dump_str(self, name: bool = True) -> str:
         params = json.dumps(self.model_dump(exclude=self.non_agent_fields()))
-        return "{" + f'"{self.name()}": {params}' + "}"
+        if name:
+            return "{" + f'"{self.name()}": {params}' + "}"
+        return params
 
 
 class BrowserAction(BaseAction):

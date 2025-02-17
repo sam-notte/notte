@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field
 
-from examples.simple.types import StepAgentOutput
+from examples.falco.types import StepAgentOutput
 from notte.browser.observation import Observation
-from notte.common.safe_executor import ExecutionStatus
+from notte.common.tools.safe_executor import ExecutionStatus
 from notte.controller.actions import BaseAction, GotoAction
 
 ExecutionStepStatus = ExecutionStatus[BaseAction, Observation]

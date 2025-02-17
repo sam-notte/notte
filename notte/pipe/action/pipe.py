@@ -24,6 +24,7 @@ class MainActionSpaceConfig(BaseModel):
     type: ActionSpaceType = ActionSpaceType.LLM_TAGGING
     llm_tagging: LlmActionSpaceConfig = LlmActionSpaceConfig()
     simple: SimpleActionSpaceConfig = SimpleActionSpaceConfig()
+    verbose: bool = False
 
 
 class MainActionSpacePipe(BaseActionSpacePipe):
@@ -42,8 +43,10 @@ class MainActionSpacePipe(BaseActionSpacePipe):
     ) -> BaseActionSpace:
         match self.config.type:
             case ActionSpaceType.LLM_TAGGING:
-                logger.info("📄 Running LLM tagging action listing")
+                if self.config.verbose:
+                    logger.info("🏷️ Running LLM tagging action listing")
                 return self.llm_pipe.forward(context, previous_action_list, pagination)  # type: ignore
             case ActionSpaceType.SIMPLE:
-                logger.info("📄 Running simple action listing")
+                if self.config.verbose:
+                    logger.info("📋 Running simple action listing")
                 return self.simple_pipe.forward(context, previous_action_list, pagination)

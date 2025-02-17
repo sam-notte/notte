@@ -4,17 +4,14 @@ from patchright.async_api import Locator, Page
 from notte.browser.dom_tree import DomNode
 from notte.browser.driver import BrowserDriver
 from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
-from notte.data.space import DataSpace, ImageCategory, ImageData
-from notte.errors.llm import LLMnoOutputCompletionError
+from notte.data.space import ImageCategory, ImageData
 from notte.errors.processing import InvalidInternalCheckError
-from notte.llms.engine import StructuredContent
-from notte.llms.service import LLMService
-from notte.pipe.preprocessing.a11y.pipe import A11yPreprocessingPipe
-from notte.pipe.rendering.pipe import DomNodeRenderingConfig, DomNodeRenderingPipe
+from notte.pipe.preprocessing.dom.locate import locale_element
+from notte.pipe.resolution.simple_resolution import SimpleActionResolutionPipe
 from notte.utils.image import construct_image_url
 
 
-async def classify_image_element(locator: Locator) -> ImageCategory:
+async def classify_image_element(node: DomNode, locator: Locator | None = None) -> ImageCategory | None:
     """Classify an image or SVG element.
 
     Args:
@@ -23,12 +20,21 @@ async def classify_image_element(locator: Locator) -> ImageCategory:
     Returns:
         tuple[ImageType, str | None]: Element classification and source/content
     """
-    # First check if it's an SVG
-    tag_name = await locator.evaluate("el => el.tagName.toLowerCase()")
+    if node.attributes is not None:
+        tag_name: str = node.attributes.tag_name
+    else:
+        if locator is None:
+            return None
+        # First check if it's an SVG
+        tag_name = await locator.evaluate("el => el.tagName.toLowerCase()")
 
     if tag_name == "svg":
+        if locator is None:
+            return None
         return await classify_svg(locator)
     else:
+        if locator is None:
+            return None
         return await classify_raster_image(locator)
 
 
@@ -126,6 +132,11 @@ async def resolve_image_conflict(page: Page, node: DomNode, node_id: str) -> Loc
             check="Node with id {node_id} not found in graph",
             dev_advice="Check the `resolve_image_conflict` method for more information.",
         )
+    selectors = SimpleActionResolutionPipe.resolve_selectors(image_node, verbose=False)
+    locator = await locale_element(page, selectors)
+    if (await locator.count()) == 1:
+        return locator
+
     if len(image_node.text) > 0:
         locators = await page.get_by_role(image_node.get_role_str(), name=image_node.text).all()  # type: ignore
         if len(locators) == 1:
@@ -143,7 +154,20 @@ async def resolve_image_conflict(page: Page, node: DomNode, node_id: str) -> Loc
     return None
 
 
-async def get_image_src(locator: Locator) -> str | None:
+async def get_image_src(node: DomNode, locator: Locator | None = None) -> str | None:
+    # first check dom node
+    if node.attributes is not None:
+        if node.attributes.src is not None:
+            return node.attributes.src
+        if node.attributes.href is not None:
+            return node.attributes.href
+        if node.attributes.data_src is not None:
+            return node.attributes.data_src
+        if node.attributes.data_srcset is not None:
+            return node.attributes.data_srcset
+
+    if locator is None:
+        return None
     # Try different common image source attributes
     for attr in ["src", "data-src", "srcset"]:
         src: str | None = await locator.get_attribute(attr)
@@ -161,87 +185,31 @@ async def get_image_src(locator: Locator) -> str | None:
     return src
 
 
-class ComplexScrapingPipe:
+class ImageScrapingPipe:
     """
-    Data scraping pipe that scrapes data from the page
+    Data scraping pipe that scrapes images from the page
     """
 
-    def __init__(self, llmserve: LLMService, browser: BrowserDriver) -> None:
-        self.llmserve: LLMService = llmserve
+    def __init__(self, browser: BrowserDriver, verbose: bool = False) -> None:
         self.browser: BrowserDriver = browser
+        self.verbose: bool = verbose
 
-    def _render_node(
-        self,
-        context: ProcessedBrowserSnapshot,
-        config: DomNodeRenderingConfig,
-        max_tokens: int,
-    ) -> str:
-        # TODO: add DIVID & CONQUER once this is implemented
-        document = DomNodeRenderingPipe.forward(
-            node=context.node,
-            config=config,
-        )
-        if len(self.llmserve.tokenizer.encode(document)) <= max_tokens:
-            return document
-        # too many tokens, use simple AXT
-        logger.warning(
-            "Document too long for data extraction: "
-            f" {len(self.llmserve.tokenizer.encode(document))} tokens => use Simple AXT instead"
-        )
-        short_snapshot = A11yPreprocessingPipe.forward(context.snapshot, tree_type="simple")
-        document = DomNodeRenderingPipe.forward(
-            node=short_snapshot.node,
-            config=config,
-        )
-        return document
-
-    async def forward(
-        self,
-        context: ProcessedBrowserSnapshot,
-        only_main_content: bool,
-        scrape_images: bool,
-        config: DomNodeRenderingConfig,
-        max_tokens: int,
-    ) -> DataSpace:
-
-        document = self._render_node(context, config, max_tokens)
-        # make LLM call
-        prompt = "only_main_content" if only_main_content else "all_data"
-        response = self.llmserve.completion(prompt_id=f"data-extraction/{prompt}", variables={"document": document})
-        if response.choices[0].message.content is None:  # type: ignore
-            raise LLMnoOutputCompletionError()
-        response_text = str(response.choices[0].message.content)  # type: ignore
-        # logger.debug(f"ℹ️ response text: {response_text}")
-        sc = StructuredContent(
-            outer_tag="data-extraction",
-            inner_tag="markdown",
-            fail_if_final_tag=False,
-            fail_if_inner_tag=False,
-        )
-        text = sc.extract(response_text)
-        return DataSpace(
-            markdown=text,
-            images=None if not scrape_images else await self._scrape_images(context),
-            structured=None,
-        )
-
-    async def _scrape_images(self, context: ProcessedBrowserSnapshot) -> list[ImageData]:
-        if self.browser is None:
-            logger.error("Images cannot be scraped without a browser")
-            return []
+    async def forward(self, context: ProcessedBrowserSnapshot) -> list[ImageData]:
         image_nodes = context.node.image_nodes()
         out_images: list[ImageData] = []
         for node in image_nodes:
             if node.id is not None:
                 locator = await resolve_image_conflict(self.browser.page, context.node, node.id)
-                if locator is None:
-                    logger.warning(f"No locator found for image node {node.id}")
-                    continue
                 # if image_src is None:
                 #     logger.warning(f"No src attribute found for image node {node.id}")
                 #     continue
-                category = await classify_image_element(locator)
-                image_src = await get_image_src(locator)
+                category = await classify_image_element(node, locator)
+                image_src = await get_image_src(node, locator)
+
+                if locator is None and (category is None or image_src is None):
+                    if self.verbose:
+                        logger.warning(f"No locator found for image node {node.id}")
+                    continue
                 out_images.append(
                     ImageData(
                         id=node.id,
