@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-from notte.browser.observation import Observation
 from pydantic import BaseModel
+
+from notte.browser.observation import Observation
 
 
 class PerceptionResult(BaseModel):
@@ -9,6 +10,10 @@ class PerceptionResult(BaseModel):
     actions: str
     data: str
     full: str
+
+    @classmethod
+    def empty(cls) -> "PerceptionResult":
+        return cls(metadata="", actions="", data="", full="")
 
 
 class BasePerception(ABC):

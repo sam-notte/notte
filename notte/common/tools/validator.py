@@ -16,7 +16,7 @@ If the task is unclear defined, you can let it pass.
 But if something is missing or the image does not show what was requested dont let it pass.
 Try to understand the page and help the model with suggestions like scroll, do x, ... to get the solution right.
 
-Task to validate: {{task}}.
+Task to validate: {{&task}}.
 
 Return a JSON object with 2 keys: `is_valid` and `reason`:
 - `is_valid` is a boolean that indicates if the output is correct.

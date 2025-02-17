@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import override
 
 from litellm import AllMessageValues
 from loguru import logger
+from typing_extensions import override
 
-from examples.falco.perception import FalcoPerception
 from notte.common.agent.config import AgentConfig
-from notte.common.agent.perception import BasePerception
 from notte.common.tools.conversation import Conversation
 from notte.common.tools.trajectory_history import (
     ExecutionStepStatus,
@@ -22,9 +20,11 @@ class BaseHistoryRenderer(ABC):
 
     Implements some sane defaults to render short history, and render some steps, but no main render_history method"""
 
+    config: AgentConfig
+
     @property
-    @abstractmethod
-    def max_error_length(self) -> int: ...
+    def max_error_length(self) -> int:
+        return self.config.max_error_length
 
     @abstractmethod
     def render_history(self, trajectory: TrajectoryHistory) -> list[AllMessageValues]:
@@ -74,9 +74,9 @@ THIS SHOULD BE THE LAST RESORT.
         include_ids: bool = False,
         include_data: bool = True,
     ) -> str:
-        action_msg = "\n".join(["  - " + result.input.dump_str() for result in step.results])
+        action_msg = "\n".join(["  - " + result.input.dump_str() for result, _ in step.results])
         status_msg = "\n".join(
-            ["  - " + self.render_step_result(result, include_ids, include_data) for result in step.results]
+            ["  - " + self.render_step_result(result, include_ids, include_data) for result, _ in step.results]
         )
         return f"""
 # Execution step {step_idx}
@@ -93,10 +93,8 @@ THIS SHOULD BE THE LAST RESORT.
 
 
 class CompressedHistRenderer(BaseHistoryRenderer):
-    def __init__(self, config: AgentConfig, perception: BasePerception):
+    def __init__(self, config: AgentConfig):
         self.config: AgentConfig = config
-        self.perception: BasePerception = perception
-        self.max_error_length: int = config.max_error_length
 
     @override
     def render_history(self, trajectory: TrajectoryHistory) -> list[AllMessageValues]:
@@ -111,10 +109,8 @@ class CompressedHistRenderer(BaseHistoryRenderer):
 
 class FullHistRenderer(BaseHistoryRenderer):
 
-    def __init__(self, config: AgentConfig, perception: BasePerception):
+    def __init__(self, config: AgentConfig):
         self.config: AgentConfig = config
-        self.perception: BasePerception = perception
-        self.max_error_length: int = config.max_error_length
 
     @override
     def render_history(self, trajectory: TrajectoryHistory) -> list[AllMessageValues]:
@@ -147,11 +143,8 @@ class FullHistRenderer(BaseHistoryRenderer):
 
 class DataHistoryRenderer(BaseHistoryRenderer):
 
-    def __init__(self, config: AgentConfig, perception: FalcoPerception, raw: bool | None = None):
+    def __init__(self, config: AgentConfig):
         self.config: AgentConfig = config
-        self.perception: FalcoPerception = perception
-        self.max_error_length: int = config.max_error_length
-        self.raw: bool | None = raw
 
     @override
     def render_history(self, trajectory: TrajectoryHistory) -> list[AllMessageValues]:
@@ -174,7 +167,7 @@ class DataHistoryRenderer(BaseHistoryRenderer):
                     continue
                 # add observation data to the conversation
                 obs = result.get()
-                if obs.has_data:
+                if obs.has_data():
                     conv.add_user_message(content=perception_result.data)
 
         return conv.messages()

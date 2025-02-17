@@ -4,7 +4,7 @@ from examples.falco.types import StepAgentOutput
 from notte.browser.observation import Observation
 from notte.common.agent.perception import PerceptionResult
 from notte.common.tools.safe_executor import ExecutionStatus
-from notte.controller.actions import BaseAction, GotoAction
+from notte.controller.actions import BaseAction
 
 ExecutionStepStatus = ExecutionStatus[BaseAction, Observation]
 
@@ -36,9 +36,9 @@ class TrajectoryHistory(BaseModel):
         else:
             self.steps[-1].results.append((step, perceived))
 
-    def last_obs(self) -> Observation | None:
+    def last_obs(self) -> tuple[Observation, PerceptionResult] | None:
         for step in self.steps[::-1]:
-            for step_result, _ in step.results[::-1]:
+            for step_result, perception in step.results[::-1]:
                 if step_result.success and step_result.output is not None:
-                    return step_result.output
+                    return (step_result.output, perception)
         return None

@@ -8,6 +8,7 @@ from notte.browser.observation import Observation
 from notte.browser.pool import BrowserPool
 from notte.common.agent.base import BaseAgent
 from notte.common.agent.config import AgentConfig
+from notte.common.agent.perception import PerceptionResult
 from notte.common.agent.types import AgentOutput
 from notte.common.tools.conversation import Conversation
 from notte.common.tools.safe_executor import ExecutionStatus, SafeActionExecutor
@@ -82,15 +83,15 @@ class FalcoAgent(BaseAgent):
 
         match self.history_type:
             case HistoryType.COMPRESSED:
-                self.history_renderer = CompressedHistRenderer(self.config, self.perception)
+                self.history_renderer = CompressedHistRenderer(self.config)
             case HistoryType.FULL_CONVERSATION:
-                self.history_renderer = FullHistRenderer(self.config, self.perception)
+                self.history_renderer = FullHistRenderer(self.config)
             case HistoryType.SHORT_OBSERVATIONS:
-                self.history_renderer = DataHistoryRenderer(self.config, self.perception)
+                self.history_renderer = DataHistoryRenderer(self.config)
             case HistoryType.SHORT_OBSERVATIONS_WITH_RAW_DATA:
-                self.history_renderer = DataHistoryRenderer(self.config, self.perception, raw=True)
+                self.history_renderer = DataHistoryRenderer(self.config)
             case HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA:
-                self.history_renderer = DataHistoryRenderer(self.config, self.perception, raw=False)
+                self.history_renderer = DataHistoryRenderer(self.config)
 
         self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=config.max_error_length)
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(
@@ -122,19 +123,25 @@ class FalcoAgent(BaseAgent):
         # get history messages
         self.conv.add_messages(self.history_renderer.render_history(self.trajectory))
 
-        # todo: implement it back
+        # add last perception
         last_valid_obs = self.trajectory.last_obs()
-        if last_valid_obs is not None and self.history_type is not HistoryType.FULL_CONVERSATION:
-            self.conv.add_user_message(
-                content=self.perception.perceive(last_valid_obs),
-                image=last_valid_obs.screenshot if self.config.include_screenshot else None,
-            )
+        if last_valid_obs is None or self.history_type is HistoryType.FULL_CONVERSATION:
+            return self.conv.messages()
+
+        last_obs, last_perception = last_valid_obs
+
+        self.conv.add_user_message(
+            content=last_perception.full,
+            image=last_obs.screenshot if self.config.include_screenshot else None,
+        )
+
+        logger.info(f"🔍 Latest step perception:\n{last_perception.full}")
         return self.conv.messages()
 
     async def step(self, task: str) -> CompletionAction | None:
         """Execute a single step of the agent"""
         messages = self.get_messages(task)
-        logger.info(f"🔍 LLM messages:\n{messages}")
+        # logger.info(f"🔍 LLM messages:\n{messages}")
         response: StepAgentOutput = self.llm.structured_completion(messages, response_format=StepAgentOutput)
         logger.info(f"🔍 LLM response:\n{response}")
         self.trajectory.add_output(response)
@@ -144,9 +151,9 @@ class FalcoAgent(BaseAgent):
         # Execute the actions
         for action in response.get_actions(self.config.max_actions_per_step):
 
+            # execute, perceive, add to history
             result = await self.step_executor.execute(action)
             perceived_env = self.perception.perceive(result.get())
-
             self.trajectory.add_step(result, perceived_env)
 
             step_msg = self.history_renderer.render_step_result(result, include_ids=True)
@@ -198,7 +205,8 @@ class FalcoAgent(BaseAgent):
                             output=None,
                             success=False,
                             message=failed_val_msg,
-                        )
+                        ),
+                        PerceptionResult.empty(),
                     )
 
         error_msg = f"Failed to solve task in {self.env.config.max_steps} steps"
