@@ -94,6 +94,10 @@ class Conversation:
         self.history.append(cached_msg)
         self._total_tokens += token_count
 
+    def add_messages(self, messages: list[AllMessageValues]) -> None:
+        for msg in messages:
+            self._add_message(msg)
+
     def add_system_message(self, content: str) -> None:
         """Add a system message to the conversation"""
         self._add_message(ChatCompletionSystemMessage(role="system", content=content))

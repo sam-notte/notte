@@ -49,7 +49,7 @@ Here are the available actions you can take on this page:
 """
 
     @override
-    def perceive(self, obs: Observation) -> str:
+    def perceive_full(self, obs: Observation) -> str:
         if not obs.has_data() and not obs.has_space():
             raise ValueError("No data or actions found")
         return f"""

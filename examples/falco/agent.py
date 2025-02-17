@@ -16,6 +16,12 @@ from notte.common.tools.validator import CompletionValidator
 from notte.controller.actions import BaseAction, CompletionAction
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
+from notte.pipe.rendering.history import (
+    BaseHistoryRenderer,
+    CompressedHistRenderer,
+    DataHistoryRenderer,
+    FullHistRenderer,
+)
 
 from .perception import FalcoPerception
 from .prompt import FalcoPrompt
@@ -67,11 +73,25 @@ class FalcoAgent(BaseAgent):
             config=config.env,
             pool=pool,
         )
+        self.perception: FalcoPerception = FalcoPerception()
         self.validator: CompletionValidator = CompletionValidator(llm=self.llm, perception=self.perception)
         self.prompt: FalcoPrompt = FalcoPrompt(max_actions_per_step=config.max_actions_per_step)
         self.conv: Conversation = Conversation(max_tokens=config.max_history_tokens, convert_tools_to_assistant=True)
-        self.perception: FalcoPerception = FalcoPerception()
         self.history_type: HistoryType = config.history_type
+        self.history_renderer: BaseHistoryRenderer
+
+        match self.history_type:
+            case HistoryType.COMPRESSED:
+                self.history_renderer = CompressedHistRenderer(self.config, self.perception)
+            case HistoryType.FULL_CONVERSATION:
+                self.history_renderer = FullHistRenderer(self.config, self.perception)
+            case HistoryType.SHORT_OBSERVATIONS:
+                self.history_renderer = DataHistoryRenderer(self.config, self.perception)
+            case HistoryType.SHORT_OBSERVATIONS_WITH_RAW_DATA:
+                self.history_renderer = DataHistoryRenderer(self.config, self.perception, raw=True)
+            case HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA:
+                self.history_renderer = DataHistoryRenderer(self.config, self.perception, raw=False)
+
         self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=config.max_error_length)
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(
             func=self.env.act,
@@ -98,41 +118,11 @@ class FalcoAgent(BaseAgent):
         system_msg, task_msg = self.prompt.system(), self.prompt.task(task)
         self.conv.add_system_message(content=system_msg)
         self.conv.add_user_message(content=task_msg)
-        # just for logging
-        traj_msg = self.trajectory.perceive()
-        logger.info(f"🔍 Trajectory history:\n{traj_msg}")
-        # add trajectory to the conversation
-        match self.history_type:
-            case HistoryType.COMPRESSED:
-                self.conv.add_user_message(content=traj_msg)
-            case _:
-                if len(self.trajectory.steps) == 0:
-                    self.conv.add_user_message(content=self.trajectory.start_rules())
-                for step in self.trajectory.steps:
-                    # TODO: choose if we want this to be an assistant message or a tool message
-                    # self.conv.add_tool_message(step.agent_response, tool_id="step")
-                    self.conv.add_assistant_message(step.agent_response.model_dump_json(exclude_none=True))
-                    for result in step.results:
-                        short_step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
-                        self.conv.add_user_message(content=short_step_msg)
-                        if not result.success:
-                            continue
-                        # add observation data to the conversation
-                        obs = result.get()
-                        match (self.history_type, obs.has_data()):
-                            case (HistoryType.FULL_CONVERSATION, _):
-                                self.conv.add_user_message(
-                                    content=self.perception.perceive(obs),
-                                    image=obs.screenshot if self.config.include_screenshot else None,
-                                )
-                            case (HistoryType.SHORT_OBSERVATIONS_WITH_RAW_DATA, True):
-                                # add data if data was scraped
-                                self.conv.add_user_message(content=self.perception.perceive_data(obs, raw=True))
-                            case (HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA, True):
-                                self.conv.add_user_message(content=self.perception.perceive_data(obs, raw=False))
-                            case _:
-                                pass
 
+        # get history messages
+        self.conv.add_messages(self.history_renderer.render_history(self.trajectory))
+
+        # todo: implement it back
         last_valid_obs = self.trajectory.last_obs()
         if last_valid_obs is not None and self.history_type is not HistoryType.FULL_CONVERSATION:
             self.conv.add_user_message(
@@ -153,9 +143,13 @@ class FalcoAgent(BaseAgent):
             return response.output
         # Execute the actions
         for action in response.get_actions(self.config.max_actions_per_step):
+
             result = await self.step_executor.execute(action)
-            self.trajectory.add_step(result)
-            step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
+            perceived_env = self.perception.perceive(result.get())
+
+            self.trajectory.add_step(result, perceived_env)
+
+            step_msg = self.history_renderer.render_step_result(result, include_ids=True)
             if not result.success:
                 logger.error(f"🚨 {step_msg}")
                 # stop the loop

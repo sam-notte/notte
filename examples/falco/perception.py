@@ -8,6 +8,7 @@ from notte.common.agent.perception import BasePerception
 
 @final
 class FalcoPerception(BasePerception):
+
     def __init__(
         self,
         include_step_info: bool = True,
@@ -32,7 +33,7 @@ You will see the following only once. If you need to remember it and you dont kn
 """
 
     @override
-    def perceive(self, obs: Observation) -> str:
+    def perceive_full(self, obs: Observation) -> str:
         return f"""
 {self.perceive_metadata(obs)}
 Interactive elements from current page view:
