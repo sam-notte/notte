@@ -91,3 +91,4 @@ jobs:
           path: |
             dist/*.txt
             dist/results.html
+            dist/results.jsonl
