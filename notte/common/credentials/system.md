@@ -1,0 +1,1 @@
+- If you are asked to signin/signup to continue, fill the parameters with login@login_page.com / login_password

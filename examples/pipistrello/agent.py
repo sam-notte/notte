@@ -11,10 +11,10 @@ from notte.browser.observation import Observation
 from notte.common.agent.base import BaseAgent
 from notte.common.agent.config import AgentConfig
 from notte.common.agent.types import AgentOutput
+from notte.common.credentials.models import VaultInterface
 from notte.common.tools.conversation import Conversation
 from notte.common.tracer import LlmUsageDictTracer
 from notte.controller.actions import CompletionAction
-from notte.credentials.models import VaultInterface
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
 
@@ -22,7 +22,7 @@ _ = load_dotenv()
 
 
 class PipistrelloAgentConfig(AgentConfig):
-    env: NotteEnvConfig = NotteEnvConfig.use_llm()
+    env: NotteEnvConfig = NotteEnvConfig().use_llm()
 
 
 class PipistrelloAgent(BaseAgent):
@@ -35,9 +35,9 @@ class PipistrelloAgent(BaseAgent):
         self.tracer: LlmUsageDictTracer = LlmUsageDictTracer()
         self.config: AgentConfig = config
         self.llm: LLMEngine = LLMEngine(model=config.reasoning_model)
-        self.env: NotteEnv = NotteEnv(config=config.env, vault=vault)
+        self.env: NotteEnv = NotteEnv(config=config.env)
         self.parser: PipistrelloParser = PipistrelloParser()
-        self.prompt: PipistrelloPrompt = PipistrelloPrompt(self.parser)
+        self.prompt: PipistrelloPrompt = PipistrelloPrompt(self.parser, has_vault=vault is not None)
         self.perception: PipistrelloPerception = PipistrelloPerception()
         self.conv: Conversation = Conversation()
         self.vault: VaultInterface | None = vault
@@ -55,40 +55,6 @@ class PipistrelloAgent(BaseAgent):
             llm_usage=self.tracer.usage,
         )
 
-    async def is_login_page(self) -> bool:
-        """
-        Use LLM to determine if the current page is a login page.
-        """
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant that determines if a webpage is a login page."
-                    "Respond with only 'true' or 'false'."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Based on the following webpage content, is this a login page? "
-                    "Only respond with 'true' or 'false'.\n\n"
-                    f"{self.env.context.snapshot.text}"
-                ),
-            },
-        ]
-
-        response = (
-            self.llm.completion(
-                messages=messages,
-                model=self.config.reasoning_model,
-            )
-            .choices[0]
-            .message.content.lower()
-            .strip()
-        )
-
-        return response == "true"
-
     async def step(self) -> CompletionAction | None:
         logger.info(f"🤖 LLM prompt:\n{self.conv.messages()}")
         response: str = self.llm.single_completion(self.conv.messages())
@@ -103,7 +69,21 @@ class PipistrelloAgent(BaseAgent):
         if parsed_response.completion is not None:
             return parsed_response.completion
 
+        print("parsed_response.action")
+        print(parsed_response.action)
+
+        if self.vault is not None and hasattr(parsed_response.action, "params_values"):
+            current_url = self.env.context.snapshot.metadata.url
+            print("params_values")
+            print(parsed_response.action.params_values)
+            parsed_response.action.params_values = self.vault.replace_placeholder_credentials(
+                current_url, parsed_response.action.params_values
+            )
+            print("new params_values")
+            print(parsed_response.action.params_values)
+
         obs: Observation = await self.env.act(parsed_response.action)
+
         text_obs = self.perception.perceive(obs)
         self.conv.add_user_message(
             content=f"""
@@ -121,20 +101,16 @@ class PipistrelloAgent(BaseAgent):
         logger.info(f"🚀 starting agent with task: {task} and url: {url}")
         self.conv.add_system_message(self.prompt.system(task, url))
         self.conv.add_user_message(self.prompt.env_rules())
-
         async with self.env:
+
             for i in range(self.config.env.max_steps):
                 logger.info(f"> step {i}: looping in")
                 output = await self.step()
                 if output is not None:
-                    if output.success and self.vault is not None:
-                        # Store credentials if task was successful
-                        current_url = self.env.context.snapshot.metadata.url
-                        self.vault.add_credentials(current_url, "username", "password")
-                    status = "😎 task completed successfully" if output.success else "👿 task failed"
+                    status = "😎 task completed sucessfully" if output.success else "👿 task failed"
                     logger.info(f"{status} with answer: {output.answer}")
                     return self.output(output.answer, output.success)
-
+            # If the task is not done, raise an error
             error_msg = f"Failed to solve task in {self.config.env.max_steps} steps"
             logger.info(f"🚨 {error_msg}")
             return self.output(error_msg, False)

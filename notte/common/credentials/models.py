@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, Optional, Protocol
+from typing import Optional, Protocol
+
+from notte.actions.base import ActionParameterValue
 
 
 @dataclass
@@ -23,7 +25,7 @@ class VaultInterface(Protocol):
         ...
 
     def replace_placeholder_credentials(
-        self, url: str | None, params: Dict[str, str] | str | None
-    ) -> Dict[str, str] | str | None:
+        self, url: str | None, params: list[ActionParameterValue] | None
+    ) -> list[ActionParameterValue] | None:
         """Replace placeholder credentials with actual credentials"""
         ...

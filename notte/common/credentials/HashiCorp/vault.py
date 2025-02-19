@@ -1,7 +1,9 @@
-from typing import Dict, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from hvac import Client
+
+from notte.actions.base import ActionParameterValue
 
 from ..models import Credentials, VaultInterface
 
@@ -53,10 +55,10 @@ class HashiCorpVault(VaultInterface):
         )
 
     def replace_placeholder_credentials(
-        self, url: str | None, params: Dict[str, str] | str | None
-    ) -> Dict[str, str] | str | None:
+        self, url: str | None, params: list[ActionParameterValue] | None
+    ) -> list[ActionParameterValue] | None:
         """Replace placeholder credentials with actual credentials"""
-        if not params or not isinstance(params, dict):
+        if not params:
             return params
 
         if not url:
@@ -68,11 +70,15 @@ class HashiCorpVault(VaultInterface):
             return params
 
         # Replace placeholder values with actual credentials
-        new_params = params.copy()
-        for key, value in new_params.items():
-            if value == "login@login_page.com":
-                new_params[key] = creds.username
-            elif value == "login_password":
-                new_params[key] = creds.password
+        new_params = []
+        for param in params:
+            new_param = ActionParameterValue(name=param.name, value=param.value)
+
+            if param.value == "login@login_page.com":
+                new_param.value = creds.username
+            elif param.value == "login_password":
+                new_param.value = creds.password
+
+            new_params.append(new_param)
 
         return new_params

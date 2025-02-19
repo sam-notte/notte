@@ -7,7 +7,7 @@ from notte.common.agent.perception import BasePerception
 
 
 @final
-class PipiPerception(BasePerception):
+class PipistrelloPerception(BasePerception):
 
     @override
     def perceive_metadata(self, obs: Observation) -> str:

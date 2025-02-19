@@ -22,7 +22,6 @@ from notte.controller.actions import (
     WaitAction,
 )
 from notte.controller.base import BrowserController
-from notte.credentials.models import VaultInterface
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
 from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
@@ -140,11 +139,9 @@ class NotteEnv(AsyncResource):
         self,
         config: NotteEnvConfig | None = None,
         browser: BrowserDriver | None = None,
-        vault: VaultInterface | None = None,
         pool: BrowserPool | None = None,
         llmserve: LLMService | None = None,
     ) -> None:
-        self._vault = vault
         if config is not None:
             if config.verbose:
                 logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
@@ -283,9 +280,6 @@ class NotteEnv(AsyncResource):
         enter: bool | None = None,
     ) -> Observation:
 
-        if self._vault and isinstance(params, dict):
-            current_url = self.context.snapshot.metadata.url if self.context and self.context.snapshot else None
-            params = self._vault.replace_placeholder_credentials(current_url, params)
         if action_id == BrowserActionId.SCRAPE.value:
             # Scrape action is a special case
             return await self.scrape()
