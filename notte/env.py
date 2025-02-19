@@ -1,150 +1,288 @@
 import asyncio
-from typing import Unpack, final
+import datetime as dt
+from collections.abc import Sequence
+from typing import Unpack
 
 from loguru import logger
+from pydantic import BaseModel
 
-from notte.actions.base import (
-    Action,
-    ActionParameter,
-    ActionParameterValue,
-    SpecialAction,
-    SpecialActionId,
-)
-from notte.actions.code import process_action_code
-from notte.browser.context import Context
-from notte.browser.driver import BrowserArgs, BrowserDriver
-from notte.browser.observation import Observation
+from notte.actions.base import ExecutableAction
+from notte.browser.driver import BrowserConfig, BrowserDriver
+from notte.browser.observation import Observation, TrajectoryProgress
+from notte.browser.pool import BrowserPool
+from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import BrowserSnapshot
 from notte.common.logging import timeit
 from notte.common.resource import AsyncResource
+from notte.controller.actions import (
+    BaseAction,
+    BrowserActionId,
+    GotoAction,
+    ScrapeAction,
+    WaitAction,
+)
+from notte.controller.base import BrowserController
 from notte.credentials.models import VaultInterface
-from notte.errors.actions import InvalidActionError
 from notte.errors.env import MaxStepsReachedError, NoContextObservedError
+from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
-from notte.pipe.data_scraping import DataScrapingPipe
-from notte.pipe.main import BaseContextToActionSpacePipe, ContextToActionSpacePipe
-from notte.pipe.preprocessing.a11y.pipe import ActionA11yPipe
-from notte.pipe.resolution import ActionNodeResolutionPipe
-from notte.sdk.types import DEFAULT_MAX_NB_ACTIONS, DEFAULT_MAX_NB_STEPS
+from notte.pipe.action.pipe import (
+    ActionSpaceType,
+    MainActionSpaceConfig,
+    MainActionSpacePipe,
+)
+from notte.pipe.preprocessing.pipe import PreprocessingType, ProcessedSnapshotPipe
+from notte.pipe.resolution.pipe import NodeResolutionPipe
+from notte.pipe.scraping.pipe import DataScrapingPipe, ScrapingConfig, ScrapingType
+from notte.sdk.types import (
+    DEFAULT_MAX_NB_STEPS,
+    PaginationParams,
+    PaginationParamsDict,
+    ScrapeParams,
+    ScrapeParamsDict,
+)
 
 
-@final
-class BrowserSnapshotToContextPipe:
+class NotteEnvConfig(BaseModel):
+    max_steps: int = DEFAULT_MAX_NB_STEPS
+    processing_type: PreprocessingType = PreprocessingType.DOM
+    browser: BrowserConfig = BrowserConfig()
+    scraping: ScrapingConfig = ScrapingConfig()
+    action: MainActionSpaceConfig = MainActionSpaceConfig()
+    observe_max_retry_after_snapshot_update: int = 2
+    nb_seconds_between_snapshots_check: int = 10
+    auto_scrape: bool = True
+    perception_model: str | None = None
+    verbose: bool = False
+
+    def dev_mode(self) -> "NotteEnvConfig":
+        self.verbose = True
+        self.browser.verbose = True
+        self.action.verbose = True
+        self.action.llm_tagging.verbose = True
+        self.action.llm_tagging.listing.verbose = True
+        self.action.llm_tagging.listing.rendering.verbose = True
+        self.scraping.rendering.verbose = True
+        return self
+
+    def user_mode(self) -> "NotteEnvConfig":
+        self.verbose = True
+        self.browser.verbose = True
+        self.action.verbose = True
+        self.action.llm_tagging.verbose = True
+        self.action.llm_tagging.listing.verbose = True
+        return self
+
+    def groq(self) -> "NotteEnvConfig":
+        self.perception_model = "groq/llama-3.3-70b-versatile"
+        return self
+
+    def openai(self) -> "NotteEnvConfig":
+        self.perception_model = "openai/gpt-4o"
+        return self
+
+    def cerebras(self) -> "NotteEnvConfig":
+        self.perception_model = "cerebras/llama-3.3-70b"
+        return self
+
+    def a11y(self) -> "NotteEnvConfig":
+        self.processing_type = PreprocessingType.A11Y
+        return self
+
+    def dom(self) -> "NotteEnvConfig":
+        self.processing_type = PreprocessingType.DOM
+        return self
+
+    def steps(self, max_steps: int | None = None) -> "NotteEnvConfig":
+        self.max_steps = max_steps if max_steps is not None else DEFAULT_MAX_NB_STEPS
+        return self
+
+    def headless(self) -> "NotteEnvConfig":
+        self.browser.headless = True
+        return self
+
+    def not_headless(self) -> "NotteEnvConfig":
+        self.browser.headless = False
+        return self
+
+    def llm_action_tagging(self) -> "NotteEnvConfig":
+        self.action.type = ActionSpaceType.LLM_TAGGING
+        return self
+
+    def llm_data_extract(self) -> "NotteEnvConfig":
+        self.scraping.type = ScrapingType.LLM_EXTRACT
+        return self
+
+    def disable_web_security(self) -> "NotteEnvConfig":
+        self.browser.disable_web_security = True
+        return self
+
+    def disable_auto_scrape(self) -> "NotteEnvConfig":
+        self.auto_scrape = False
+        return self
+
     @staticmethod
-    def forward(snapshot: BrowserSnapshot) -> Context:
-        return ActionA11yPipe.forward(snapshot)
+    def use_llm() -> "NotteEnvConfig":
+        return NotteEnvConfig().llm_data_extract().llm_action_tagging()
 
-
-@final
-class ExecutionPipe:
     @staticmethod
-    async def forward(
-        action: Action,
-        params: list[ActionParameterValue],
-        context: Context,
-        browser: BrowserDriver,
-        enter: bool,
-    ) -> BrowserSnapshot:
-        exec_actions = await ActionNodeResolutionPipe(browser).forward(action, params, context)
-        action = process_action_code(exec_actions, context, generated=False)
-        return await browser.execute_action(action, context, enter)
+    def disable_llm() -> "NotteEnvConfig":
+        return (
+            NotteEnvConfig(
+                scraping=ScrapingConfig(type=ScrapingType.SIMPLE),
+                action=MainActionSpaceConfig(type=ActionSpaceType.SIMPLE),
+            )
+            .dom()
+            .disable_auto_scrape()
+        )
+
+
+class TrajectoryStep(BaseModel):
+    obs: Observation
+    action: BaseAction
 
 
 class NotteEnv(AsyncResource):
     def __init__(
         self,
-        max_steps: int = DEFAULT_MAX_NB_STEPS,
+        config: NotteEnvConfig | None = None,
+        headless: bool = False,
         browser: BrowserDriver | None = None,
         vault: VaultInterface | None = None,
+        pool: BrowserPool | None = None,
         llmserve: LLMService | None = None,
-        **browser_kwargs: Unpack[BrowserArgs],
     ) -> None:
-        self._max_steps: int | None = max_steps
-        self._browser: BrowserDriver = browser or BrowserDriver(**browser_kwargs)
         self._vault = vault
+        if config is not None:
+            if config.verbose:
+                logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
+        self.config: NotteEnvConfig = config or NotteEnvConfig.use_llm()
+        if llmserve is None:
+            llmserve = LLMService(base_model=self.config.perception_model)
+        self.config.browser.headless = headless
+        self._browser: BrowserDriver = browser or BrowserDriver(pool=pool, config=self.config.browser)
         super().__init__(self._browser)
-        self._trajectory: list[Observation] = []
-        self._context: Context | None = None
-        self._context_to_action_space_pipe: BaseContextToActionSpacePipe = ContextToActionSpacePipe(llmserve=llmserve)
-        self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, browser=self._browser)
+        self.controller: BrowserController = BrowserController(self._browser, verbose=self.config.verbose)
+
+        self.trajectory: list[TrajectoryStep] = []
+        self._context: ProcessedBrowserSnapshot | None = None
+        self._action_space_pipe: MainActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
+        self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(
+            llmserve=llmserve, browser=self._browser, config=self.config.scraping
+        )
+        self._node_resolution_pipe: NodeResolutionPipe = NodeResolutionPipe(
+            browser=self._browser, type=self.config.processing_type, verbose=self.config.verbose
+        )
 
     @property
-    def context(self) -> Context:
+    def context(self) -> ProcessedBrowserSnapshot:
         if self._context is None:
             raise NoContextObservedError()
         return self._context
 
     @property
-    def previous_actions(self) -> list[Action] | None:
+    def previous_actions(self) -> Sequence[BaseAction] | None:
         # This function is always called after trajectory.append(preobs)
         # —This means trajectory[-1] is always the "current (pre)observation"
         # And trajectory[-2] is the "previous observation" we're interested in.
-        if len(self._trajectory) <= 1:
+        if len(self.trajectory) <= 1:
             return None
-        previous_obs: Observation = self._trajectory[-2]
+        previous_obs: Observation = self.trajectory[-2].obs
         if not previous_obs.has_space():
             return None  # we don't have a space for pre-observations
         if self.obs.clean_url != previous_obs.clean_url:
             return None  # the page has significantly changed
-        return previous_obs.space.actions(status="all")
+        if previous_obs.space is None:
+            raise InvalidInternalCheckError(
+                check="Previous observation has no space. This should never happen.",
+                url=previous_obs.metadata.url,
+                dev_advice=(
+                    "This technnically should never happen. There is likely an issue during the action space pipe."
+                ),
+            )
+        return previous_obs.space.actions("all")
 
     @property
     def obs(self) -> Observation:
-        if len(self._trajectory) <= 0:
+        if len(self.trajectory) <= 0:
             raise NoContextObservedError()
-        return self._trajectory[-1]
+        return self.trajectory[-1].obs
+
+    def progress(self) -> TrajectoryProgress:
+        return TrajectoryProgress(
+            max_steps=self.config.max_steps,
+            current_step=len(self.trajectory),
+        )
 
     # ---------------------------- observe, step functions ----------------------------
 
-    def _preobserve(self, snapshot: BrowserSnapshot) -> Observation:
-        if self._max_steps is not None and len(self._trajectory) >= self._max_steps:
-            raise MaxStepsReachedError(max_steps=self._max_steps)
-        self._context = BrowserSnapshotToContextPipe.forward(snapshot)
-        preobs = Observation.from_snapshot(snapshot)
-        self._trajectory.append(preobs)
+    def _preobserve(self, snapshot: BrowserSnapshot, action: BaseAction) -> Observation:
+        if len(self.trajectory) >= self.config.max_steps:
+            raise MaxStepsReachedError(max_steps=self.config.max_steps)
+        self._context = ProcessedSnapshotPipe.forward(snapshot, type=self.config.processing_type)
+        preobs = Observation.from_snapshot(snapshot, progress=self.progress())
+        self.trajectory.append(TrajectoryStep(obs=preobs, action=action))
         return preobs
 
-    async def _obslisting(
+    async def _observe(
         self,
-        min_nb_actions: int | None,
-        max_nb_actions: int,
-        retry: int = 2,
+        pagination: PaginationParams,
+        retry: int,
     ) -> Observation:
-        self.obs.space = self._context_to_action_space_pipe.forward(
+        if self.config.verbose:
+            logger.info(f"🔍 observing page {self.context.snapshot.metadata.url}")
+        self.obs.space = self._action_space_pipe.forward(
             self.context,
             self.previous_actions,
-            min_nb_actions=min_nb_actions,
-            max_nb_actions=max_nb_actions,
+            pagination=pagination,
         )
         # TODO: improve this
         # Check if the snapshot has changed since the beginning of the trajectory
         # if it has, it means that the page was not fully loaded and that we should restart the oblisting
-        check_snapshot = await self._browser.snapshot()
-        if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
-            logger.warning("Snapshot changed since the beginning of the action listing, retrying to observe again")
-            _ = self._preobserve(check_snapshot)
-            return await self._obslisting(retry=retry - 1, min_nb_actions=min_nb_actions, max_nb_actions=max_nb_actions)
+        time_diff = dt.datetime.now() - self.context.snapshot.metadata.timestamp
+        if time_diff.total_seconds() > self.config.nb_seconds_between_snapshots_check:
+            if self.config.verbose:
+                logger.warning(
+                    f"{time_diff.total_seconds()} seconds since the beginning of the action listing."
+                    "Check if page content has changed..."
+                )
+            check_snapshot = await self._browser.snapshot(screenshot=False)
+            if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
+                if self.config.verbose:
+                    logger.warning(
+                        "Snapshot changed since the beginning of the action listing, retrying to observe again"
+                    )
+                _ = self._preobserve(check_snapshot, action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)))
+                return await self._observe(retry=retry - 1, pagination=pagination)
 
-        if self.obs.space.category is not None and self.obs.space.category.is_data() and not self.obs.has_data():
-            self.obs.data = await self._data_scraping_pipe.forward(self.context, scrape_images=False)
+        if (
+            self.config.auto_scrape
+            and self.obs.space.category is not None
+            and self.obs.space.category.is_data()
+            and not self.obs.has_data()
+        ):
+            self.obs.data = await self._data_scraping_pipe.forward(self.context, ScrapeParams())
         return self.obs
 
     @timeit("goto")
     async def goto(self, url: str | None) -> Observation:
         snapshot = await self._browser.goto(url)
-        return self._preobserve(snapshot)
+        return self._preobserve(snapshot, action=GotoAction(url=snapshot.metadata.url))
 
     @timeit("observe")
     async def observe(
         self,
         url: str | None = None,
-        min_nb_actions: int | None = None,
-        max_nb_actions: int = DEFAULT_MAX_NB_ACTIONS,
+        **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
         _ = await self.goto(url)
-        logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-        logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
-        return await self._obslisting(min_nb_actions, max_nb_actions)
+        if self.config.verbose:
+            logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
+            logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+        return await self._observe(
+            pagination=PaginationParams.model_validate(pagination),
+            retry=self.config.observe_max_retry_after_snapshot_update,
+        )
 
     @timeit("execute")
     async def execute(
@@ -153,78 +291,39 @@ class NotteEnv(AsyncResource):
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
-        # Replace credentials only if vault is configured
+
         if self._vault and isinstance(params, dict):
             current_url = self.context.snapshot.metadata.url if self.context and self.context.snapshot else None
             params = self._vault.replace_placeholder_credentials(current_url, params)
+        if action_id == BrowserActionId.SCRAPE.value:
+            # Scrape action is a special case
+            return await self.scrape()
+        exec_action = ExecutableAction.parse(action_id, params, enter=enter)
+        action = await self._node_resolution_pipe.forward(exec_action, self._context)
+        snapshot = await self.controller.execute(action)
+        obs = self._preobserve(snapshot, action=action)
+        return obs
 
-        if SpecialAction.is_special(action_id):
-            return await self._execute_special(SpecialActionId(action_id), params)
-        if action_id not in [inode.id for inode in self.context.interaction_nodes()]:
-            raise InvalidActionError(action_id=action_id, reason=f"action '{action_id}' not found in page context.")
-        action, _params = self._parse_env(action_id, params)
-        enter = enter if enter is not None else action.id.startswith("I")
-        snapshot = await ExecutionPipe.forward(action, _params, self.context, self._browser, enter=enter)
-        logger.info(f"🌌 action {action_id} executed in browser")
-        return self._preobserve(snapshot)
-
-    @timeit("execute_special")
-    async def _execute_special(
+    @timeit("act")
+    async def act(
         self,
-        action_id: SpecialActionId,
-        params: dict[str, str] | str | None = None,
+        action: BaseAction,
     ) -> Observation:
-        if not SpecialAction.is_special(action_id):
-            raise InvalidActionError(
-                action_id=action_id,
-                reason=(
-                    (
-                        f"try executing a special action but '{action_id}' is not a special action. "
-                        f"Special actions are {SpecialActionId}"
-                    )
-                ),
-            )
-        _, _params = self._parse_env(action_id, params)
-        match action_id:
-            case SpecialActionId.GOTO:
-                if len(_params) == 0:
-                    raise InvalidActionError(
-                        action_id=action_id, reason="Special action `goto` requires a url parameter to be executed."
-                    )
-                return await self.goto(_params[0].value)
-            case SpecialActionId.SCRAPE:
-                return await self.scrape()
-            case SpecialActionId.SCREENSHOT:
-                snapshot = await self._browser.snapshot(screenshot=True)
-            case SpecialActionId.BACK:
-                snapshot = await self._browser.back()
-            case SpecialActionId.FORWARD:
-                snapshot = await self._browser.forward()
-            case SpecialActionId.REFRESH:
-                snapshot = await self._browser.refresh()
-            case SpecialActionId.WAIT:
-                if len(_params) == 0:
-                    raise InvalidActionError(
-                        action_id=action_id,
-                        reason="Special action `wait` requires a wait_time parameter to be executed.",
-                    )
-                await self._browser.wait(int(_params[0].value))
-                snapshot = await self._browser.snapshot()
-            case SpecialActionId.TERMINATE:
-                snapshot = await self._browser.snapshot()
-                await self._browser.close()
-            case _:
-                raise InvalidActionError(
-                    action_id=action_id,
-                    reason=(
-                        (
-                            f"try executing a special action but '{action_id}' is not a special action. "
-                            f"Special actions are {list(SpecialActionId)}"
-                        )
-                    ),
-                )
-        logger.info(f"🌌 special action {action_id} executed in browser")
-        return self._preobserve(snapshot)
+        if self.config.verbose:
+            logger.info(f"🌌 starting execution of action {action.id}...")
+        if isinstance(action, ScrapeAction):
+            # Scrape action is a special case
+            # TODO: think about flow. Right now, we do scraping and observation in one step
+            return await self.god(instructions=action.instructions)
+        action = await self._node_resolution_pipe.forward(action, self._context)
+        snapshot = await self.controller.execute(action)
+        if self.config.verbose:
+            logger.info(f"🌌 action {action.id} executed in browser. Observing page...")
+        _ = self._preobserve(snapshot, action=action)
+        return await self._observe(
+            pagination=PaginationParams(),
+            retry=self.config.observe_max_retry_after_snapshot_update,
+        )
 
     @timeit("step")
     async def step(
@@ -232,37 +331,46 @@ class NotteEnv(AsyncResource):
         action_id: str,
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
-        min_nb_actions: int | None = None,
-        max_nb_actions: int = DEFAULT_MAX_NB_ACTIONS,
+        **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
         _ = await self.execute(action_id, params, enter=enter)
-        logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-        logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
-        return await self._obslisting(min_nb_actions, max_nb_actions)
+        if self.config.verbose:
+            logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
+            logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+        return await self._observe(
+            pagination=PaginationParams.model_validate(pagination),
+            retry=self.config.observe_max_retry_after_snapshot_update,
+        )
 
     @timeit("scrape")
     async def scrape(
         self,
         url: str | None = None,
-        only_main_content: bool = True,
-        scrape_images: bool = False,
+        **scrape_params: Unpack[ScrapeParamsDict],
     ) -> Observation:
         if url is not None:
             _ = await self.goto(url)
-        self.obs.data = await self._data_scraping_pipe.forward(
-            self.context,
-            only_main_content=only_main_content,
-            scrape_images=scrape_images,
-        )
+        params = ScrapeParams(**scrape_params)
+        self.obs.data = await self._data_scraping_pipe.forward(self.context, params)
         return self.obs
 
     @timeit("god")
-    async def god(self, url: str | None = None) -> Observation:
+    async def god(
+        self,
+        url: str | None = None,
+        **params: Unpack[ScrapeParamsDict | PaginationParamsDict],  # type: ignore
+    ) -> Observation:
+        if self.config.verbose:
+            logger.info("🌊 God mode activated (scraping + action listing)")
         if url is not None:
             _ = await self.goto(url)
+        scrape = ScrapeParams.model_validate(params)
+        pagination = PaginationParams.model_validate(params)
         space, data = await asyncio.gather(
-            self._context_to_action_space_pipe.forward_async(self.context, self.previous_actions),
-            self._data_scraping_pipe.forward_async(self.context),
+            self._action_space_pipe.forward_async(
+                self.context, previous_action_list=self.previous_actions, pagination=pagination
+            ),
+            self._data_scraping_pipe.forward_async(self.context, scrape),
         )
         self.obs.space = space
         self.obs.data = data
@@ -270,41 +378,10 @@ class NotteEnv(AsyncResource):
 
     @timeit("reset")
     async def reset(self) -> None:
-        self._trajectory = []
+        if self.config.verbose:
+            logger.info("🌊 Resetting environment...")
+        self.trajectory = []
         self._context = None
         return await self._browser.reset()
 
     # ------------------------------ Private ---------------------------------------
-
-    def _parse_env(
-        self, action_id: str, params: dict[str, str] | str | None = None
-    ) -> tuple[Action, list[ActionParameterValue]]:
-        if isinstance(params, str):
-            params = {"value": params}
-        _param_values: list[ActionParameterValue] = []
-        _params: list[ActionParameter] = []
-        if params is not None:
-            _param_values = [
-                ActionParameterValue(
-                    parameter_name=name,
-                    value=value,
-                )
-                for name, value in params.items()
-            ]
-            _params = [
-                ActionParameter(
-                    name=name,
-                    type="string",
-                )
-                for name in params.keys()
-            ]
-        return (
-            Action(
-                id=action_id,
-                description="ID only",
-                category="",
-                status="valid",
-                params=_params,
-            ),
-            _param_values,
-        )

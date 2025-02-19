@@ -1,3 +1,5 @@
+import inspect
+import typing
 from datetime import datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable
@@ -8,7 +10,21 @@ from loguru import logger
 from notte.common.tracer import LlmTracer
 
 if TYPE_CHECKING:
-    from notte.llms.engine import LLMEngine
+    pass
+
+
+def recover_args(func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
+    sig = inspect.signature(func)
+    params = list(sig.parameters.keys())
+
+    # Map positional args to parameter names
+    named_args = {}
+    for param_name, arg_value in zip(params, args):
+        named_args[param_name] = arg_value
+
+    # Combine with kwargs
+    all_params = {**named_args, **kwargs}
+    return all_params
 
 
 def trace_llm_usage(
@@ -17,13 +33,16 @@ def trace_llm_usage(
     def decorator(func: Callable[..., ModelResponse]) -> Callable[..., ModelResponse]:
         @wraps(func)
         def wrapper(
-            engine: "LLMEngine",
-            messages: list[dict[str, str]],
-            model: str,
+            *args: Any,
             **kwargs: Any,
         ) -> ModelResponse:
             # Call the original function
-            response: ModelResponse = func(engine, messages, model, **kwargs)
+
+            recovered_args = recover_args(func, args, kwargs)
+            model = typing.cast(str, recovered_args.get("model"))
+
+            messages = typing.cast(list[Any], recovered_args.get("messages"))
+            response: ModelResponse = func(*args, **kwargs)
 
             # Only trace if tracer is provided
             if tracer is not None:

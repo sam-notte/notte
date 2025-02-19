@@ -8,7 +8,7 @@ Use descriptive and concise language.
 
 2. <document-analysis>
 Inside this section, show your analytical work:
-- Count of all terminal nodes by type (B, L, I)
+- Count of all terminal nodes by type (B, L, I, O, M)
 - Verification that each ID appears exactly once in the document
 - Discussion of how you identified parameters
 - Discussion of your categorization strategy
@@ -29,7 +29,7 @@ Nothing else should appear in this section except the table.
 1. ID Column:
 - Each ID must appear exactly once
 - NO GROUPING OF IDs (e.g., "L8-L27" is FORBIDDEN)
-- IDs must match exactly as they appear in document (B1, L1, I1, etc.)
+- IDs must match exactly as they appear in document (B1, L1, I1, O1, M1, etc.)
 
 2. Description Column:
 - Must be concise and self-explanatory without seeing the interface
@@ -85,6 +85,7 @@ Example of CORRECT entries:
 | ID | Description | Type | Parameters | Category |
 | B1 | Open the main navigation menu | Button | | Navigation |
 | I1 | Allow user to select trip type | Combobox | name: tripType: type: str, default="round-trip", values=["round-trip", "one-way", "multi-city"] | Flight Search |
+| O1 | Select the "round-trip" option | Option | | Flight Search |
 | L1 | Open the home page | Link | | Navigation |
 
 Example of INCORRECT entries:

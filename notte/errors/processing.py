@@ -15,6 +15,7 @@ class SnapshotProcessingError(NotteBaseError):
         super().__init__(
             dev_message=dev_message,
             user_message=f"Sorry, Notte is not yet able to process this website{url_str}.",
+            agent_message="Sorry, this action is not yet supported. Hint: try another action.",
             should_notify_team=True,
         )
 
@@ -32,9 +33,7 @@ class InvalidInternalCheckError(SnapshotProcessingError):
 
     def __init__(self, url: str | None, check: str, dev_advice: str) -> None:
         super().__init__(
-            dev_message=(
-                (f"Internal check '{check}' failed during snapshot processing. " f"Advice to resolve: {dev_advice}")
-            ),
+            dev_message=f"Internal check '{check}' failed during snapshot processing. Advice to resolve: {dev_advice}",
             url=url,
         )
 
@@ -44,12 +43,10 @@ class InconsistentInteractionsNodesInAxTrees(InvalidInternalCheckError):
         super().__init__(
             check=check,
             dev_advice=(
-                (
-                    "There are inconsistencies between interaction nodes in two ax trees, this should not happen. "
-                    "You should investigate the reason why. You could first try to set `raise_error=False` to "
-                    "get more low level information. You should also try to print the ax trees to see where the "
-                    "issue is coming from."
-                )
+                "There are inconsistencies between interaction nodes in two ax trees, this should not happen. "
+                "You should investigate the reason why. You could first try to set `raise_error=False` to "
+                "get more low level information. You should also try to print the ax trees to see where the "
+                "issue is coming from."
             ),
             url=None,
         )
@@ -63,10 +60,8 @@ class NodeFilteringResultsInEmptyGraph(SnapshotProcessingError):
     def __init__(self, url: str | None, operation: str = "filtering") -> None:
         super().__init__(
             dev_message=(
-                (
-                    f"Operation '{operation}' resulted in an empty graph. Notte always expect a non-empty graph. "
-                    "Please check the `pruning.py` file or `subtree_without` method for more information."
-                )
+                f"Operation '{operation}' resulted in an empty graph. Notte always expect a non-empty graph. "
+                "Please check the `pruning.py` file or `subtree_without` method for more information."
             ),
             url=url,
         )
@@ -75,10 +70,8 @@ class NodeFilteringResultsInEmptyGraph(SnapshotProcessingError):
 class InvalidA11yTreeType(InvalidInternalCheckError):
     def __init__(self, type: str) -> None:
         super().__init__(
-            check=((f"Unknown a11y tree type {type}. Valid types are: 'processed', 'simple', 'raw'.")),
-            dev_advice=(
-                ("This should not happen. Someone proably added a new type without updating properly the code.")
-            ),
+            check=f"Unknown a11y tree type {type}. Valid types are: 'processed', 'simple', 'raw'.",
+            dev_advice="This should not happen. Someone proably added a new type without updating properly the code.",
             url=None,
         )
 

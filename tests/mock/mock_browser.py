@@ -1,13 +1,19 @@
 from dataclasses import dataclass
-from typing import TypedDict, final
+from typing import final
 
 from loguru import logger
-from typing_extensions import override
+from typing_extensions import TypedDict, override
 
 from notte.actions.base import ExecutableAction
-from notte.browser.context import Context
-from notte.browser.node_type import A11yNode, A11yTree
-from notte.browser.snapshot import BrowserSnapshot, SnapshotMetadata
+from notte.browser.dom_tree import A11yNode, A11yTree, ComputedDomAttributes, DomNode
+from notte.browser.node_type import NodeType
+from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
+from notte.browser.snapshot import (
+    BrowserSnapshot,
+    SnapshotMetadata,
+    TabsData,
+    ViewportData,
+)
 from notte.common.resource import AsyncResource
 
 
@@ -101,14 +107,51 @@ class MockBrowserDriver(AsyncResource):
             simple=self._mock_a11y_node,
             raw=self._mock_a11y_node,
         )
+
+        self._mock_dom_node = DomNode(
+            id="mock",
+            role="WebArea",
+            text="Mock WebArea",
+            children=[
+                DomNode(
+                    id="L1",
+                    role="link",
+                    text="More information",
+                    children=[],
+                    attributes=None,
+                    computed_attributes=ComputedDomAttributes(),
+                    type=NodeType.INTERACTION,
+                ),
+            ],
+            attributes=None,
+            computed_attributes=ComputedDomAttributes(),
+            type=NodeType.OTHER,
+        )
+
         self._mock_snapshot = BrowserSnapshot(
             metadata=SnapshotMetadata(
                 title="mock",
                 url="https://mock.url",
+                viewport=ViewportData(
+                    scroll_x=0,
+                    scroll_y=0,
+                    viewport_width=1000,
+                    viewport_height=1000,
+                    total_width=1000,
+                    total_height=1000,
+                ),
+                tabs=[
+                    TabsData(
+                        tab_id=0,
+                        title="mock",
+                        url="https://mock.url",
+                    ),
+                ],
             ),
             html_content="<html><body>Mock HTML</body></html>",
             a11y_tree=self._mock_tree,
             screenshot=None,
+            dom_node=self._mock_dom_node,
         )
         super().__init__(self)
 
@@ -140,17 +183,33 @@ class MockBrowserDriver(AsyncResource):
             metadata=SnapshotMetadata(
                 title="mock",
                 url=url,
+                viewport=ViewportData(
+                    scroll_x=0,
+                    scroll_y=0,
+                    viewport_width=1000,
+                    viewport_height=1000,
+                    total_width=1000,
+                    total_height=1000,
+                ),
+                tabs=[
+                    TabsData(
+                        tab_id=0,
+                        title="mock",
+                        url=url,
+                    ),
+                ],
             ),
             html_content="<html><body>Mock HTML</body></html>",
             a11y_tree=self._mock_tree,
             screenshot=None,
+            dom_node=self._mock_dom_node,
         )
         return snapshot
 
     async def execute_action(
         self,
         action: ExecutableAction,
-        context: Context,
+        context: ProcessedBrowserSnapshot,
         enter: bool = False,
     ) -> BrowserSnapshot:
         """Mock action execution"""

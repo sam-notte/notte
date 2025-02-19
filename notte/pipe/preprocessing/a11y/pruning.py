@@ -4,7 +4,8 @@ from functools import partial
 
 from loguru import logger
 
-from notte.browser.node_type import A11yNode, NodeCategory
+from notte.browser.dom_tree import A11yNode
+from notte.browser.node_type import NodeCategory
 from notte.errors.processing import InvalidInternalCheckError
 from notte.pipe.preprocessing.a11y.traversal import (
     find_all_matching_subtrees_with_parents,
@@ -28,8 +29,6 @@ class PruningConfig:
         """
 
         if node["role"] in NodeCategory.INTERACTION.roles():
-            return False
-        if node["role"] in NodeCategory.PARAMETERS.roles():
             return False
         # check text and images
         if node["role"] in NodeCategory.IMAGE.roles():
@@ -68,7 +67,6 @@ class PruningConfig:
 
     def important_roles(self) -> set[str]:
         base = NodeCategory.INTERACTION.roles()
-        base.update(NodeCategory.PARAMETERS.roles())
         if not self.prune_texts:
             base.update(NodeCategory.TEXT.roles())
         if not self.prune_images:
@@ -140,9 +138,8 @@ def prune_empty_links(node: A11yNode, config: PruningConfig) -> A11yNode | None:
     return node
 
 
-def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
+def prune_text_child_in_interaction_nodes(node: A11yNode, verbose: bool = False) -> A11yNode:
     allowed_roles = NodeCategory.IMAGE.roles()
-    allowed_roles.update(NodeCategory.PARAMETERS.roles())
 
     children: list[A11yNode] = node.get("children", [])
     if node["role"] in NodeCategory.INTERACTION.roles() and len(children) >= 1 and len(node["name"]) > 0:
@@ -158,12 +155,11 @@ def prune_text_child_in_interaction_nodes(node: A11yNode) -> A11yNode:
             # images are allowed in interaction nodes
             return node
         else:
-            logger.warning(
-                (
+            if verbose:
+                logger.warning(
                     f"Found non-text children (i.e. {other_than_text}) in interaction"
                     f" node role {node['role']} and name {node['name']}"
                 )
-            )
 
     node["children"] = [prune_text_child_in_interaction_nodes(child) for child in children]
     return node
@@ -283,11 +279,9 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
         raise InvalidInternalCheckError(
             check=f"No priority found for {node_role} and {child_role}",
             dev_advice=(
-                (
-                    "Priority rules defined which node (child or parent) should be kept around when a parent "
-                    "only has one child. This errors occurs because a new edge case has been discovered. "
-                    "Please add a new priority rule."
-                )
+                "Priority rules defined which node (child or parent) should be kept around when a parent "
+                "only has one child. This errors occurs because a new edge case has been discovered. "
+                "Please add a new priority rule."
             ),
             url=None,
         )
@@ -315,7 +309,7 @@ def complex_processing_accessiblity_tree(node: A11yNode, config: PruningConfig |
                     f"parent node(role='{node['role']}', name='{node['name']}') should have already been "
                     "pruned before reaching this point. "
                 ),
-                dev_advice=("This should not happen. Please check the node and the tree to see why this is happening."),
+                dev_advice="This should not happen. Please check the node and the tree to see why this is happening.",
                 url=None,
             )
             # Vestige of the old code (check if we can remove it)

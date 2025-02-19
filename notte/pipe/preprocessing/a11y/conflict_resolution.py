@@ -1,10 +1,12 @@
 import copy
+import html
 import re
 
 from loguru import logger
 from patchright.async_api import Locator, Page
 
-from notte.browser.node_type import A11yNode, HtmlSelector, NodeCategory
+from notte.browser.dom_tree import A11yNode, NodeSelectors
+from notte.browser.node_type import NodeCategory
 from notte.errors.processing import SnapshotProcessingError
 from notte.errors.resolution import ConflictResolutionCheckError
 from notte.pipe.preprocessing.a11y.traversal import (
@@ -116,10 +118,8 @@ async def resolve_conflict_by_text_parents(
     chosen_locator = candidate_locators[0]
     if await chosen_locator.count() > 1:
         logger.error(
-            (
-                "[CONFLICT TEXT RESOLUTION] Multiple chosen locators found for "
-                f"node {node['name']} with role {node['role']}"
-            )
+            "[CONFLICT TEXT RESOLUTION] Multiple chosen locators found for "
+            f"node {node['name']} with role {node['role']}"
         )
         return None
     # now we have a single candidate locator
@@ -170,18 +170,14 @@ name: '{node['name']}' role: '{node['role']}' and len({len(node_path)})
 
     if len(locators) > 1:
         logger.error(
-            (
-                "[CONFLICT PATH RESOLUTION] Multiple locators found for "
-                f"path {node_path[-1]['name']} with role {node_path[0]['role']}"
-            )
+            "[CONFLICT PATH RESOLUTION] Multiple locators found for "
+            f"path {node_path[-1]['name']} with role {node_path[0]['role']}"
         )
         return None
     if len(locators) == 0:
         logger.error(
-            (
-                "[CONFLICT PATH RESOLUTION] No locators found for "
-                f"path {node_path[-1]['name']} with role {node_path[0]['role']}"
-            )
+            "[CONFLICT PATH RESOLUTION] No locators found for "
+            f"path {node_path[-1]['name']} with role {node_path[0]['role']}"
         )
         return None
     return locators[0]
@@ -221,7 +217,8 @@ def extract_selector_from_locator(locator: Locator) -> str:
 
     match = re.search(r"selector='([^']+)'", str(locator.first))
     if match:
-        return match.group(1)
+        raise ValueError(f"Invalid selector: {match.group(1)}")
+        return html.unescape(match.group(1))
     return ""
 
 
@@ -275,7 +272,7 @@ async def get_locator_for_a11y_path(
     locators = await locator.all()
     if len(locators) == 0:
         logger.warning(
-            (f"Warning: No locators found for '{node['name']}'" f" with role '{node['role']}' trying to relax selector")
+            f"Warning: No locators found for '{node['name']}' with role '{node['role']}' trying to relax selector"
         )
         # last resort: try to relax the selector
         locators = await try_relax_selector(page, node)
@@ -291,10 +288,8 @@ async def get_locator_for_a11y_path(
 
     if not conflict_resolution:
         logger.error(
-            (
-                f"[CONFLICT RESOLUTION] Multiple locators found for node with ID {node.get('id')}"
-                " but conflict resolution is disabled"
-            )
+            f"[CONFLICT RESOLUTION] Multiple locators found for node with ID {node.get('id')}"
+            " but conflict resolution is disabled"
         )
         return None
 
@@ -363,7 +358,7 @@ xpath_code = """(element) => {
 }"""
 
 
-async def get_html_selector(locator: Locator) -> HtmlSelector | None:
+async def get_html_selector(locator: Locator) -> NodeSelectors | None:
     """
     Convert a Playwright locator to its XPath representation,
     prioritizing IDs and full element paths.
@@ -387,22 +382,30 @@ async def get_html_selector(locator: Locator) -> HtmlSelector | None:
         )
         css_path: str = await locator.evaluate(css_path_code)
 
-        playwright_selector: str = extract_selector_from_locator(locator).replace("\\'", "'")
-        return HtmlSelector(
+        playwright_selector: str = extract_selector_from_locator(locator)
+        return NodeSelectors(
             playwright_selector=playwright_selector,
             css_selector=css_path,
             xpath_selector=xpath,
+            notte_selector="",
+            in_iframe=False,
+            in_shadow_root=False,
+            iframe_parent_css_selectors=[],
         )
 
     except Exception:
         # Fallback to basic selector parsing if the above fails
         selector: str = extract_selector_from_locator(locator)  # type: ignore
 
-        def return_selector(selector: str) -> HtmlSelector:
-            return HtmlSelector(
+        def return_selector(selector: str) -> NodeSelectors:
+            return NodeSelectors(
                 playwright_selector=selector,
                 css_selector="",
                 xpath_selector="",
+                notte_selector="",
+                in_iframe=False,
+                in_shadow_root=False,
+                iframe_parent_css_selectors=[],
             )
 
         # Handle existing XPath

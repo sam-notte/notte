@@ -43,6 +43,9 @@ class BrowserPoolConfig:
     # Safety margin (percentage of total memory to keep free)
     SAFETY_MARGIN = float(os.getenv("MEMORY_SAFETY_MARGIN", "0.2"))  # 20% by default
 
+    WINDOW_WIDTH = int(os.getenv("WINDOW_WIDTH", 1280))
+    WINDOW_HEIGHT = int(os.getenv("WINDOW_HEIGHT", 1020))
+
     @classmethod
     def get_available_memory(cls) -> int:
         """Calculate total available memory for Playwright"""
@@ -98,14 +101,12 @@ class BrowserPool:
         self.verbose = verbose
         if self.verbose:
             logger.info(
-                (
-                    f"Initializing BrowserPool with:"
-                    f"\n - Container Memory: {self.config.CONTAINER_MEMORY}MB"
-                    f"\n - Available Memory: {self.config.get_available_memory()}MB"
-                    f"\n - Max Contexts: {self.max_total_contexts}"
-                    f"\n - Max Browsers: {self.max_browsers}"
-                    f"\n - Contexts per Browser: {self.contexts_per_browser}"
-                )
+                "Initializing BrowserPool with:"
+                f"\n - Container Memory: {self.config.CONTAINER_MEMORY}MB"
+                f"\n - Available Memory: {self.config.get_available_memory()}MB"
+                f"\n - Max Contexts: {self.max_total_contexts}"
+                f"\n - Max Browsers: {self.max_browsers}"
+                f"\n - Contexts per Browser: {self.contexts_per_browser}"
             )
 
         self._headless_browsers: dict[str, BrowserWithContexts] = {}
@@ -161,7 +162,7 @@ class BrowserPool:
             "contexts_remaining": self.max_total_contexts - stats["open_contexts"],
         }
 
-    async def _create_browser(self, headless: bool) -> BrowserWithContexts:
+    async def _create_browser(self, headless: bool, disable_web_security: bool) -> BrowserWithContexts:
         """Get an existing browser or create a new one if needed"""
         if self._playwright is None:
             await self.start()
@@ -175,22 +176,32 @@ class BrowserPool:
         # current_debug_port = self.base_debug_port + len(self.available_browsers())
         if self._playwright is None:
             raise BrowserNotStartedError()
+
+        browser_args = [
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--no-zygote",
+            "--mute-audio",
+            f'--js-flags="--max-old-space-size={int(self.config.CONTEXT_MEMORY)}"',
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--start-maximized",
+        ]
+
+        if disable_web_security:
+            browser_args.extend(
+                [
+                    "--disable-web-security",
+                    "--disable-site-isolation-trials",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                ]
+            )
         browser = await self._playwright.chromium.launch(
             headless=headless,
             timeout=self.BROWSER_CREATION_TIMEOUT_SECONDS * 1000,
-            args=(
-                [
-                    "--disable-dev-shm-usage",
-                    "--disable-extensions",
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--no-zygote",
-                    "--mute-audio",
-                    f'--js-flags="--max-old-space-size={int(self.config.CONTEXT_MEMORY)}"',
-                ]
-                if headless
-                else []
-            ),
+            args=browser_args,
         )
         browser_id = str(uuid.uuid4())
         _browser = BrowserWithContexts(
@@ -211,7 +222,7 @@ class BrowserPool:
                 return browser
         return None
 
-    async def get_browser_resource(self, headless: bool) -> BrowserResource:
+    async def get_browser_resource(self, headless: bool, disable_web_security: bool) -> BrowserResource:
         """Create and track a new browser context"""
         browser = await self._find_browser_with_space(headless)
         if browser is None:
@@ -219,12 +230,15 @@ class BrowserPool:
                 logger.info(
                     f"Maximum contexts per browser reached ({self.contexts_per_browser}). Creating new browser..."
                 )
-            browser = await self._create_browser(headless)
+            browser = await self._create_browser(headless, disable_web_security)
 
         context_id = str(uuid.uuid4())
         try:
             async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
-                context = await browser.browser.new_context()
+                context = await browser.browser.new_context(
+                    no_viewport=False,
+                    viewport={"width": self.config.WINDOW_WIDTH, "height": self.config.WINDOW_HEIGHT},
+                )
                 browser.contexts[context_id] = TimeContext(context_id=context_id, context=context)
                 page = await context.new_page()
                 return BrowserResource(
@@ -250,10 +264,8 @@ class BrowserPool:
         resource_browser = browsers[resource.browser_id]
         if resource.context_id not in resource_browser.contexts:
             raise BrowserResourceNotFoundError(
-                (
-                    f"Context '{resource.context_id}' not found in available "
-                    f"contexts (i.e {list(resource_browser.contexts.keys())})"
-                )
+                f"Context '{resource.context_id}' not found in available "
+                f"contexts (i.e {list(resource_browser.contexts.keys())})"
             )
         try:
             async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
@@ -273,10 +285,8 @@ class BrowserPool:
         ):
             if self.verbose:
                 logger.info(
-                    (
-                        f"Browser {browser_id} has been open for less than "
-                        f"{self.BROWSER_CREATION_TIMEOUT_SECONDS} seconds. Skipping..."
-                    )
+                    f"Browser {browser_id} has been open for less than "
+                    f"{self.BROWSER_CREATION_TIMEOUT_SECONDS} seconds. Skipping..."
                 )
             return
         try:
@@ -312,20 +322,16 @@ class BrowserPool:
                         if should_skip:
                             if self.verbose:
                                 logger.info(
-                                    (
-                                        f"Skipping context {context_id} of browser {browser.browser_id} "
-                                        "because it has been open for "
-                                        f"less than {self.BROWSER_CREATION_TIMEOUT_SECONDS} s"
-                                    )
+                                    f"Skipping context {context_id} of browser {browser.browser_id} "
+                                    "because it has been open for "
+                                    f"less than {self.BROWSER_CREATION_TIMEOUT_SECONDS} s"
                                 )
                             continue
                         if except_resources is not None:
                             if self.verbose:
                                 logger.info(
-                                    (
-                                        f"Closing context {context_id} of browser {browser.browser_id} "
-                                        "because it is not in except_resources"
-                                    )
+                                    f"Closing context {context_id} of browser {browser.browser_id} "
+                                    "because it is not in except_resources"
                                 )
                         await context.context.close()
                         del browser.contexts[context_id]
