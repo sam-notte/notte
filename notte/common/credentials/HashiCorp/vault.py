@@ -1,14 +1,28 @@
 from typing import Optional
 from urllib.parse import urlparse
 
-from hvac import Client
+try:
+    from hvac import Client
+
+    VAULT_AVAILABLE = True
+except ImportError:
+    VAULT_AVAILABLE = False
 
 from ..base import BaseVault
 from ..models import Credentials
 
 
+def check_vault_imports():
+    if not VAULT_AVAILABLE:
+        raise ImportError(
+            "The 'hvac' package is required for HashiCorp Vault integration."
+            " Install it with 'poetry install --with vault'"
+        )
+
+
 class HashiCorpVault(BaseVault):
     def __init__(self, url: str, token: str):
+        check_vault_imports()
         self.client = Client(url=url, token=token)
         self._mount_path = "secret"
         self._init_vault()
