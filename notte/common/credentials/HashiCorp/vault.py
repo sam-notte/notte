@@ -3,12 +3,11 @@ from urllib.parse import urlparse
 
 from hvac import Client
 
-from notte.actions.base import ActionParameterValue
+from ..base import BaseVault
+from ..models import Credentials
 
-from ..models import Credentials, VaultInterface
 
-
-class HashiCorpVault(VaultInterface):
+class HashiCorpVault(BaseVault):
     def __init__(self, url: str, token: str):
         self.client = Client(url=url, token=token)
         self._mount_path = "secret"
@@ -53,32 +52,3 @@ class HashiCorpVault(VaultInterface):
         self.client.secrets.kv.v2.delete_metadata_and_all_versions(
             path=f"credentials/{domain}", mount_point=self._mount_path
         )
-
-    def replace_placeholder_credentials(
-        self, url: str | None, params: list[ActionParameterValue] | None
-    ) -> list[ActionParameterValue] | None:
-        """Replace placeholder credentials with actual credentials"""
-        if not params:
-            return params
-
-        if not url:
-            return params
-
-        # Get credentials for current domain
-        creds = self.get_credentials(url)
-        if not creds:
-            return params
-
-        # Replace placeholder values with actual credentials
-        new_params = []
-        for param in params:
-            new_param = ActionParameterValue(name=param.name, value=param.value)
-
-            if param.value == "login@login_page.com":
-                new_param.value = creds.username
-            elif param.value == "login_password":
-                new_param.value = creds.password
-
-            new_params.append(new_param)
-
-        return new_params

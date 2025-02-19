@@ -2,15 +2,19 @@ from pathlib import Path
 
 import chevron
 
+from notte.common.credentials.base import get_credentials_prompt
+
 from .parser import GufoParser
 
 system_prompt_file = Path(__file__).parent / "system.md"
 
 
 class GufoPrompt:
-    def __init__(self, parser: GufoParser):
+    def __init__(self, parser: GufoParser, has_vault: bool = False):
         self.parser: GufoParser = parser
         self.system_prompt: str = system_prompt_file.read_text()
+        if has_vault:
+            self.system_prompt += "\n" + get_credentials_prompt()
 
     def system(self, task: str, url: str | None = None) -> str:
         return chevron.render(self.system_prompt, {"task": task, "url": url or "the web"}, warn=True)

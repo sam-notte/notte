@@ -4,6 +4,7 @@ from pathlib import Path
 
 import chevron
 
+from notte.common.credentials.base import get_credentials_prompt
 from notte.controller.actions import (
     BaseAction,
     ClickAction,
@@ -34,10 +35,13 @@ class FalcoPrompt:
     def __init__(
         self,
         max_actions_per_step: int,
+        has_vault: bool = False,
     ) -> None:
         multi_act = max_actions_per_step > 1
         prompt_type = PromptType.MULTI_ACTION if multi_act else PromptType.SINGLE_ACTION
         self.system_prompt: str = prompt_type.prompt_file().read_text()
+        if has_vault:
+            self.system_prompt += "\n" + get_credentials_prompt()
         self.max_actions_per_step: int = max_actions_per_step
         self.space: ActionSpace = ActionSpace(description="")
 
