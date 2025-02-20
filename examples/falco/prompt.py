@@ -34,7 +34,6 @@ class FalcoPrompt:
     def __init__(
         self,
         max_actions_per_step: int,
-        has_vault: bool = False,
     ) -> None:
         multi_act = max_actions_per_step > 1
         prompt_type = PromptType.MULTI_ACTION if multi_act else PromptType.SINGLE_ACTION
