@@ -1,15 +1,17 @@
-from typing import Optional
+from typing import final
 from urllib.parse import urlparse
 
+from typing_extensions import override
+
 try:
-    from hvac import Client
+    from hvac import Client as HashiCorpVaultClient
 
     VAULT_AVAILABLE = True
 except ImportError:
     VAULT_AVAILABLE = False
+    HashiCorpVaultClient = None
 
-from ..base import BaseVault
-from ..models import Credentials
+from notte.common.credential_vault.base import BaseVault, VaultCredentials
 
 
 def check_vault_imports():
@@ -20,11 +22,14 @@ def check_vault_imports():
         )
 
 
+@final
 class HashiCorpVault(BaseVault):
+    """HashiCorp Vault implementation of the BaseVault interface."""
+
     def __init__(self, url: str, token: str):
         check_vault_imports()
-        self.client = Client(url=url, token=token)
-        self._mount_path = "secret"
+        self.client = HashiCorpVaultClient(url=url, token=token)
+        self._mount_path: str = "secret"
         self._init_vault()
 
     def _init_vault(self) -> None:
@@ -42,6 +47,7 @@ class HashiCorpVault(BaseVault):
             if "path is already in use" not in str(e):
                 raise e
 
+    @override
     def add_credentials(self, url: str, username: str, password: str) -> None:
         domain = urlparse(url).netloc or url
         self.client.secrets.kv.v2.create_or_update_secret(
@@ -50,17 +56,19 @@ class HashiCorpVault(BaseVault):
             mount_point=self._mount_path,
         )
 
-    def get_credentials(self, url: str) -> Optional[Credentials]:
+    @override
+    def get_credentials(self, url: str) -> VaultCredentials | None:
         domain = urlparse(url).netloc or url
         try:
             secret = self.client.secrets.kv.v2.read_secret_version(
                 path=f"credentials/{domain}", mount_point=self._mount_path
             )
             data = secret["data"]["data"]
-            return Credentials(url=data["url"], username=data["username"], password=data["password"])
+            return VaultCredentials(url=data["url"], username=data["username"], password=data["password"])
         except Exception:
             return None
 
+    @override
     def remove_credentials(self, url: str) -> None:
         domain = urlparse(url).netloc or url
         self.client.secrets.kv.v2.delete_metadata_and_all_versions(
