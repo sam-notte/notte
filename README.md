@@ -20,7 +20,7 @@ Requires Python 3.11+
 
 ```bash
 pip install notte
-playwright install --with-deps chromium
+patchright install --with-deps chromium
 ```
 
 # Config
@@ -128,18 +128,34 @@ async with NotteEnv(NotteEnvConfig().disable_llm()) as env:
     print(obs.data.structured)
 ```
 
+# Run an AI agent with Notte
 
-
-
-
-
-Or alternatively, you can use Notte conversationally with an LLM agent:
+You can use Notte conversationally with an LLM agent:
 
 ```bash
-$ python examples/agent.py --goal "subscribe to notte.cc newsletter with ap@agpinto.com"
+$ python examples/cli_agent.py --task "subscribe to notte.cc newsletter with ap@agpinto.com"
 ```
 
 🌌 Use Notte as a backend environment for a web-based LLM agent. In this example, you integrate your own LLM policy, manage the interaction flow, handle errors, and define rewards, all while letting Notte handle webpages parsing/understanding and browser interactions.
+
+or alternatively, you can use the FastAPI server with docker:
+
+```bash
+docker build -t notte-fastapi-server .
+docker run -d -p 8000:8000 notte-fastapi-server
+```
+
+then you can use the server with the following curl command:
+
+```bash
+curl -X POST "http://localhost:8000/agent/run" -H "Content-Type: application/json" -d '{"task": "subscribe to notte.cc newsletter with ap@agpinto.com"}'
+```
+
+
+
+
+
+
 
 # API services
 
@@ -182,10 +198,9 @@ If you supply multiple keys in your `.env` file, Notte uses a [llamux](https://g
 Setup your local working environment;
 
 ```bash
-poetry env use 3.11 && poetry shell
-poetry install --with dev
-poetry run playwright install
-poetry run pre-commit install
+uv sync --dev
+uv run patchright install --with-deps chromium
+uv run pre-commit install
 ```
 
 Find an issue, fork, open a PR, and merge :)
