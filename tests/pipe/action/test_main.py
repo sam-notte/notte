@@ -6,9 +6,9 @@ import pytest
 
 from notte.actions.base import Action
 from notte.actions.space import ActionSpace, PossibleActionSpace
-from notte.browser.dom_tree import ComputedDomAttributes, DomNode
+from notte.browser.dom_tree import A11yTree, ComputedDomAttributes, DomNode
 from notte.browser.node_type import NodeRole, NodeType
-from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
+from notte.browser.snapshot import BrowserSnapshot, SnapshotMetadata, ViewportData
 from notte.pipe.action.llm_taging.pipe import LlmActionSpaceConfig, LlmActionSpacePipe
 from notte.sdk.types import PaginationParams
 from tests.mock.mock_service import MockLLMService
@@ -32,9 +32,27 @@ def listing_config() -> LlmActionSpaceConfig:
     return LlmActionSpaceConfig(required_action_coverage=0.0, doc_categorisation=False)
 
 
-def context_from_ids(ids: list[str]) -> ProcessedBrowserSnapshot:
-    return ProcessedBrowserSnapshot(
-        node=DomNode(
+def context_from_ids(ids: list[str]) -> BrowserSnapshot:
+    return BrowserSnapshot(
+        metadata=SnapshotMetadata(
+            title="",
+            url="",
+            viewport=ViewportData(
+                viewport_width=1000,
+                viewport_height=1000,
+                scroll_x=0,
+                scroll_y=0,
+                total_width=1000,
+                total_height=1000,
+            ),
+            tabs=[],
+        ),
+        html_content="",
+        a11y_tree=A11yTree(
+            raw={},
+            simple={},
+        ),
+        dom_node=DomNode(
             id=None,
             role=NodeRole.WEBAREA,
             text="Root Webarea",
@@ -54,21 +72,21 @@ def context_from_ids(ids: list[str]) -> ProcessedBrowserSnapshot:
                 for id in ids
             ],
         ),
-        snapshot=None,
+        screenshot=None,
     )
 
 
 def llm_patch_from_ids(
     ids: list[str],
-) -> Callable[[ProcessedBrowserSnapshot, list[Action] | None], PossibleActionSpace]:
+) -> Callable[[BrowserSnapshot, list[Action] | None], PossibleActionSpace]:
     return lambda context, previous_action_list: PossibleActionSpace(
         description="",
         actions=actions_from_ids(ids),
     )
 
 
-def context_to_actions(context: ProcessedBrowserSnapshot) -> Sequence[Action]:
-    return actions_from_ids(ids=[node.id for node in context.interaction_nodes()])
+def context_to_actions(snapshot: BrowserSnapshot) -> Sequence[Action]:
+    return actions_from_ids(ids=[node.id for node in snapshot.interaction_nodes()])
 
 
 def space_to_ids(space: ActionSpace) -> list[str]:

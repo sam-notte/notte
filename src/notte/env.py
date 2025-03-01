@@ -5,13 +5,13 @@ from typing import Unpack
 
 from loguru import logger
 from pydantic import BaseModel
+from typing_extensions import override
 
 from notte.actions.base import ExecutableAction
-from notte.browser.driver import BrowserConfig, BrowserDriver
 from notte.browser.observation import Observation, TrajectoryProgress
 from notte.browser.pool.base import BaseBrowserPool
-from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
 from notte.browser.snapshot import BrowserSnapshot
+from notte.browser.window import BrowserWindow, BrowserWindowConfig
 from notte.common.logging import timeit
 from notte.common.resource import AsyncResource
 from notte.controller.actions import (
@@ -22,7 +22,7 @@ from notte.controller.actions import (
     WaitAction,
 )
 from notte.controller.base import BrowserController
-from notte.errors.env import MaxStepsReachedError, NoContextObservedError
+from notte.errors.env import MaxStepsReachedError, NoSnapshotObservedError
 from notte.errors.processing import InvalidInternalCheckError
 from notte.llms.service import LLMService
 from notte.pipe.action.pipe import (
@@ -53,7 +53,7 @@ class ScrapeAndObserveParamsDict(ScrapeParamsDict, PaginationParamsDict):
 class NotteEnvConfig(BaseModel):
     max_steps: int = DEFAULT_MAX_NB_STEPS
     preprocessing: PreprocessingConfig = PreprocessingConfig()
-    browser: BrowserConfig = BrowserConfig()
+    window: BrowserWindowConfig = BrowserWindowConfig()
     scraping: ScrapingConfig = ScrapingConfig()
     action: MainActionSpaceConfig = MainActionSpaceConfig()
     observe_max_retry_after_snapshot_update: int = 2
@@ -64,7 +64,7 @@ class NotteEnvConfig(BaseModel):
 
     def dev_mode(self) -> "NotteEnvConfig":
         self.verbose = True
-        self.browser.verbose = True
+        self.window.pool.verbose = True
         self.action.verbose = True
         self.action.llm_tagging.verbose = True
         self.action.llm_tagging.listing.verbose = True
@@ -75,7 +75,7 @@ class NotteEnvConfig(BaseModel):
 
     def user_mode(self) -> "NotteEnvConfig":
         self.verbose = True
-        self.browser.verbose = True
+        self.window.pool.verbose = True
         self.action.verbose = True
         self.action.llm_tagging.verbose = True
         self.action.llm_tagging.listing.verbose = True
@@ -106,15 +106,15 @@ class NotteEnvConfig(BaseModel):
         return self
 
     def headless(self, value: bool | None = None) -> "NotteEnvConfig":
-        self.browser.headless = value if value is not None else True
+        self.window.headless = value if value is not None else True
         return self
 
     def not_headless(self) -> "NotteEnvConfig":
-        self.browser.headless = False
+        self.window.headless = False
         return self
 
     def cdp(self, url: str) -> "NotteEnvConfig":
-        self.browser.cdp_url = url
+        self.window.cdp_url = url
         return self
 
     def llm_action_tagging(self) -> "NotteEnvConfig":
@@ -126,7 +126,7 @@ class NotteEnvConfig(BaseModel):
         return self
 
     def disable_web_security(self) -> "NotteEnvConfig":
-        self.browser.disable_web_security = True
+        self.window.pool.disable_web_security = True
         return self
 
     def disable_auto_scrape(self) -> "NotteEnvConfig":
@@ -151,7 +151,7 @@ class NotteEnv(AsyncResource):
     def __init__(
         self,
         config: NotteEnvConfig | None = None,
-        browser: BrowserDriver | None = None,
+        window: BrowserWindow | None = None,
         pool: BaseBrowserPool | None = None,
         llmserve: LLMService | None = None,
     ) -> None:
@@ -161,25 +161,25 @@ class NotteEnv(AsyncResource):
         self.config: NotteEnvConfig = config or NotteEnvConfig().use_llm()
         if llmserve is None:
             llmserve = LLMService(base_model=self.config.perception_model)
-        self._browser: BrowserDriver = browser or BrowserDriver(pool=pool, config=self.config.browser)
-        super().__init__(self._browser)
-        self.controller: BrowserController = BrowserController(self._browser, verbose=self.config.verbose)
+        self._window: BrowserWindow = window or BrowserWindow(pool=pool, config=self.config.window)
+        super().__init__(self._window)
+        self.controller: BrowserController = BrowserController(self._window, verbose=self.config.verbose)
 
         self.trajectory: list[TrajectoryStep] = []
-        self._context: ProcessedBrowserSnapshot | None = None
+        self._snapshot: BrowserSnapshot | None = None
         self._action_space_pipe: MainActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(
-            llmserve=llmserve, browser=self._browser, config=self.config.scraping
+            llmserve=llmserve, window=self._window, config=self.config.scraping
         )
         self._node_resolution_pipe: NodeResolutionPipe = NodeResolutionPipe(
-            browser=self._browser, type=self.config.preprocessing.type, verbose=self.config.verbose
+            window=self._window, type=self.config.preprocessing.type, verbose=self.config.verbose
         )
 
     @property
-    def context(self) -> ProcessedBrowserSnapshot:
-        if self._context is None:
-            raise NoContextObservedError()
-        return self._context
+    def snapshot(self) -> BrowserSnapshot:
+        if self._snapshot is None:
+            raise NoSnapshotObservedError()
+        return self._snapshot
 
     @property
     def previous_actions(self) -> Sequence[BaseAction] | None:
@@ -206,7 +206,7 @@ class NotteEnv(AsyncResource):
     @property
     def obs(self) -> Observation:
         if len(self.trajectory) <= 0:
-            raise NoContextObservedError()
+            raise NoSnapshotObservedError()
         return self.trajectory[-1].obs
 
     def progress(self) -> TrajectoryProgress:
@@ -220,7 +220,7 @@ class NotteEnv(AsyncResource):
     def _preobserve(self, snapshot: BrowserSnapshot, action: BaseAction) -> Observation:
         if len(self.trajectory) >= self.config.max_steps:
             raise MaxStepsReachedError(max_steps=self.config.max_steps)
-        self._context = ProcessedSnapshotPipe.forward(snapshot, self.config.preprocessing)
+        self._snapshot = ProcessedSnapshotPipe.forward(snapshot, self.config.preprocessing)
         preobs = Observation.from_snapshot(snapshot, progress=self.progress())
         self.trajectory.append(TrajectoryStep(obs=preobs, action=action))
         return preobs
@@ -231,16 +231,16 @@ class NotteEnv(AsyncResource):
         retry: int,
     ) -> Observation:
         if self.config.verbose:
-            logger.info(f"🧿 observing page {self.context.snapshot.metadata.url}")
+            logger.info(f"🧿 observing page {self.snapshot.metadata.url}")
         self.obs.space = self._action_space_pipe.forward(
-            self.context,
+            self.snapshot,
             self.previous_actions,
             pagination=pagination,
         )
         # TODO: improve this
         # Check if the snapshot has changed since the beginning of the trajectory
         # if it has, it means that the page was not fully loaded and that we should restart the oblisting
-        time_diff = dt.datetime.now() - self.context.snapshot.metadata.timestamp
+        time_diff = dt.datetime.now() - self.snapshot.metadata.timestamp
         if time_diff.total_seconds() > self.config.nb_seconds_between_snapshots_check:
             if self.config.verbose:
                 logger.warning(
@@ -249,8 +249,8 @@ class NotteEnv(AsyncResource):
                         "Check if page content has changed..."
                     )
                 )
-            check_snapshot = await self._browser.snapshot(screenshot=False)
-            if not self.context.snapshot.compare_with(check_snapshot) and retry > 0:
+            check_snapshot = await self._window.snapshot(screenshot=False)
+            if not self.snapshot.compare_with(check_snapshot) and retry > 0:
                 if self.config.verbose:
                     logger.warning(
                         "Snapshot changed since the beginning of the action listing, retrying to observe again"
@@ -266,12 +266,12 @@ class NotteEnv(AsyncResource):
         ):
             if self.config.verbose:
                 logger.info(f"🛺 Autoscrape enabled and page is {self.obs.space.category}. Scraping page...")
-            self.obs.data = await self._data_scraping_pipe.forward(self.context, ScrapeParams())
+            self.obs.data = await self._data_scraping_pipe.forward(self.snapshot, ScrapeParams())
         return self.obs
 
     @timeit("goto")
     async def goto(self, url: str | None) -> Observation:
-        snapshot = await self._browser.goto(url)
+        snapshot = await self._window.goto(url)
         return self._preobserve(snapshot, action=GotoAction(url=snapshot.metadata.url))
 
     @timeit("observe")
@@ -283,7 +283,7 @@ class NotteEnv(AsyncResource):
         _ = await self.goto(url)
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-            logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+            logger.debug(f"ℹ️ snapshot inodes IDs: {[node.id for node in self.snapshot.interaction_nodes()]}")
         return await self._observe(
             pagination=PaginationParams.model_validate(pagination),
             retry=self.config.observe_max_retry_after_snapshot_update,
@@ -300,7 +300,7 @@ class NotteEnv(AsyncResource):
             # Scrape action is a special case
             return await self.scrape()
         exec_action = ExecutableAction.parse(action_id, params, enter=enter)
-        action = await self._node_resolution_pipe.forward(exec_action, self._context)
+        action = await self._node_resolution_pipe.forward(exec_action, self._snapshot)
         snapshot = await self.controller.execute(action)
         obs = self._preobserve(snapshot, action=action)
         return obs
@@ -316,7 +316,7 @@ class NotteEnv(AsyncResource):
             # Scrape action is a special case
             # TODO: think about flow. Right now, we do scraping and observation in one step
             return await self.god(instructions=action.instructions)
-        action = await self._node_resolution_pipe.forward(action, self._context)
+        action = await self._node_resolution_pipe.forward(action, self._snapshot)
         snapshot = await self.controller.execute(action)
         if self.config.verbose:
             logger.info(f"🌌 action {action.id} executed in browser. Observing page...")
@@ -337,7 +337,7 @@ class NotteEnv(AsyncResource):
         _ = await self.execute(action_id, params, enter=enter)
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
-            logger.debug(f"ℹ️ context inodes IDs: {[node.id for node in self.context.interaction_nodes()]}")
+            logger.debug(f"ℹ️ snapshot inodes IDs: {[node.id for node in self.snapshot.interaction_nodes()]}")
         return await self._observe(
             pagination=PaginationParams.model_validate(pagination),
             retry=self.config.observe_max_retry_after_snapshot_update,
@@ -352,7 +352,7 @@ class NotteEnv(AsyncResource):
         if url is not None:
             _ = await self.goto(url)
         params = ScrapeParams(**scrape_params)
-        self.obs.data = await self._data_scraping_pipe.forward(self.context, params)
+        self.obs.data = await self._data_scraping_pipe.forward(self.snapshot, params)
         return self.obs
 
     @timeit("god")
@@ -369,20 +369,20 @@ class NotteEnv(AsyncResource):
         pagination = PaginationParams.model_validate(params)
         space, data = await asyncio.gather(
             self._action_space_pipe.forward_async(
-                self.context, previous_action_list=self.previous_actions, pagination=pagination
+                self.snapshot, previous_action_list=self.previous_actions, pagination=pagination
             ),
-            self._data_scraping_pipe.forward_async(self.context, scrape),
+            self._data_scraping_pipe.forward_async(self.snapshot, scrape),
         )
         self.obs.space = space
         self.obs.data = data
         return self.obs
 
     @timeit("reset")
+    @override
     async def reset(self) -> None:
         if self.config.verbose:
             logger.info("🌊 Resetting environment...")
         self.trajectory = []
-        self._context = None
-        return await self._browser.reset()
-
-    # ------------------------------ Private ---------------------------------------
+        self._snapshot = None
+        # reset the window
+        await super().reset()

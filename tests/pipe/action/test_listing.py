@@ -1,8 +1,7 @@
 import pytest
 
 from notte.browser.dom_tree import A11yNode, A11yTree, ComputedDomAttributes, DomNode
-from notte.browser.node_type import NodeRole, NodeType
-from notte.browser.processed_snapshot import ProcessedBrowserSnapshot
+from notte.browser.node_type import NodeType
 from notte.browser.snapshot import BrowserSnapshot, SnapshotMetadata, ViewportData
 from notte.pipe.action.llm_taging.listing import ActionListingConfig, ActionListingPipe
 from notte.pipe.action.llm_taging.parser import ActionListingParserConfig, ActionListingParserType
@@ -45,55 +44,44 @@ def action_table_answer() -> str:
 
 
 @pytest.fixture
-def mock_context() -> ProcessedBrowserSnapshot:
-    return ProcessedBrowserSnapshot(
-        node=DomNode(
-            id="B1",
-            role=NodeRole.BUTTON,
+def mock_snapshot() -> BrowserSnapshot:
+    return BrowserSnapshot(
+        metadata=SnapshotMetadata(
+            title="mock",
+            url="https://www.google.com/travel/flights",
+            viewport=ViewportData(
+                scroll_x=0,
+                scroll_y=0,
+                viewport_width=1000,
+                viewport_height=1000,
+                total_width=1000,
+                total_height=1000,
+            ),
+            tabs=[],
+        ),
+        html_content="html-content",
+        a11y_tree=A11yTree(
+            raw=A11yNode(
+                id="B2",
+                role="button",
+                name="user-text",
+            ),
+            simple=A11yNode(
+                id="B2",
+                role="button",
+                name="user-text",
+            ),
+        ),
+        dom_node=DomNode(
+            id="B2",
+            role="button",
             text="user-text",
             type=NodeType.INTERACTION,
             children=[],
             attributes=None,
             computed_attributes=ComputedDomAttributes(),
         ),
-        snapshot=BrowserSnapshot(
-            metadata=SnapshotMetadata(
-                title="mock",
-                url="https://www.google.com/travel/flights",
-                viewport=ViewportData(
-                    scroll_x=0,
-                    scroll_y=0,
-                    viewport_width=1000,
-                    viewport_height=1000,
-                    total_width=1000,
-                    total_height=1000,
-                ),
-                tabs=[],
-            ),
-            html_content="html-content",
-            a11y_tree=A11yTree(
-                raw=A11yNode(
-                    id="B2",
-                    role="button",
-                    name="user-text",
-                ),
-                simple=A11yNode(
-                    id="B2",
-                    role="button",
-                    name="user-text",
-                ),
-            ),
-            dom_node=DomNode(
-                id="B2",
-                role="button",
-                text="user-text",
-                type=NodeType.INTERACTION,
-                children=[],
-                attributes=None,
-                computed_attributes=ComputedDomAttributes(),
-            ),
-            screenshot=b"screenshot",
-        ),
+        screenshot=b"screenshot",
     )
 
 
@@ -105,7 +93,7 @@ def mock_context() -> ProcessedBrowserSnapshot:
     ],
 )
 def test_listing_pipe(
-    mock_context: ProcessedBrowserSnapshot,
+    mock_snapshot: BrowserSnapshot,
     parser: ActionListingParserType,
     mock_response: str,
     request: pytest.FixtureRequest,
@@ -129,7 +117,7 @@ homepage
     )
 
     pipe: ActionListingPipe = ActionListingPipe(llmserve=llm_service, config=config)
-    actions = pipe.forward(context=mock_context).actions
+    actions = pipe.forward(snapshot=mock_snapshot).actions
 
     # Test common expectations
     assert len(actions) == 6  # Total number of actions
