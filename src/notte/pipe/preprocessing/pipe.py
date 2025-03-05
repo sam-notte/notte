@@ -1,9 +1,8 @@
 from enum import Enum
-from typing import final
-
-from pydantic import BaseModel
+from typing import Self, final
 
 from notte.browser.snapshot import BrowserSnapshot
+from notte.common.config import FrozenConfig
 from notte.pipe.preprocessing.a11y.pipe import (
     A11yPreprocessingConfig,
     A11yPreprocessingPipe,
@@ -16,9 +15,15 @@ class PreprocessingType(Enum):
     DOM = "dom"
 
 
-class PreprocessingConfig(BaseModel):
+class PreprocessingConfig(FrozenConfig):
     type: PreprocessingType = PreprocessingType.DOM
     a11y: A11yPreprocessingConfig = A11yPreprocessingConfig()
+
+    def accessibility(self: Self) -> Self:
+        return self._copy_and_validate(type=PreprocessingType.A11Y)
+
+    def dom(self: Self) -> Self:
+        return self._copy_and_validate(type=PreprocessingType.DOM)
 
 
 @final

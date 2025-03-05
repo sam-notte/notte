@@ -1,10 +1,11 @@
 from enum import Enum
+from typing import Self
 
 import regex as re
 from loguru import logger
-from pydantic import BaseModel
 
 from notte.actions.base import ActionParameter, PossibleAction
+from notte.common.config import FrozenConfig
 from notte.errors.llm import LLMParsingError
 from notte.errors.processing import InvalidInternalCheckError
 
@@ -15,9 +16,18 @@ class ActionListingParserType(Enum):
     JSON = "json"  # TODO
 
 
-class ActionListingParserConfig(BaseModel):
+class ActionListingParserConfig(FrozenConfig):
     type: ActionListingParserType = ActionListingParserType.TABLE
     allow_partial: bool = True
+
+    def set_markdown(self: Self) -> Self:
+        return self._copy_and_validate(type=ActionListingParserType.MARKDOWN)
+
+    def set_table(self: Self) -> Self:
+        return self._copy_and_validate(type=ActionListingParserType.TABLE)
+
+    def set_json(self: Self) -> Self:
+        return self._copy_and_validate(type=ActionListingParserType.JSON)
 
 
 class ActionListingParserPipe:
