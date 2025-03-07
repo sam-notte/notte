@@ -42,7 +42,7 @@ api = [
     "uvicorn>=0.29.0",
 ]
 discord = [
-    "discord-py>=2.5.0",
+    "discord-py==2.5.0",
 ]
 slack = [
     "slack-sdk>=3.34.0",

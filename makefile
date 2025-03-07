@@ -21,7 +21,7 @@ clean:
 install:
 	@rm -f uv.lock
 	@uv sync --dev --all-extras
-	@uv export --without-hashes -f requirements.txt -o requirements.txt
+	@uv export > requirements.txt
 
 .PHONY: release
 release:
