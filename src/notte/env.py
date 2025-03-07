@@ -25,6 +25,7 @@ from notte.controller.actions import (
 from notte.controller.base import BrowserController
 from notte.errors.env import MaxStepsReachedError, NoSnapshotObservedError
 from notte.errors.processing import InvalidInternalCheckError
+from notte.llms.engine import LlmModel
 from notte.llms.service import LLMService
 from notte.pipe.action.pipe import (
     MainActionSpaceConfig,
@@ -73,13 +74,19 @@ class NotteEnvConfig(FrozenConfig):
         )
 
     def groq(self: Self) -> Self:
-        return self._copy_and_validate(perception_model="groq/llama-3.3-70b-versatile")
+        return self._copy_and_validate(perception_model=LlmModel.groq)
 
     def openai(self: Self) -> Self:
-        return self._copy_and_validate(perception_model="openai/gpt-4o")
+        return self._copy_and_validate(perception_model=LlmModel.openai)
 
     def cerebras(self: Self) -> Self:
-        return self._copy_and_validate(perception_model="cerebras/llama-3.3-70b")
+        return self._copy_and_validate(perception_model=LlmModel.cerebras)
+
+    def gemini(self: Self) -> Self:
+        return self._copy_and_validate(perception_model=LlmModel.gemini)
+
+    def model(self: Self, model: str) -> Self:
+        return self._copy_and_validate(perception_model=model)
 
     def a11y(self: Self) -> Self:
         return self._copy_and_validate(preprocessing=self.preprocessing.accessibility())
@@ -105,6 +112,11 @@ class NotteEnvConfig(FrozenConfig):
     def llm_data_extract(self: Self) -> Self:
         return self._copy_and_validate(scraping=self.scraping.set_llm_extract())
 
+    def web_security(self: Self, value: bool = True) -> Self:
+        if value:
+            return self.enable_web_security()
+        return self.disable_web_security()
+
     def disable_web_security(self: Self) -> Self:
         return self._copy_and_validate(window=self.window.disable_web_security())
 
@@ -120,7 +132,7 @@ class NotteEnvConfig(FrozenConfig):
     def use_llm(self: Self) -> Self:
         return self.llm_data_extract().llm_action_tagging()
 
-    def disable_llm(self: Self) -> Self:
+    def disable_perception(self: Self) -> Self:
         return self._copy_and_validate(
             scraping=self.scraping.set_simple(),
             action=self.action.set_simple(),
