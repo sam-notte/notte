@@ -8,7 +8,11 @@ from patchright.async_api import Browser as PatchrightBrowser
 from pydantic import Field
 from typing_extensions import override
 
-from notte.browser.pool.base import BaseBrowserPool, BrowserResource, BrowserWithContexts
+from notte.browser.pool.base import (
+    BaseBrowserPool,
+    BrowserResource,
+    BrowserWithContexts,
+)
 from notte.common.config import FrozenConfig
 from notte.errors.browser import (
     BrowserResourceLimitError,

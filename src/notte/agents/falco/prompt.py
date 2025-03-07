@@ -8,6 +8,7 @@ from notte.controller.actions import (
     BaseAction,
     ClickAction,
     CompletionAction,
+    FallbackObserveAction,
     FillAction,
     GotoAction,
     ScrapeAction,
@@ -38,7 +39,7 @@ class FalcoPrompt:
         prompt_type = PromptType.MULTI_ACTION if multi_act else PromptType.SINGLE_ACTION
         self.system_prompt: str = prompt_type.prompt_file().read_text()
         self.max_actions_per_step: int = max_actions_per_step
-        self.space: ActionSpace = ActionSpace(description="")
+        self.space: ActionSpace = ActionSpace(description="", exclude_actions={FallbackObserveAction})
 
     @staticmethod
     def _json_dump(steps: list[BaseAction]) -> str:
@@ -47,7 +48,7 @@ class FalcoPrompt:
 
     def example_form_filling(self) -> str:
         return self._json_dump(
-            [FillAction(id="I1", value="username"), FillAction(id="I2", value="password"), ClickAction(id="B1")]
+            [FillAction(id="I99", value="username"), FillAction(id="I101", value="password"), ClickAction(id="B1")]
         )
 
     def example_invalid_sequence(self) -> str:
@@ -77,6 +78,7 @@ class FalcoPrompt:
 {
   "state": {
     "page_summary": "On the page are company a,b,c wtih their revenue 1,2,3.",
+    "relevant_interactions": [{"id": "B2", "reason": "The button with id B2 represents search and I'm looking to search"}],
     "previous_goal_status": "success|failure|unknown",
     "previous_goal_eval": "{{goal_eval}}",
     "memory": "Description of what has been done and what you need to remember until the end of the task",
@@ -123,3 +125,9 @@ If not, continue as usual.
 Your new ultimate task is: {task}.
 Take the previous context into account and finish your new ultimate task.
 """
+
+    def action_message(self) -> str:
+        return """Given the previous information, start by reflecting on your last action. Then, summarize the current page and list relevant available interactions.
+Absolutely do not under any circumstance list or pay attention to any id that is not explicitly found in the page.
+From there, select the your next goal, and in turn, your next action.
+    """

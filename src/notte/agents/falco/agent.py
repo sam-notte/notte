@@ -1,4 +1,6 @@
 import time
+import traceback
+import typing
 from collections.abc import Callable
 from enum import StrEnum
 
@@ -18,7 +20,7 @@ from notte.common.tools.safe_executor import ExecutionStatus, SafeActionExecutor
 from notte.common.tools.trajectory_history import TrajectoryHistory
 from notte.common.tools.validator import CompletionValidator
 from notte.common.tracer import LlmUsageDictTracer
-from notte.controller.actions import BaseAction, CompletionAction
+from notte.controller.actions import BaseAction, CompletionAction, FallbackObserveAction
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
 
@@ -73,9 +75,12 @@ class FalcoAgent(BaseAgent):
         if config.include_screenshot and not config.env.window.screenshot:
             raise ValueError("Cannot `include_screenshot=True` if `screenshot` is not enabled in the browser config")
         self.tracer: LlmUsageDictTracer = LlmUsageDictTracer()
+        self.llm: LLMEngine = LLMEngine(
+            model=config.reasoning_model,
+            tracer=self.tracer,
+            structured_output_retries=config.env.structured_output_retries,
+        )
         self.step_callback: Callable[[str, StepAgentOutput], None] | None = step_callback
-
-        self.llm: LLMEngine = LLMEngine(model=config.reasoning_model, tracer=self.tracer)
         # Users should implement their own parser to customize how observations
         # and actions are formatted for their specific LLM and use case
         self.env: NotteEnv = NotteEnv(
@@ -86,7 +91,12 @@ class FalcoAgent(BaseAgent):
         self.perception: FalcoPerception = FalcoPerception()
         self.validator: CompletionValidator = CompletionValidator(llm=self.llm, perception=self.perception)
         self.prompt: FalcoPrompt = FalcoPrompt(max_actions_per_step=config.max_actions_per_step)
-        self.conv: Conversation = Conversation(max_tokens=config.max_history_tokens, convert_tools_to_assistant=True)
+        self.conv: Conversation = Conversation(
+            max_tokens=config.max_history_tokens,
+            convert_tools_to_assistant=True,
+            autosize=True,
+            model=config.reasoning_model,
+        )
         self.history_type: HistoryType = config.history_type
         self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=config.max_error_length)
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(
@@ -144,11 +154,12 @@ class FalcoAgent(BaseAgent):
                             case (HistoryType.FULL_CONVERSATION, _):
                                 self.conv.add_user_message(
                                     content=self.perception.perceive(obs),
-                                    image=obs.screenshot if self.config.include_screenshot else None,
+                                    image=(obs.screenshot if self.config.include_screenshot else None),
                                 )
                             case (HistoryType.SHORT_OBSERVATIONS_WITH_RAW_DATA, True):
                                 # add data if data was scraped
                                 self.conv.add_user_message(content=self.perception.perceive_data(obs, raw=True))
+
                             case (HistoryType.SHORT_OBSERVATIONS_WITH_SHORT_DATA, True):
                                 self.conv.add_user_message(content=self.perception.perceive_data(obs, raw=False))
                             case _:
@@ -158,14 +169,17 @@ class FalcoAgent(BaseAgent):
         if last_valid_obs is not None and self.history_type is not HistoryType.FULL_CONVERSATION:
             self.conv.add_user_message(
                 content=self.perception.perceive(last_valid_obs),
-                image=last_valid_obs.screenshot if self.config.include_screenshot else None,
+                image=(last_valid_obs.screenshot if self.config.include_screenshot else None),
             )
+
+        if len(self.trajectory.steps) > 0:
+            self.conv.add_user_message(self.prompt.action_message())
+
         return self.conv.messages()
 
     async def step(self, task: str) -> CompletionAction | None:
         """Execute a single step of the agent"""
         messages = self.get_messages(task)
-        logger.info(f"🔍 LLM messages:\n{messages}")
         response: StepAgentOutput = self.llm.structured_completion(messages, response_format=StepAgentOutput)
         if self.step_callback is not None:
             self.step_callback(task, response)
@@ -179,11 +193,28 @@ class FalcoAgent(BaseAgent):
             # Replace credentials if needed using the vault
             if self.vault is not None and self.vault.contains_credentials(action):
                 action = self.vault.replace_credentials(action, self.env.snapshot)
+
             result = await self.step_executor.execute(action)
+
             self.trajectory.add_step(result)
             step_msg = self.trajectory.perceive_step_result(result, include_ids=True)
             if not result.success:
                 logger.error(f"🚨 {step_msg}")
+
+                # observe again
+                obs = await self.env.observe()
+
+                # cast is necessary because we cant have covariance
+                # in ExecutionStatus
+                ex_status = ExecutionStatus(
+                    input=typing.cast(BaseAction, FallbackObserveAction()),
+                    output=obs,
+                    success=True,
+                    message="Observed",
+                )
+                self.trajectory.add_output(response)
+                self.trajectory.add_step(ex_status)
+
                 # stop the loop
                 break
             # Successfully executed the action
@@ -198,7 +229,7 @@ class FalcoAgent(BaseAgent):
 
         except Exception as e:
             if self.config.raise_condition is RaiseCondition.NEVER:
-                return self.output(f"Failed due to {e}", False)
+                return self.output(f"Failed due to {e}: {traceback.format_exc()}", False)
             raise e
 
     async def _run(self, task: str, url: str | None = None) -> AgentResponse:

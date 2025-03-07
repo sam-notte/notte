@@ -7,12 +7,20 @@ from notte.controller.actions import BaseAction, ClickAction, CompletionAction
 from notte.controller.space import ActionSpace
 
 
+class RelevantInteraction(BaseModel):
+    """Interaction ids that can be relevant to the next actions"""
+
+    id: str
+    reason: str
+
+
 class AgentState(BaseModel):
     """Current state of the agent"""
 
-    page_summary: str
     previous_goal_status: Literal["success", "failure", "unknown"]
     previous_goal_eval: str
+    page_summary: str
+    relevant_interactions: list[RelevantInteraction]
     memory: str
     next_goal: str
 
@@ -64,7 +72,7 @@ _AgentAction: type[AgentAction] = create_agent_action_model()
 
 class StepAgentOutput(BaseModel):
     state: AgentState
-    actions: list[_AgentAction]  # type: ignore[type-arg]
+    actions: list[_AgentAction] = Field(min_length=1)  # type: ignore[type-arg]
 
     @field_serializer("actions")
     def serialize_actions(self, actions: list[AgentAction], _info: Any) -> list[dict[str, Any]]:
