@@ -1,73 +1,51 @@
+<p align="center">
+  <img src="docs/logo/banner.png" alt="Notte Logo" width="100%">
+</p>
+
+## The full stack for the agentic internet layer
+
+[![GitHub stars](https://img.shields.io/github/stars/nottelabs/notte?style=social)](https://github.com/nottelabs/notte/stargazers)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/pypi/v/notte)](https://pypi.org/project/notte/)
-[![Discord](https://img.shields.io/discord/1312234428444966924?color=7289DA&label=Discord&logo=discord&logoColor=white)](https://discord.gg/atbh5s6bts)
-[![PyPI Downloads](https://static.pepy.tech/badge/notte)](https://pepy.tech/projects/notte)
-
-# Notte 🌌
-
-**[Notte](https://www.notte.cc/?ref=github) is a web browser for LLM agents.** It transforms the internet into an agent-friendly environment, turning websites into structured, navigable maps described in natural language. By using natural language commands, Notte minimizes hallucinations, reduces token usage, and lowers costs and latency. It handles the browser complexity so your LLM policies can focus on what they do best: conversational reasoning and planning.
-
-## A new paradigm for web agent navigation:
-
-- Language-first web navigation, no DOM/HTML parsing required
-- Treats the web as a structured, natural language action map
-- Reinforcement learning style action space and controls
-
-# Install
-
-Requires Python 3.11+
+[![PyPI version](https://img.shields.io/pypi/v/notte?color=blue)](https://pypi.org/project/notte/)
+[![PyPI Downloads](https://static.pepy.tech/badge/notte?color=blue)](https://pepy.tech/projects/notte)
+[![commits main](https://img.shields.io/github/commit-activity/m/nottelabs/notte?color=blue)](https://github.com/nottelabs/notte/commits/main)
 
 ```bash
+$ agent.run("go to twitter and post: new era this is @nottecore taking over my acc")
+— ft. secure password vault, bypass bot detection, speed x2
+```
+
+<p align="center">
+  <img src="docs/gifs/v1.gif" alt="Demo" width="100%" href="https://video.twimg.com/ext_tw_video/1892967963344461824/pu/vid/avc1/1282x720/15sCfmmUUcAtBZaR.mp4">
+</p>
+
+## Quickstart me
+
+```bash
+uv venv --python 3.11
 pip install notte
 patchright install --with-deps chromium
+export GEMINI_API_KEY="your-api-key"
 ```
 
-# Config
-
-Notte uses language models to parse and structure web pages into a structured action space. To get started, you need to provide at least one API key for a supported language model provider. These keys can be configured in `.env` file (use `cp .env.example .env` to get started and loaded into your environment;
+And spin up your crazy cool and dead simple agent;
 
 ```python
-os.environ["OPENAI_API_KEY"] = "your-api-key"
-# or any other provider(s) you have keys for
+from notte.agents import Agent
+agi = Agent(reasoning_model="gemini/gemini-2.0-flash")
+agi.run(task="doom scroll cat memes on google images")
 ```
 
-### Supported default providers
+This is by far the closest attempt to AGI we've ever witnessed ;)
 
-By default, Notte supports the following providers:
+## Highligths 🌌
 
-- [Cerebras](https://cerebras.ai/inference) fastest, 60K tpm rate limit, wait-list keys
-- [Anthropic](https://docs.anthropic.com/en/docs/api/api-reference) 40K tpm rate limit
-- [OpenAI](https://platform.openai.com/docs/guides/chat/introduction) 30k tpm rate limit
-- [Groq](https://console.groq.com/docs/api-keys) fast, 6K tpm rate limit
-
-# Usage
-
-As a reinforcement learning environment to get full navigation control;
-
-```python
-import os
-from notte.env import NotteEnv, NotteEnvConfig
-
-# setting fast language model provider keys
-os.environ['ANTHROPIC_API_KEY'] = "your-api-key"
-
-# Important: this should be run in an async context (e.g. notebook, asyncio, etc.)
-# if you are running in a script, you should start `asyncio.run(main())`
-async with NotteEnv(NotteEnvConfig().not_headless()) as env:
-  # observe a webpage, and take a random action
-  obs = await env.observe("https://www.google.com/travel/flights")
-  obs = await env.step(obs.space.sample(role="link").id)
-```
-
-The observation object contains all you need about the current state of a page (url, screenshot, list of available actions, etc.);
+Notte is the full stack framework for web browsing LLM agents. Our main tech highlight is that we introduce a perception layer that turns the internet into an agent-friendly environment, by turning websites into structured maps described in natural language, ready to be digested by an LLM with less effort ✨
 
 ```bash
-> obs = env.observe("https://www.google.com/travel/flights")
-> print(obs.space.markdown()) # list of available actions
-```
+$ page.perceive("https://www.google.com/travel/flights")
 
-```
 # Flight Search
 * I1: Enters departure location (departureLocation: str = "San Francisco")
 * I3: Selects departure date (departureDate: date)
@@ -83,117 +61,125 @@ The observation object contains all you need about the current state of a page (
 ...
 ```
 
-You can also scrape data from the page using the `scrape` function;
-```python
-...
-async with NotteEnv(NotteEnvConfig().not_headless()) as env:
-  ...
-  obs = await env.scrape()
-print(obs.data) # data extracted from the page (if any)
-```
+The above gives you the gist of how we push to better parse webpages and reduce the cognitive load of LLM reasoners. The aim is to enable you to build and deploy more accurate web browsing agents, while downgrading to smaller models, which in turn increase inference speed and reduce production costs.
 
-```
-# Flight Search inputs
-- Where from?: Paris
-- Where to?: London
-- Departure: Tue, Jan 14
+### Speed contest vs. Browser-Use
 
-# Flight Search Results
-20 of 284 results returned.
-They are ranked based on price and convenience
-
-| Airline       | Departure  | Arrival  | Duration   | Stops     | Price |
-|---------------|------------|----------|------------|-----------|-------|
-| easyJet       | 10:15 AM   | 10:35 AM | 1 hr 20 min| Nonstop   | $62   |
-| Air France    | 4:10 PM    | 4:35 PM  | 1 hr 25 min| Nonstop   | $120  |
-```
-
-scrape also supports structured data extraction with Pydantic models, e.g.
-
-```python
-from notte.env import NotteEnv, NotteEnvConfig
-from pydantic import BaseModel, Field
-class ArticleSchema(BaseModel):
-    title: str
-    points: int
-    by: str
-    commentsURL: str
-
-class TopArticlesSchema(BaseModel):
-    top: list[ArticleSchema] = Field(..., max_items=5, description="Top 5 stories")
-
-
-async with NotteEnv(NotteEnvConfig().disable_perception()) as env:
-    obs = await env.scrape(url='https://news.ycombinator.com', response_format=TopArticlesSchema)
-    print(obs.data.structured)
-```
-
-# Run an AI agent with Notte
-
-You can use Notte conversationally with an LLM agent:
+The perception layer enables smaller models (e.g. the llama suite) to be connected for the agent's reasoning, because all the DOM noise is abstracted and the LLM can focus on a set of actions described in plain language. This allows the agent to be served on ultra-high inference such as Cerebras without losing precision 🏃‍♂️
 
 ```bash
-$ python examples/cli_agent.py --task "subscribe to notte.cc newsletter with ap@agpinto.com"
+$ agent.run("search cheapest flight from paris to nyc on gflight")
+— left:browser-use, right:notte-agent (cerebras)
 ```
 
-🌌 Use Notte as a backend environment for a web-based LLM agent. In this example, you integrate your own LLM policy, manage the interaction flow, handle errors, and define rewards, all while letting Notte handle webpages parsing/understanding and browser interactions.
+<p align="center">
+  <img src="docs/gifs/v2.gif" alt="Demo" width="100%" href="https://video.twimg.com/amplify_video/1882896602324418560/vid/avc1/1278x720/Conf_R7LL8htoooT.mp4?tag=16">
+</p>
 
-or alternatively, you can use the FastAPI server with docker:
+## The full stack framework
 
-```bash
-docker build -t notte-fastapi-server .
-docker run -d -p 8000:8000 notte-fastapi-server
-```
+Notte's full stack agentic internet framework combines core browser infrastructure (sessions, live replay, cdp) with intelligent browsing agents, bridged and enhanced with our perception layer. Our entire codebase is made to be highly customizable, ready to integrate other devtools from the ecosystem and packaged to be push to prod. We also provide web scripting capabilities and sota scraping endpoints out of the box, because why not.
 
-then you can use the server with the following curl command:
+<table>
+  <tr>
+    <th><strong>service</strong></th>
+    <th><code>agent.run()</code></th>
+    <th><code>agent.cloud()</code></th>
+    <th><code>page.scrape()</code></th>
+    <th><code>page.act()</code></th>
+    <th><code>page.perceive()</code></th>
+  </tr>
+  <tr>
+    <td><strong>browser-use</strong></td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><strong>stagehand</strong></td>
+    <td></td>
+    <td></td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><strong>notte</strong></td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+    <td align="center">🌕</td>
+  </tr>
+</table>
 
-```bash
-curl -X POST "http://localhost:8000/agent/run" -H "Content-Type: application/json" -d '{"task": "subscribe to notte.cc newsletter with ap@agpinto.com"}'
-```
+PS: The title of services are figurative eg. `agent.cloud()` refers to hosting an agent in cloud for you.
 
+### Unstable and upcoming features
 
+⏭️ We have either already partially shipped or are working on the following features: captcha resolution, residential proxies, web security, vpn-style browsing, authentication and payments with secure safe, improved speed and memory, human-in-the-loop integration, channeled notifications, and cookies management.
 
+## Hosted SDK
 
-
-
-
-# API services
-
-We offer managed cloud browser sessions with the following premium add-ons:
-
-- **Authentication:** Built-in auth for secure workflows.
-- **Caching:** Fast responses with intelligent caching.
-- **Action Permissions:** Control over sensitive actions.
-
-Request access to a set of API keys on [notte.cc](https://www.notte.cc/?ref=github)
-
-Then integrate with the SDK;
+We can manage cloud browser sessions and all libraries features for you:
 
 ```python
-from notte.sdk import NotteClient
-url = "https://www.google.com/flights"
-with NotteClient(api_key="your-api-key") as env:
-    # Navigate to the page and observe its state
-    obs = env.observe(url=url)
-    # Interact with the page - type "Paris" into input field I1
-    obs = env.step(action_id="I1", params="Paris")
-    # Print the current state of the page
+# just append .sdk to import from sdk
+from notte.sdk.agents import Agent
+remote_agi = Agent(reasoning_model="gemini/gemini-2.0-flash")
+remote_agi.run(task="doom scroll dog memes on google images")
 ```
 
-# Main features
+To run the above you'll need a notte API key from our [console platform](https://console.notte.cc) 🔑
 
-- **Web Driver Support:** Compatible with any web driver. Defaults to Playwright.
-- **LLM Integration:** Use any LLM as a policy engine with quick prompt tuning.
-- **Multi-Step Actions**: Navigate and act across multiple steps.
-- **Extensible:** Simple to integrate and customize.
+### API endpoints
 
-# Advanced Config
+Scraping endpoint:
 
-### Using multiple keys
+- `/v1/scrape` - Scrape data from a URL
 
-If you supply multiple keys in your `.env` file, Notte uses a [llamux](https://github.com/andreakiro/llamux-llm-router) configuration to intelligently select the best model for each invocation. This approach helps avoid rate limits, optimize cost-performance balance, and enhance your experience. You can add more providers or adjust rate limits by modifying the [config file](notte/llms/config/endpoints.csv)
+Session management:
 
-# Contribute
+- `/v1/sessions/create` - Create a new browser session
+- `/v1/sessions/list` - List active sessions
+- `/v1/sessions/close` - Close a session
+- `/v1/sessions/profiles` - Manage session profiles
+- `/v1/sessions/{session_id}/subscribe` - Subscribe to session events via cdp
+- `/v1/sessions/{session_id}/unsubscribe` - Unsubscribe from session events
+
+Page interactions:
+
+- `/v1/page/scrape` - Extract structured data from current page
+- `/v1/page/observe` - Get action space (perception) from current page
+- `/v1/page/act` - Perform action on current page with text command
+
+Agent launchpad:
+
+- `/v1/agent/run` - Execute agent task
+- `/v1/agent/status` - Get agent task status
+- `/v1/agent/pause` - Pause running agent
+- `/v1/agent/resume` - Resume paused agent
+- `/v1/agent/cancel` - Cancel running agent
+- `/v1/agent/list` - List running agent tasks
+
+Read more on our [documentation](https://docs.notte.cc) website. You can cURL all of them 🥰
+
+## The console
+
+Most of our features are also available on our [console Playground](https://console.notte.cc/browse) with a large free-tier!
+
+```bash
+$ page.extract("get top 5 latest trendy coins on pf, return ticker, name, mcap")
+— webpage scraping, structured schema llm extraction
+```
+
+<p align="center">
+  <img src="docs/gifs/v3.gif" alt="Demo" width="100%" href="https://video.twimg.com/ext_tw_video/1891808695886991360/pu/vid/avc1/1014x720/uc56Q0q3RGK2h8YM.mp4?tag=12">
+</p>
+
+## Contribute
 
 Setup your local working environment;
 
@@ -205,6 +191,24 @@ uv run pre-commit install
 
 Find an issue, fork, open a PR, and merge :)
 
-# License
+## License
 
 Notte is released under the [Apache 2.0 license](LICENSE)
+
+## Citation
+
+If you use notte in your research or project, please cite:
+
+```bibtex
+@software{notte2025,
+  author = {Pinto, Andrea and Giordano, Lucas and {nottelabs-team}},
+  title = {Notte: Software suite for internet-native agentic systems},
+  url = {https://github.com/nottelabs/notte},
+  year = {2025},
+  publisher = {GitHub},
+  license = {Apache-2.0}
+  version = {0.1.3},
+}
+```
+
+Built with luv from Earth 🌏
