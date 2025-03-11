@@ -39,7 +39,7 @@ agi.run(task="doom scroll cat memes on google images")
 
 This is by far the closest attempt to AGI we've ever witnessed ;)
 
-## Highligths 🌌
+## Highlights 🌌
 
 Notte is the full stack framework for web browsing LLM agents. Our main tech highlight is that we introduce a perception layer that turns the internet into an agent-friendly environment, by turning websites into structured maps described in natural language, ready to be digested by an LLM with less effort ✨
 
