@@ -51,9 +51,9 @@ class AgentPatcher:
             return json.dumps(to_dump)
         except TypeError as te:
             try:
-                from langchain_core.load.dump import dumps
+                from langchain_core.load.dump import dumps  # type: ignore[import]
 
-                return dumps(to_dump)
+                return dumps(to_dump)  # type: ignore[import, has-type]
             except ImportError:
                 raise CantDumpArgumentError from te
 
