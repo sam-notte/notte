@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Self, Unpack
 
 from loguru import logger
+from patchright.async_api import ProxySettings
 from pydantic import BaseModel
 from typing_extensions import override
 
@@ -97,6 +98,12 @@ class NotteEnvConfig(FrozenConfig):
     def steps(self: Self, max_steps: int | None = None) -> Self:
         return self._copy_and_validate(max_steps=max_steps if max_steps is not None else DEFAULT_MAX_NB_STEPS)
 
+    def set_proxy(self: Self, value: ProxySettings | None) -> Self:
+        return self._copy_and_validate(window=self.window.set_proxy(value))
+
+    def set_user_agent(self: Self, value: str | None) -> Self:
+        return self._copy_and_validate(window=self.window.set_user_agent(value))
+
     def headless(self: Self, value: bool = True) -> Self:
         return self._copy_and_validate(window=self.window.set_headless(value))
 
@@ -161,7 +168,8 @@ class NotteEnv(AsyncResource):
         self.config: NotteEnvConfig = config or NotteEnvConfig().use_llm()
         if llmserve is None:
             llmserve = LLMService(
-                base_model=self.config.perception_model, structured_output_retries=self.config.structured_output_retries
+                base_model=self.config.perception_model,
+                structured_output_retries=self.config.structured_output_retries,
             )
         self._window: BrowserWindow = window or BrowserWindow(pool=pool, config=self.config.window)
         super().__init__(self._window)
@@ -174,7 +182,9 @@ class NotteEnv(AsyncResource):
             llmserve=llmserve, window=self._window, config=self.config.scraping
         )
         self._node_resolution_pipe: NodeResolutionPipe = NodeResolutionPipe(
-            window=self._window, type=self.config.preprocessing.type, verbose=self.config.verbose
+            window=self._window,
+            type=self.config.preprocessing.type,
+            verbose=self.config.verbose,
         )
 
     @property
@@ -257,7 +267,10 @@ class NotteEnv(AsyncResource):
                     logger.warning(
                         "Snapshot changed since the beginning of the action listing, retrying to observe again"
                     )
-                _ = self._preobserve(check_snapshot, action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)))
+                _ = self._preobserve(
+                    check_snapshot,
+                    action=WaitAction(time_ms=int(time_diff.total_seconds() * 1000)),
+                )
                 return await self._observe(retry=retry - 1, pagination=pagination)
 
         if (
@@ -371,7 +384,9 @@ class NotteEnv(AsyncResource):
         pagination = PaginationParams.model_validate(params)
         space, data = await asyncio.gather(
             self._action_space_pipe.forward_async(
-                self.snapshot, previous_action_list=self.previous_actions, pagination=pagination
+                self.snapshot,
+                previous_action_list=self.previous_actions,
+                pagination=pagination,
             ),
             self._data_scraping_pipe.forward_async(self.snapshot, scrape),
         )

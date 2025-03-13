@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from collections.abc import Callable
@@ -26,6 +27,8 @@ class RaiseCondition(StrEnum):
 class DefaultAgentArgs(StrEnum):
     ENV_DISABLE_WEB_SECURITY = "disable_web_security"
     ENV_HEADLESS = "headless"
+    ENV_USER_AGENT = "user_agent"
+    ENV_PROXY = "proxy"
     ENV_PERCEPTION_MODEL = "perception_model"
     ENV_MAX_STEPS = "max_steps"
 
@@ -37,7 +40,8 @@ class AgentConfig(FrozenConfig, ABC):
     # make env private to avoid exposing the NotteEnvConfig class
     env: NotteEnvConfig = Field(init=False)
     reasoning_model: str = Field(
-        default=LlmModel.default(), description="The model to use for reasoning (i.e taking actions)."
+        default=LlmModel.default(),
+        description="The model to use for reasoning (i.e taking actions).",
     )
     include_screenshot: bool = Field(default=False, description="Whether to include a screenshot in the response.")
     max_history_tokens: int = Field(
@@ -45,13 +49,16 @@ class AgentConfig(FrozenConfig, ABC):
         description="The maximum number of tokens in the history. When the history exceeds this limit, the oldest messages are discarded.",
     )
     max_error_length: int = Field(
-        default=500, description="The maximum length of an error message to be forwarded to the reasoning model."
+        default=500,
+        description="The maximum length of an error message to be forwarded to the reasoning model.",
     )
     raise_condition: RaiseCondition = Field(
-        default=RaiseCondition.RETRY, description="How to raise an error when the agent fails to complete a step."
+        default=RaiseCondition.RETRY,
+        description="How to raise an error when the agent fails to complete a step.",
     )
     max_consecutive_failures: int = Field(
-        default=3, description="The maximum number of consecutive failures before the agent gives up."
+        default=3,
+        description="The maximum number of consecutive failures before the agent gives up.",
     )
     force_env: bool | None = Field(
         default=None,
@@ -142,6 +149,18 @@ class AgentConfig(FrozenConfig, ABC):
             help="Whether to run the browser in headless mode.",
         )
         _ = parser.add_argument(
+            f"--{DefaultAgentArgs.ENV_USER_AGENT.with_prefix()}",
+            type=str,
+            default=None,
+            help="The user agent to run the browser with",
+        )
+        _ = parser.add_argument(
+            f"--{DefaultAgentArgs.ENV_PROXY.with_prefix()}",
+            type=str,
+            default=None,
+            help="The proxy (in json format) to run the browser with",
+        )
+        _ = parser.add_argument(
             f"--{DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY.with_prefix()}",
             action="store_true",
             help="Whether disable web security.",
@@ -207,16 +226,29 @@ class AgentConfig(FrozenConfig, ABC):
 
         def update_env(env: NotteEnvConfig) -> NotteEnvConfig:
             operations: list[Callable[[NotteEnvConfig], NotteEnvConfig]] = []
+            if DefaultAgentArgs.ENV_PROXY is not None:
+                proxy_str = env_args[DefaultAgentArgs.ENV_PROXY]
+                del env_args[DefaultAgentArgs.ENV_PROXY]
+                if proxy_str is not None:
+                    proxy = json.loads(proxy_str)
+                    operations.append(lambda env: env.set_proxy(proxy))
+
+            if DefaultAgentArgs.ENV_USER_AGENT in env_args:
+                user_agent = env_args[DefaultAgentArgs.ENV_USER_AGENT]
+                operations.append(lambda env: env.set_user_agent(user_agent))
+                del env_args[DefaultAgentArgs.ENV_USER_AGENT]
+
+            if DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY in env_args:
+                disable_web_security = env_args[DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY]
+                operations.append(
+                    lambda env: (env.disable_web_security() if disable_web_security else env.enable_web_security())
+                )
+                del env_args[DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY]
+
             if DefaultAgentArgs.ENV_HEADLESS in env_args:
                 headless = env_args[DefaultAgentArgs.ENV_HEADLESS]
                 operations.append(lambda env: env.headless(headless))
                 del env_args[DefaultAgentArgs.ENV_HEADLESS]
-            if DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY in env_args:
-                disable_web_security = env_args[DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY]
-                operations.append(
-                    lambda env: env.disable_web_security() if disable_web_security else env.enable_web_security()
-                )
-                del env_args[DefaultAgentArgs.ENV_DISABLE_WEB_SECURITY]
 
             env = env._copy_and_validate(**env_args)
             for operation in operations:

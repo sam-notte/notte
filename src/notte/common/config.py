@@ -12,7 +12,7 @@ class FrozenConfig(BaseModel):
 
     def _copy_and_validate(self: Self, **kwargs: Any) -> Self:
         # kwargs should be validated before being passed to model_copy
-        _ = self.model_validate(kwargs)
+        _ = self.model_validate(dict(self.model_dump(), **kwargs))
         config = self.model_copy(deep=True, update=kwargs)
         return config
 

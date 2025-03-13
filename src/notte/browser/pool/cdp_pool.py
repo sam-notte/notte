@@ -5,7 +5,7 @@ from patchright.async_api import Browser as PatchrightBrowser
 from pydantic import BaseModel
 from typing_extensions import override
 
-from notte.browser.pool.base import BaseBrowserPool, BrowserWithContexts
+from notte.browser.pool.base import BaseBrowserPool, BrowserResourceOptions, BrowserWithContexts
 
 
 class CDPSession(BaseModel):
@@ -25,14 +25,14 @@ class CDPBrowserPool(BaseBrowserPool, ABC):
         pass
 
     @override
-    async def create_playwright_browser(self, headless: bool) -> PatchrightBrowser:
+    async def create_playwright_browser(self, resource_options: BrowserResourceOptions) -> PatchrightBrowser:
         cdp_session = self.create_session_cdp()
         self.last_session = cdp_session
         return await self.playwright.chromium.connect_over_cdp(cdp_session.cdp_url)
 
     @override
-    async def create_browser(self, headless: bool) -> BrowserWithContexts:
-        browser = await super().create_browser(headless)
+    async def create_browser(self, resource_options: BrowserResourceOptions) -> BrowserWithContexts:
+        browser = await super().create_browser(resource_options)
         if self.last_session is None:
             raise ValueError("Last session is not set")
         self.sessions[browser.browser_id] = self.last_session

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import datetime as dt
 import uuid
@@ -19,8 +21,12 @@ from patchright.async_api import (
     Playwright,
     async_playwright,
 )
+from typing_extensions import TypedDict
 
-from notte.errors.browser import BrowserPoolNotStartedError, BrowserResourceNotFoundError
+from notte.errors.browser import (
+    BrowserPoolNotStartedError,
+    BrowserResourceNotFoundError,
+)
 
 
 @dataclass
@@ -28,7 +34,7 @@ class BrowserResource:
     page: PlaywrightPage
     browser_id: str
     context_id: str
-    headless: bool
+    resource_options: BrowserResourceOptions
 
 
 @dataclass
@@ -43,9 +49,23 @@ class BrowserWithContexts:
     browser_id: str
     browser: PlaywrightBrowser
     contexts: dict[str, TimeContext]
-    headless: bool
+    resource_options: BrowserResourceOptions
     timestamp: dt.datetime = field(default_factory=lambda: dt.datetime.now())
     cdp_url: str | None = None
+
+
+class ProxySettings(TypedDict, total=False):
+    server: str
+    bypass: str | None
+    username: str | None
+    password: str | None
+
+
+@dataclass(frozen=True)
+class BrowserResourceOptions:
+    headless: bool
+    user_agent: str | None = None
+    proxy: ProxySettings | None = None
 
 
 class BaseBrowserPool(ABC):
@@ -95,38 +115,38 @@ class BaseBrowserPool(ABC):
         return self._playwright
 
     @abstractmethod
-    async def create_playwright_browser(self, headless: bool) -> PlaywrightBrowser:
+    async def create_playwright_browser(self, resource_options: BrowserResourceOptions) -> PlaywrightBrowser:
         pass
 
     @abstractmethod
     async def close_playwright_browser(self, browser: BrowserWithContexts, force: bool = True) -> bool:
         pass
 
-    async def create_browser(self, headless: bool) -> BrowserWithContexts:
+    async def create_browser(self, resource_options: BrowserResourceOptions) -> BrowserWithContexts:
         """Get an existing browser or create a new one if needed"""
 
-        browser = await self.create_playwright_browser(headless)
+        browser = await self.create_playwright_browser(resource_options)
         browser_id = str(uuid.uuid4())
         _browser = BrowserWithContexts(
             browser_id=browser_id,
             browser=browser,
             contexts={},
-            headless=headless,
+            resource_options=resource_options,
         )
         # Store browser reference
-        self.available_browsers(headless)[browser_id] = _browser
+        self.available_browsers(resource_options.headless)[browser_id] = _browser
         return _browser
 
-    async def get_or_create_browser(self, headless: bool) -> BrowserWithContexts:
+    async def get_or_create_browser(self, resource_options: BrowserResourceOptions) -> BrowserWithContexts:
         """Find a browser with available space for a new context"""
-        browsers = self.available_browsers(headless)
+        browsers = self.available_browsers(resource_options.headless)
         for browser in browsers.values():
             if len(browser.contexts) < self._contexts_per_browser:
                 return browser
         # Create a new browser
         if self.verbose:
             logger.info(f"Maximum contexts per browser reached ({self._contexts_per_browser}). Creating new browser...")
-        browser = await self.create_browser(headless)
+        browser = await self.create_browser(resource_options)
         return browser
 
     def create_context(self, browser: BrowserWithContexts, context: PlaywrightBrowserContext) -> str:
@@ -134,11 +154,8 @@ class BaseBrowserPool(ABC):
         browser.contexts[context_id] = TimeContext(context_id=context_id, context=context)
         return context_id
 
-    async def get_browser_resource(
-        self,
-        headless: bool,
-    ) -> BrowserResource:
-        browser = await self.get_or_create_browser(headless)
+    async def get_browser_resource(self, resource_options: BrowserResourceOptions) -> BrowserResource:
+        browser = await self.get_or_create_browser(resource_options)
 
         try:
             async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
@@ -148,6 +165,8 @@ class BaseBrowserPool(ABC):
                         "width": self.viewport_width,
                         "height": self.viewport_height,
                     },
+                    user_agent=resource_options.user_agent,
+                    proxy=resource_options.proxy,
                 )
                 context_id = self.create_context(browser, context)
                 if len(context.pages) == 0:
@@ -155,7 +174,10 @@ class BaseBrowserPool(ABC):
                 else:
                     page = context.pages[-1]
                 return BrowserResource(
-                    page=page, context_id=context_id, browser_id=browser.browser_id, headless=browser.headless
+                    page=page,
+                    context_id=context_id,
+                    browser_id=browser.browser_id,
+                    resource_options=resource_options,
                 )
         except Exception as e:
             logger.error(f"Failed to create browser resource: {e}")
@@ -171,7 +193,7 @@ class BaseBrowserPool(ABC):
     async def release_browser(self, browser: BrowserWithContexts) -> None:
         if self.verbose:
             logger.info(f"Releasing browser {browser.browser_id}...")
-        browsers = self.available_browsers(headless=browser.headless)
+        browsers = self.available_browsers(headless=browser.resource_options.headless)
         if browser.browser_id not in browsers:
             raise BrowserResourceNotFoundError(
                 f"Browser '{browser.browser_id}' not found in available browsers (i.e {list(browsers.keys())})"
@@ -182,7 +204,7 @@ class BaseBrowserPool(ABC):
         del browsers[browser.browser_id]
 
     async def release_browser_resource(self, resource: BrowserResource) -> None:
-        browsers = self.available_browsers(resource.headless)
+        browsers = self.available_browsers(resource.resource_options.headless)
         if resource.browser_id not in browsers:
             raise BrowserResourceNotFoundError(
                 f"Browser '{resource.browser_id}' not found in available browsers (i.e {list(browsers.keys())})"

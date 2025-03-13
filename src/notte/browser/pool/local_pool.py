@@ -11,6 +11,7 @@ from typing_extensions import override
 from notte.browser.pool.base import (
     BaseBrowserPool,
     BrowserResource,
+    BrowserResourceOptions,
     BrowserWithContexts,
 )
 from notte.common.config import FrozenConfig
@@ -173,7 +174,7 @@ class LocalBrowserPool(BaseBrowserPool):
         }
 
     @override
-    async def create_playwright_browser(self, headless: bool) -> PatchrightBrowser:
+    async def create_playwright_browser(self, resource_options: BrowserResourceOptions) -> PatchrightBrowser:
         """Get an existing browser or create a new one if needed"""
         # Check if we can create more browsers
         if len(self.available_browsers()) >= self.config.get_max_browsers():
@@ -183,7 +184,7 @@ class LocalBrowserPool(BaseBrowserPool):
         browser_args = self.config.get_chromium_args(offset_base_debug_port=len(self.available_browsers()))
 
         browser = await self.playwright.chromium.launch(
-            headless=headless,
+            headless=resource_options.headless,
             timeout=self.BROWSER_CREATION_TIMEOUT_SECONDS * 1000,
             args=browser_args,
         )
@@ -256,7 +257,7 @@ class LocalBrowserPool(BaseBrowserPool):
                                 page=context.context.pages[0],
                                 browser_id=browser.browser_id,
                                 context_id=context_id,
-                                headless=browser.headless,
+                                resource_options=browser.resource_options,
                             )
                         )
                 if len(browser.contexts) == 0:
@@ -271,10 +272,10 @@ class LocalBrowserPool(BaseBrowserPool):
 @final
 class SingleLocalBrowserPool(LocalBrowserPool):
     @override
-    async def get_browser_resource(self, headless: bool) -> BrowserResource:
+    async def get_browser_resource(self, resource_options: BrowserResourceOptions) -> BrowserResource:
         # start the pool automatically for single browser pool
         await self.start()
-        return await super().get_browser_resource(headless)
+        return await super().get_browser_resource(resource_options)
 
     @override
     async def close_playwright_browser(self, browser: BrowserWithContexts, force: bool = True) -> bool:
