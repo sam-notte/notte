@@ -74,6 +74,11 @@ class SessionRequest(SessionStartRequest):
     ] = False
 
     def __post_init__(self):
+        """
+        Validates that the session timeout does not exceed the global allowed limit.
+        
+        This method checks whether the instance's timeout in minutes exceeds the globally defined maximum. If the timeout is too high, it raises a ValueError.
+        """
         if self.timeout_minutes > DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES:
             raise ValueError(
                 (

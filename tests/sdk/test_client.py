@@ -79,6 +79,19 @@ def session_response_dict(session_id: str, close: bool = False) -> SessionRespon
 
 
 def _start_session(mock_post: MagicMock, client: NotteClient, session_id: str) -> SessionResponse:
+    """
+    Simulate a session start with a mocked HTTP POST response.
+    
+    This helper configures the mocked POST request to return a successful response
+    (using an HTTP status code of 200 and a JSON payload built from the given session
+    identifier) before invoking the client's session start method.
+    
+    Args:
+        session_id (str): The identifier used to generate the mock session response.
+    
+    Returns:
+        SessionResponse: The response returned from starting the session.
+    """
     mock_response: SessionResponseDict = session_response_dict(session_id)
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = mock_response
