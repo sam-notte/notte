@@ -2,7 +2,7 @@ import datetime as dt
 from base64 import b64decode, b64encode
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Annotated, Any, Generic, Literal, TypeVar
+from typing import Annotated, Any, Generic, Literal, Required, TypeVar
 
 from pydantic import BaseModel, Field, create_model, field_validator
 from typing_extensions import TypedDict
@@ -18,7 +18,7 @@ from notte.data.space import DataSpace
 # Session Management
 # ############################################################
 
-DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES = 5
+DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES = 3
 DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES = 30
 DEFAULT_MAX_NB_ACTIONS = 100
 DEFAULT_MAX_NB_STEPS = 20
@@ -28,10 +28,11 @@ class SessionStartRequestDict(TypedDict, total=False):
     timeout_minutes: int
     screenshot: bool | None
     max_steps: int
+    proxies: list[str] | None
 
 
 class SessionRequestDict(SessionStartRequestDict, total=False):
-    session_id: str | None
+    session_id: Required[str]
     keep_alive: bool
 
 
@@ -73,6 +74,12 @@ class SessionRequest(SessionStartRequest):
     ] = False
 
     def __post_init__(self):
+        """
+        Validate that the session timeout does not exceed the allowed global limit.
+
+        Raises:
+            ValueError: If the session's timeout_minutes exceeds DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES.
+        """
         if self.timeout_minutes > DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES:
             raise ValueError(
                 (
@@ -80,6 +87,11 @@ class SessionRequest(SessionStartRequest):
                     f"{self.timeout_minutes} > {DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES}"
                 )
             )
+
+
+class ListRequestDict(TypedDict, total=False):
+    only_active: bool
+    limit: int
 
 
 class SessionListRequest(BaseModel):
@@ -124,6 +136,10 @@ class SessionResponseDict(TypedDict, total=False):
 # ############################################################
 
 
+class TabSessionDebugRequest(BaseModel):
+    tab_idx: int
+
+
 class TabSessionDebugResponse(BaseModel):
     metadata: TabsData
     debug_url: str
@@ -143,6 +159,13 @@ class SessionDebugRecordingEvent(BaseModel):
     type: Literal["action", "observation", "error"]
     data: BaseAction | Observation | str
     timestamp: dt.datetime = Field(default_factory=dt.datetime.now)
+
+    @staticmethod
+    def session_closed() -> "SessionDebugRecordingEvent":
+        return SessionDebugRecordingEvent(
+            type="error",
+            data="Session closed by user. No more actions will be recorded.",
+        )
 
 
 # ############################################################
@@ -373,6 +396,11 @@ class ObserveResponse(BaseModel):
 # ############################################################
 
 
+class AgentRequestDict(TypedDict, total=False):
+    task: Required[str]
+    url: str | None
+
+
 class AgentRequest(BaseModel):
     task: str
     url: str | None = None
@@ -385,6 +413,10 @@ class AgentStatus(StrEnum):
 
 class AgentSessionRequest(SessionRequest):
     agent_id: Annotated[str | None, Field(description="The ID of the agent to run")] = None
+
+
+class AgentRunRequestDict(AgentRequestDict, SessionRequestDict, total=False):
+    pass
 
 
 class AgentRunRequest(AgentRequest, SessionRequest):
