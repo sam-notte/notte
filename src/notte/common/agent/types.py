@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from litellm import AllMessageValues
 from pydantic import BaseModel
 from typing_extensions import override
@@ -12,7 +14,7 @@ class AgentResponse(BaseModel):
     success: bool
     answer: str
     env_trajectory: list[TrajectoryStep]
-    agent_trajectory: list[AgentTrajectoryStep]
+    agent_trajectory: list[AgentTrajectoryStep[BaseModel]]
     messages: list[AllMessageValues] | None = None
     llm_usage: list[LlmUsageDictTracer.LlmUsage]
     duration_in_s: float = -1

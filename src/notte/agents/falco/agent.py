@@ -8,6 +8,10 @@ from litellm import AllMessageValues, override
 from loguru import logger
 
 import notte
+from notte.agents.falco.perception import FalcoPerception
+from notte.agents.falco.prompt import FalcoPrompt
+from notte.agents.falco.trajectory_history import FalcoTrajectoryHistory
+from notte.agents.falco.types import StepAgentOutput
 from notte.browser.observation import Observation
 from notte.browser.pool.base import BaseBrowserPool
 from notte.browser.window import BrowserWindow
@@ -17,16 +21,11 @@ from notte.common.agent.types import AgentResponse
 from notte.common.credential_vault.base import BaseVault
 from notte.common.tools.conversation import Conversation
 from notte.common.tools.safe_executor import ExecutionStatus, SafeActionExecutor
-from notte.common.tools.trajectory_history import TrajectoryHistory
 from notte.common.tools.validator import CompletionValidator
 from notte.common.tracer import LlmUsageDictTracer
 from notte.controller.actions import BaseAction, CompletionAction, FallbackObserveAction
 from notte.env import NotteEnv, NotteEnvConfig
 from notte.llms.engine import LLMEngine
-
-from .perception import FalcoPerception
-from .prompt import FalcoPrompt
-from .types import StepAgentOutput
 
 # TODO: list
 # handle tooling calling methods for different providers (if not supported by litellm)
@@ -99,7 +98,7 @@ class FalcoAgent(BaseAgent):
             model=config.reasoning_model,
         )
         self.history_type: HistoryType = config.history_type
-        self.trajectory: TrajectoryHistory = TrajectoryHistory(max_error_length=config.max_error_length)
+        self.trajectory: FalcoTrajectoryHistory = FalcoTrajectoryHistory(max_error_length=config.max_error_length)
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(
             func=self.env.act,
             raise_on_failure=(self.config.raise_condition is RaiseCondition.IMMEDIATELY),
@@ -117,7 +116,7 @@ class FalcoAgent(BaseAgent):
             answer=answer,
             success=success,
             env_trajectory=self.env.trajectory,
-            agent_trajectory=self.trajectory.steps,
+            agent_trajectory=self.trajectory.steps,  # type: ignore[reportArgumentType]
             messages=self.conv.messages(),
             duration_in_s=time.time() - self.start_time,
             llm_usage=self.tracer.usage,
@@ -229,6 +228,7 @@ class FalcoAgent(BaseAgent):
 
     @override
     async def run(self, task: str, url: str | None = None) -> AgentResponse:
+        logger.info(f"Running task: {task}")
         self.start_time: float = time.time()
         try:
             return await self._run(task, url=url)
