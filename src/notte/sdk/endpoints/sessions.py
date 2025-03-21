@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from typing import Unpack
+from webbrowser import open as open_browser
 
 from pydantic import BaseModel
 from typing_extensions import final, override
@@ -294,3 +295,21 @@ class SessionsClient(BaseClient):
         params = TabSessionDebugRequest(tab_idx=tab_idx) if tab_idx is not None else None
         endpoint = SessionsClient.session_debug_tab_endpoint(session_id=session_id, params=params)
         return self.request(endpoint)
+
+    def viewer(self, session_id: str | None = None) -> None:
+        """
+        Opens a browser tab with the debug URL for visualizing the session.
+
+        Retrieves debug information for the specified session and opens
+        its debug URL in the default web browser.
+
+        Args:
+            session_id (str, optional): The session identifier to use.
+                If not provided, the current session ID is used.
+
+        Returns:
+            None
+        """
+        debug_info = self.debug_info(session_id=session_id)
+        # open browser tab with debug_url
+        _ = open_browser(debug_info.debug_url)
