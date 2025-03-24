@@ -16,6 +16,7 @@ from notte.browser.window import BrowserWindow, BrowserWindowConfig
 from notte.common.config import FrozenConfig
 from notte.common.logging import timeit
 from notte.common.resource import AsyncResource
+from notte.common.telemetry import capture_event, track_usage
 from notte.controller.actions import (
     BaseAction,
     BrowserActionId,
@@ -164,6 +165,15 @@ class NotteEnv(AsyncResource):
         llmserve: LLMService | None = None,
         act_callback: Callable[[BaseAction, Observation], None] | None = None,
     ) -> None:
+        """
+        Initialize a NotteEnv instance with configuration and required services.
+        
+        If no configuration is provided, a default with LLM integration is used. This initializer
+        sets up the browser window (optionally using a provided pool), controller, trajectory tracking,
+        and processing pipes for actions, data scraping, and node resolution. An optional action callback
+        can be specified to handle side effects upon executing actions. Telemetry is captured during
+        initialization with key configuration parameters.
+        """
         if config is not None:
             if config.verbose:
                 logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
@@ -187,8 +197,30 @@ class NotteEnv(AsyncResource):
         )
         self.act_callback: Callable[[BaseAction, Observation], None] | None = act_callback
 
+        # Track initialization
+        capture_event(
+            "env.initialized",
+            {
+                "config": {
+                    "perception_model": self.config.perception_model,
+                    "auto_scrape": self.config.auto_scrape,
+                    "headless": self.config.window.headless,
+                    "preprocessing_type": self.config.preprocessing.type,
+                }
+            },
+        )
+
     @property
     def snapshot(self) -> BrowserSnapshot:
+        """
+        Returns the current browser snapshot.
+        
+        Raises:
+            NoSnapshotObservedError: If no snapshot has been observed.
+        
+        Returns:
+            BrowserSnapshot: The most recent browser snapshot.
+        """
         if self._snapshot is None:
             raise NoSnapshotObservedError()
         return self._snapshot
@@ -244,6 +276,23 @@ class NotteEnv(AsyncResource):
         pagination: PaginationParams,
         retry: int,
     ) -> Observation:
+        """
+        Asynchronously observes the current page and updates the observation as needed.
+        
+        This method processes the current page snapshot to extract the action space 
+        using provided pagination settings. It checks if the snapshot is outdated by 
+        comparing its timestamp with the current time. If the content has changed and 
+        retries remain, it obtains a fresh snapshot and recursively re-observes the page.
+        When auto-scrape is enabled and the observation lacks data, the method triggers 
+        automatic data scraping.
+        
+        Args:
+            pagination: Pagination settings used to extract available actions.
+            retry: Number of remaining attempts to refresh the observation if outdated.
+        
+        Returns:
+            The updated observation reflecting the current page state.
+        """
         if self.config.verbose:
             logger.info(f"🧿 observing page {self.snapshot.metadata.url}")
         self.obs.space = self._action_space_pipe.forward(
@@ -284,16 +333,48 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("goto")
+    @track_usage("env.goto")
     async def goto(self, url: str | None) -> Observation:
+        """
+        Navigate to the specified URL and return an updated observation.
+        
+        This asynchronous method directs the browser window to navigate to the given URL,
+        captures a snapshot of the resulting page, and generates an observation enhanced with
+        a goto action that records the navigated URL.
+        
+        Args:
+            url: The URL to navigate to. If None, the browser's default navigation behavior applies.
+        
+        Returns:
+            An Observation representing the state of the page after navigation.
+        """
         snapshot = await self._window.goto(url)
         return self._preobserve(snapshot, action=GotoAction(url=snapshot.metadata.url))
 
     @timeit("observe")
+    @track_usage("env.observe")
     async def observe(
         self,
         url: str | None = None,
         **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
+        """
+        Navigates to a URL (if provided) and observes the current page state.
+        
+        This method directs the environment to the specified URL using the goto() method,
+        then captures a new observation of the page. It validates any given pagination 
+        parameters and invokes the internal _observe() method with a retry setting from the 
+        configuration. When verbose mode is enabled, debug logs for previous actions and 
+        snapshot node IDs are recorded.
+        
+        Args:
+            url: Optional URL to navigate to before capturing the observation.
+            **pagination: Additional pagination parameters used to validate internal pagination
+                          rules during the observation.
+        
+        Returns:
+            The captured Observation of the current page.
+        """
         _ = await self.goto(url)
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
@@ -304,12 +385,31 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("execute")
+    @track_usage("env.execute")
     async def execute(
         self,
         action_id: str,
         params: dict[str, str] | str | None = None,
         enter: bool | None = None,
     ) -> Observation:
+        """
+        Executes the specified action and returns the resulting observation.
+        
+        If the given action identifier corresponds to a scrape operation, this method
+        delegates to the scrape routine. Otherwise, it parses the action using the
+        provided parameters and optional enter flag, resolves the executable action via
+        the node resolution pipeline, executes it, and prepares an observation based on
+        the resulting snapshot.
+        
+        Args:
+            action_id: Identifier for the action to execute. If it matches the scrape action,
+                the scraping routine is invoked.
+            params: Optional parameters for the action, either as a mapping or a string.
+            enter: Optional flag indicating whether to engage additional action behavior.
+        
+        Returns:
+            An observation capturing the state after executing the action.
+        """
         if action_id == BrowserActionId.SCRAPE.value:
             # Scrape action is a special case
             return await self.scrape()
@@ -320,10 +420,26 @@ class NotteEnv(AsyncResource):
         return obs
 
     @timeit("act")
+    @track_usage("env.act")
     async def act(
         self,
         action: BaseAction,
     ) -> Observation:
+        """
+        Executes a provided action and returns an updated page observation.
+        
+        If the action is a scrape action, this method triggers a combined scraping and
+        observation process using the action's instructions. For other actions, it resolves
+        the action based on the current snapshot, executes it, and subsequently observes the
+        updated page state.
+        
+        Parameters:
+            action (BaseAction): The action to perform. For scrape actions, its instructions
+                are used to initiate the combined scraping and observation process.
+        
+        Returns:
+            Observation: The observation reflecting the page state after executing the action.
+        """
         if self.config.verbose:
             logger.info(f"🌌 starting execution of action {action.id}...")
         if isinstance(action, ScrapeAction):
@@ -341,6 +457,7 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("step")
+    @track_usage("env.step")
     async def step(
         self,
         action_id: str,
@@ -348,6 +465,23 @@ class NotteEnv(AsyncResource):
         enter: bool | None = None,
         **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
+        """
+        Executes the specified action and returns an updated observation.
+        
+        This coroutine first executes the action identified by the provided ID with any 
+        optional parameters. If verbose logging is enabled, it logs identifiers of previous 
+        actions and elements in the current snapshot. Pagination parameters are then validated 
+        and passed to the observation routine, which applies a retry limit based on the configuration.
+        
+        Args:
+            action_id: Unique identifier for the action to execute.
+            params: Optional additional parameters for the action, provided as a dict or string.
+            enter: Optional flag to modify action behavior, such as simulating an enter command.
+            **pagination: Keyword arguments controlling pagination, validated against PaginationParams.
+        
+        Returns:
+            An Observation object representing the environment state after the action.
+        """
         _ = await self.execute(action_id, params, enter=enter)
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
@@ -358,11 +492,20 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("scrape")
+    @track_usage("env.scrape")
     async def scrape(
         self,
         url: str | None = None,
         **scrape_params: Unpack[ScrapeParamsDict],
     ) -> Observation:
+        """
+        Scrapes data from the current or a specified page.
+        
+        If a URL is provided, the function navigates to that URL before scraping. It then applies the provided scraping parameters to extract data from the page's snapshot and updates the current observation accordingly.
+        
+        Returns:
+            Observation: The updated observation containing the scraped data.
+        """
         if url is not None:
             _ = await self.goto(url)
         params = ScrapeParams(**scrape_params)
@@ -370,11 +513,26 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("god")
+    @track_usage("env.god")
     async def god(
         self,
         url: str | None = None,
         **params: Unpack[ScrapeAndObserveParamsDict],
     ) -> Observation:
+        """Activate God mode to perform concurrent scraping and action listing.
+        
+        If a URL is provided, the method navigates to that address before executing both a data scrape 
+        and an action space retrieval concurrently. It validates the provided parameters as both 
+        scraping and pagination configurations, executes the operations in parallel, updates the 
+        current observation with the retrieved action space and scraped data, and returns the updated observation.
+        
+        Args:
+            url (str, optional): URL to navigate to prior to performing scraping and action listing.
+            **params: Additional parameters for scraping and pagination (ScrapeAndObserveParamsDict).
+        
+        Returns:
+            Observation: The updated observation containing the extracted action space and scraped data.
+        """
         if self.config.verbose:
             logger.info("🌊 God mode activated (scraping + action listing)")
         if url is not None:
@@ -392,8 +550,15 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("reset")
+    @track_usage("env.reset")
     @override
     async def reset(self) -> None:
+        """
+        Resets the environment state.
+        
+        Clears the stored trajectory and snapshot, then resets the underlying browser window.
+        Logs the reset operation if verbose mode is enabled.
+        """
         if self.config.verbose:
             logger.info("🌊 Resetting environment...")
         self.trajectory = []
