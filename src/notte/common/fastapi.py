@@ -29,7 +29,7 @@ def create_agent_router(agent: BaseAgent, prefix: str = "agent") -> APIRouter:  
     )
 
     @router.post("/run", response_model=AgentResponse)  # type: ignore[reportUntypedFunctionDecorator]
-    async def run_agent(request: Annotated[AgentRequest, "Agent request parameters"]) -> AgentResponse:  # type: ignore[unused-function]
+    async def run_agent(request: Annotated[AgentRequest, "Agent request parameters"]) -> AgentResponse:  # type: ignore[reportUnusedFunction]
         try:
             return await agent.run(task=request.task, url=request.url)
         except Exception as e:
