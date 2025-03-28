@@ -422,7 +422,8 @@ class AgentRunRequestDict(AgentRequestDict, SessionRequestDict, total=False):
 
 
 class AgentRunRequest(AgentRequest, SessionRequest):
-    reasoning_model: LlmModel = LlmModel.cerebras
+    reasoning_model: LlmModel = LlmModel.default()  # type: ignore[reportCallInDefaultInitializer]
+    use_vision: bool = True
 
 
 class AgentStatusRequest(AgentSessionRequest):
