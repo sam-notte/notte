@@ -1,9 +1,11 @@
 import asyncio
 import datetime as dt
+import json
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from typing import ClassVar
+from pathlib import Path
+from typing import Any, ClassVar
 
 from loguru import logger
 from openai import BaseModel
@@ -21,6 +23,7 @@ from patchright.async_api import (
     async_playwright,
 )
 from pydantic import Field, PrivateAttr
+from typing_extensions import override
 
 from notte.browser import ProxySettings
 from notte.browser.pool.ports import get_port_manager
@@ -31,6 +34,37 @@ from notte.errors.browser import (
 )
 
 
+class Cookie(BaseModel):
+    domain: str
+    expirationDate: int
+    hostOnly: bool
+    httpOnly: bool
+    name: str
+    path: str
+    sameSite: str | None
+    secure: bool
+    session: bool
+    storeId: str | None
+    value: str
+    expires: int = Field(alias="expirationDate")
+
+    @override
+    def model_post_init(self, __context: Any) -> None:
+        if self.sameSite is not None:
+            self.sameSite = self.sameSite.lower()
+            self.sameSite = self.sameSite[0].upper() + self.sameSite[1:]
+
+    @staticmethod
+    def from_json(path: str | Path) -> list["Cookie"]:
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Cookies file not found at {path}")
+        with open(path, "r") as f:
+            cookies_json = json.load(f)
+        cookies = [Cookie.model_validate(cookie) for cookie in cookies_json]
+        return cookies
+
+
 @dataclass(frozen=True)
 class BrowserResourceOptions:
     headless: bool
@@ -38,6 +72,7 @@ class BrowserResourceOptions:
     proxy: ProxySettings | None = None
     debug: bool = False
     debug_port: int | None = None
+    cookies: list[Cookie] | None = None
 
     def set_port(self, port: int) -> "BrowserResourceOptions":
         options = dict(asdict(self), debug_port=port, debug=True)
@@ -190,6 +225,11 @@ class BaseBrowserPool(ABC, BaseModel):
                     proxy=resource_options.proxy,  # already specified at browser level, but might as well
                     user_agent=resource_options.user_agent,
                 )
+                if resource_options.cookies is not None:
+                    if self.config.verbose:
+                        logger.info(f"Adding cookies to browser {browser.browser_id}...")
+                    for cookie in resource_options.cookies:
+                        await context.add_cookies([cookie.model_dump()])  # type: ignore
                 context_id = self.create_context(browser, context)
                 if len(context.pages) == 0:
                     page = await context.new_page()
