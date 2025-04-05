@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from typing import Unpack
 
+import requests
 from pydantic import BaseModel
 from typing_extensions import final, override
 
@@ -34,6 +35,8 @@ class AgentsClient(BaseClient):
     AGENT_STOP = "{agent_id}/stop"
     AGENT_STATUS = "{agent_id}"
     AGENT_LIST = ""
+    # The following endpoints downloads a .webp file
+    AGENT_REPLAY = "{agent_id}/replay"
 
     def __init__(
         self,
@@ -113,6 +116,16 @@ class AgentsClient(BaseClient):
             params=params,
         )
 
+    @staticmethod
+    def agent_replay_endpoint(agent_id: str | None = None) -> NotteEndpoint[BaseModel]:
+        """
+        Creates an endpoint for downloading an agent's replay.
+        """
+        path = AgentsClient.AGENT_REPLAY
+        if agent_id is not None:
+            path = path.format(agent_id=agent_id)
+        return NotteEndpoint(path=path, response=BaseModel, method="GET")
+
     @override
     @staticmethod
     def endpoints() -> Sequence[NotteEndpoint[BaseModel]]:
@@ -126,6 +139,7 @@ class AgentsClient(BaseClient):
             AgentsClient.agent_stop_endpoint(),
             AgentsClient.agent_status_endpoint(),
             AgentsClient.agent_list_endpoint(),
+            AgentsClient.agent_replay_endpoint(),
         ]
 
     @property
@@ -240,3 +254,22 @@ class AgentsClient(BaseClient):
         params = AgentListRequest.model_validate(data)
         endpoint = AgentsClient.agent_list_endpoint(params=params)
         return self.request_list(endpoint)
+
+    def replay(
+        self,
+        agent_id: str,
+        output_file: str | None = None,
+    ) -> bytes:
+        """
+        Downloads the replay for the specified agent in webp format.
+        """
+        endpoint = self.request_path(AgentsClient.agent_replay_endpoint(agent_id=agent_id))
+        response = requests.get(
+            url=endpoint,
+            headers=self.headers(),
+            timeout=self.DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        )
+        if output_file is not None:
+            with open(output_file, "wb") as f:
+                _ = f.write(response.content)
+        return response.content
