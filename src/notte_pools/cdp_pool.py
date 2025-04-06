@@ -6,10 +6,9 @@ from patchright.async_api import Browser as PatchrightBrowser
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
-from notte.browser.pool.base import (
+from notte.browser.resource import BrowserResource, BrowserResourceOptions
+from notte_pools.base import (
     BaseBrowserPool,
-    BrowserResource,
-    BrowserResourceOptions,
     BrowserWithContexts,
 )
 

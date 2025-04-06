@@ -1,11 +1,8 @@
 import asyncio
 import datetime as dt
-import json
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from loguru import logger
 from openai import BaseModel
@@ -15,96 +12,16 @@ from patchright.async_api import (
 from patchright.async_api import (
     BrowserContext as PlaywrightBrowserContext,
 )
-from patchright.async_api import (
-    Page as PlaywrightPage,
-)
-from patchright.async_api import (
-    Playwright,
-    async_playwright,
-)
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field
 from typing_extensions import override
 
-from notte.browser import ProxySettings
-from notte.browser.pool.ports import get_port_manager
+from notte.browser.resource import BrowserResource, BrowserResourceOptions, PlaywrightResourceHandler
 from notte.common.config import FrozenConfig
 from notte.errors.browser import (
     BrowserPoolNotStartedError,
     BrowserResourceNotFoundError,
 )
-
-
-class Cookie(BaseModel):
-    name: str
-    domain: str
-    path: str
-    httpOnly: bool
-    expirationDate: float | None = None
-    hostOnly: bool | None = None
-    sameSite: str | None = None
-    secure: bool | None = None
-    session: bool | None = None
-    storeId: str | None = None
-    value: str
-    expires: float | None = Field(default=None)
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_expiration(cls, data: dict[str, Any]) -> dict[str, Any]:
-        # Handle either expirationDate or expires being provided
-        if data.get("expirationDate") is None and data.get("expires") is not None:
-            data["expirationDate"] = float(data["expires"])
-        elif data.get("expires") is None and data.get("expirationDate") is not None:
-            data["expires"] = float(data["expirationDate"])
-        return data
-
-    @override
-    def model_post_init(self, __context: Any) -> None:
-        # Set expires if expirationDate is provided but expires is not
-        if self.expirationDate is not None and self.expires is None:
-            self.expires = int(self.expirationDate)
-        # Set expirationDate if expires is provided but expirationDate is not
-        elif self.expires is not None and self.expirationDate is None:
-            self.expirationDate = float(self.expires)
-
-        if self.sameSite is not None:
-            self.sameSite = self.sameSite.lower()
-            self.sameSite = self.sameSite[0].upper() + self.sameSite[1:]
-
-    @staticmethod
-    def from_json(path: str | Path) -> list["Cookie"]:
-        path = Path(path)
-        if not path.exists():
-            raise FileNotFoundError(f"Cookies file not found at {path}")
-        with open(path, "r") as f:
-            cookies_json = json.load(f)
-        cookies = [Cookie.model_validate(cookie) for cookie in cookies_json]
-        return cookies
-
-
-@dataclass(frozen=True)
-class BrowserResourceOptions:
-    headless: bool
-    user_agent: str | None = None
-    proxy: ProxySettings | None = None
-    debug: bool = False
-    debug_port: int | None = None
-    cookies: list[Cookie] | None = None
-
-    def set_port(self, port: int) -> "BrowserResourceOptions":
-        options = dict(asdict(self), debug_port=port, debug=True)
-        return BrowserResourceOptions(**options)
-
-
-class BrowserResource(BaseModel):
-    model_config = {  # pyright: ignore[reportUnannotatedClassAttribute]
-        "arbitrary_types_allowed": True
-    }
-
-    page: PlaywrightPage = Field(exclude=True)
-    browser_id: str
-    context_id: str
-    resource_options: BrowserResourceOptions
+from notte_pools.ports import get_port_manager
 
 
 class TimeContext(BaseModel):
@@ -136,12 +53,11 @@ class BaseBrowserPoolConfig(FrozenConfig):
     verbose: bool = False
 
 
-class BaseBrowserPool(ABC, BaseModel):
+class BaseBrowserPool(PlaywrightResourceHandler, ABC):
     BROWSER_CREATION_TIMEOUT_SECONDS: ClassVar[int] = 30
     BROWSER_OPERATION_TIMEOUT_SECONDS: ClassVar[int] = 30
 
     config: BaseBrowserPoolConfig = BaseBrowserPoolConfig()
-    _playwright: Playwright | None = PrivateAttr(default=None)
     browsers: dict[str, BrowserWithContexts] = Field(default_factory=dict)
     headless_browsers: dict[str, BrowserWithContexts] = Field(default_factory=dict)
 
@@ -153,24 +69,12 @@ class BaseBrowserPool(ABC, BaseModel):
         else:
             return self.browsers
 
-    async def start(self) -> None:
-        """Initialize the playwright instance"""
-        if self._playwright is None:
-            self._playwright = await async_playwright().start()
-
+    @override
     async def stop(self) -> None:
         """Stop the playwright instance"""
-        if self._playwright is not None:
-            await self._playwright.stop()
-            self._playwright = None
-            self.browsers = {}
-            self.headless_browsers = {}
-
-    @property
-    def playwright(self) -> Playwright:
-        if self._playwright is None:
-            raise BrowserPoolNotStartedError()
-        return self._playwright
+        await super().stop()
+        self.browsers = {}
+        self.headless_browsers = {}
 
     @abstractmethod
     async def create_playwright_browser(self, resource_options: BrowserResourceOptions) -> PlaywrightBrowser:
@@ -224,6 +128,7 @@ class BaseBrowserPool(ABC, BaseModel):
         browser.contexts[context_id] = TimeContext(context_id=context_id, context=context)
         return context_id
 
+    @override
     async def get_browser_resource(self, resource_options: BrowserResourceOptions) -> BrowserResource:
         browser = await self.get_or_create_browser(resource_options)
 

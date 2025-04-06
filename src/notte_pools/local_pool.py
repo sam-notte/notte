@@ -8,18 +8,17 @@ from patchright.async_api import Browser as PatchrightBrowser
 from pydantic import Field
 from typing_extensions import override
 
-from notte.browser.pool.base import (
-    BaseBrowserPool,
-    BaseBrowserPoolConfig,
-    BrowserResource,
-    BrowserResourceOptions,
-    BrowserWithContexts,
-)
-from notte.browser.pool.ports import PortManager
+from notte.browser.resource import BrowserResource, BrowserResourceHandlerConfig, BrowserResourceOptions
 from notte.common.config import FrozenConfig
 from notte.errors.browser import (
     BrowserResourceLimitError,
 )
+from notte_pools.base import (
+    BaseBrowserPool,
+    BaseBrowserPoolConfig,
+    BrowserWithContexts,
+)
+from notte_pools.ports import PortManager
 
 
 class MemoryBrowserPoolConfig(FrozenConfig):
@@ -77,46 +76,17 @@ class MemoryBrowserPoolConfig(FrozenConfig):
         return int(self.calculate_max_contexts() / self.calculate_max_browsers())
 
 
-class BrowserPoolConfig(FrozenConfig):
+class BrowserPoolConfig(BrowserResourceHandlerConfig):
     memory: MemoryBrowserPoolConfig = MemoryBrowserPoolConfig()
-    base_debug_port: int = 9222
-    web_security: bool = False
-    max_browsers: int | None = None
-    max_total_contexts: int | None = None
-    viewport_width: int = 1280
-    viewport_height: int = 1020  # Default in playright is 720
-    custom_devtools_frontend: str | None = None
-    chromium_args: list[str] | None = None
-
-    def set_web_security(self: Self, value: bool = True) -> Self:
-        return self._copy_and_validate(web_security=value)
-
-    def disable_web_security(self: Self) -> Self:
-        return self.set_web_security(False)
-
-    def enable_web_security(self: Self) -> Self:
-        return self.set_web_security(True)
 
     def set_memory(self: Self, value: MemoryBrowserPoolConfig) -> Self:
         return self._copy_and_validate(memory=value)
-
-    def set_base_debug_port(self: Self, value: int) -> Self:
-        return self._copy_and_validate(base_debug_port=value)
 
     def set_max_browsers(self: Self, value: int | None) -> Self:
         return self._copy_and_validate(max_browsers=value)
 
     def set_max_total_contexts(self: Self, value: int | None) -> Self:
         return self._copy_and_validate(max_total_contexts=value)
-
-    def set_chromium_args(self: Self, value: list[str] | None) -> Self:
-        return self._copy_and_validate(chromium_args=value)
-
-    def set_viewport_width(self: Self, value: int) -> Self:
-        return self._copy_and_validate(viewport_width=value)
-
-    def set_viewport_height(self: Self, value: int) -> Self:
-        return self._copy_and_validate(viewport_height=value)
 
     def get_max_contexts(self) -> int:
         if self.max_total_contexts is not None:
@@ -132,44 +102,6 @@ class BrowserPoolConfig(FrozenConfig):
         if self.max_total_contexts is not None:
             return self.max_total_contexts // self.get_max_browsers()
         return self.memory.calculate_contexts_per_browser()
-
-    def get_chromium_args(self, cdp_port: int | None = None) -> list[str]:
-        if self.chromium_args is not None:
-            # use default chromium args if provided
-            return self.chromium_args
-        chromium_args = [
-            "--disable-dev-shm-usage",
-            "--disable-extensions",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--no-zygote",
-            "--mute-audio",
-            f'--js-flags="--max-old-space-size={int(self.memory.context_memory)}"',
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--start-maximized",
-        ]
-
-        if not self.web_security:
-            chromium_args.extend(
-                [
-                    "--disable-web-security",
-                    "--disable-site-isolation-trials",
-                    "--disable-features=IsolateOrigins,site-per-process",
-                    "--remote-allow-origins=*",
-                ]
-            )
-        if self.custom_devtools_frontend is not None:
-            chromium_args.extend(
-                [
-                    f"--custom-devtools-frontend={self.custom_devtools_frontend}",
-                ]
-            )
-
-        if cdp_port is not None:
-            chromium_args.append(f"--remote-debugging-port={cdp_port}")
-
-        return chromium_args
 
     def estimate_memory_usage(self, n_contexts: int, n_browsers: int) -> int:
         return (
@@ -291,10 +223,11 @@ class LocalBrowserPool(BaseBrowserPool):
         """Cleanup all browser instances"""
 
         except_resources_ids: dict[str, set[str]] = {
-            resource.browser_id: set() for resource in (except_resources or [])
+            resource.browser_id: set() for resource in (except_resources or []) if resource.browser_id is not None
         }
         for resource in except_resources or []:
-            except_resources_ids[resource.browser_id].add(resource.context_id)
+            if resource.browser_id is not None and resource.context_id is not None:
+                except_resources_ids[resource.browser_id].add(resource.context_id)
         nb_browsers = len(self.available_browsers())
         for browser in self.available_browsers().values():
             if browser.browser_id not in except_resources_ids or len(except_resources_ids[browser.browser_id]) == 0:
@@ -343,18 +276,3 @@ class LocalBrowserPool(BaseBrowserPool):
             # we can do that because we know that the pool is empty
             await self.stop()
             await self.start()
-
-
-class SingleLocalBrowserPool(LocalBrowserPool):
-    @override
-    async def get_browser_resource(self, resource_options: BrowserResourceOptions) -> BrowserResource:
-        # start the pool automatically for single browser pool
-        await self.start()
-        return await super().get_browser_resource(resource_options)
-
-    @override
-    async def close_playwright_browser(self, browser: BrowserWithContexts, force: bool = True) -> bool:
-        _ = await super().close_playwright_browser(browser, force)
-        # for local pool, closing one browser will stop the whole pool
-        await self.stop()
-        return True
