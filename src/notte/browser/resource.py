@@ -2,7 +2,6 @@ import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Self
 
@@ -21,16 +20,11 @@ from patchright.async_api import (
 from pydantic import Field, PrivateAttr, model_validator
 from typing_extensions import override
 
-from notte.browser import ProxySettings
 from notte.common.config import FrozenConfig
 from notte.errors.browser import (
     BrowserPoolNotStartedError,
 )
-
-
-class BrowserEnum(StrEnum):
-    CHROMIUM = "chromium"
-    FIREFOX = "firefox"
+from notte.sdk.types import BrowserType, ProxySettings
 
 
 class Cookie(BaseModel):
@@ -92,7 +86,7 @@ class BrowserResourceOptions:
     viewport_width: int = 1280
     viewport_height: int = 1020
     cdp_url: str | None = None
-    browser_type: BrowserEnum = BrowserEnum.CHROMIUM
+    browser_type: BrowserType = BrowserType.CHROMIUM
 
     def set_port(self, port: int) -> "BrowserResourceOptions":
         options = dict(asdict(self), debug_port=port, debug=True)
@@ -197,19 +191,25 @@ class PlaywrightResourceHandler(BaseModel, ABC):
             await self._playwright.stop()
             self._playwright = None
 
+    def is_started(self) -> bool:
+        return self._playwright is not None
+
     @property
     def playwright(self) -> Playwright:
         if self._playwright is None:
             raise BrowserPoolNotStartedError()
         return self._playwright
 
+    def set_playwright(self, playwright: Playwright) -> None:
+        self._playwright = playwright
+
     async def connect_cdp_browser(self, resource_options: BrowserResourceOptions) -> PlaywrightBrowser:
         if resource_options.cdp_url is None:
             raise ValueError("CDP URL is required to connect to a browser over CDP")
         match resource_options.browser_type:
-            case BrowserEnum.CHROMIUM:
+            case BrowserType.CHROMIUM:
                 return await self.playwright.chromium.connect_over_cdp(resource_options.cdp_url)
-            case BrowserEnum.FIREFOX:
+            case BrowserType.FIREFOX:
                 return await self.playwright.firefox.connect(resource_options.cdp_url)
 
     @abstractmethod
@@ -226,8 +226,20 @@ class BrowserResourceHandler(PlaywrightResourceHandler):
         if resource_options.cdp_url is not None:
             return await self.connect_cdp_browser(resource_options)
 
+        if self.config.verbose:
+            if resource_options.debug:
+                logger.info(f"[Browser Settings] Launching browser in debug mode on port {resource_options.debug_port}")
+            if resource_options.cdp_url is not None:
+                logger.info(f"[Browser Settings] Connecting to browser over CDP at {resource_options.cdp_url}")
+            if resource_options.proxy is not None:
+                logger.info(f"[Browser Settings] Using proxy {resource_options.proxy.server}")
+            if resource_options.browser_type != BrowserType.CHROMIUM:
+                logger.info(
+                    f"[Browser Settings] Using {resource_options.browser_type} browser. Note that CDP may not be supported for this browser."
+                )
+
         match resource_options.browser_type:
-            case BrowserEnum.CHROMIUM:
+            case BrowserType.CHROMIUM:
                 browser_args = self.config.get_chromium_args(cdp_port=resource_options.debug_port)
 
                 if resource_options.headless and resource_options.user_agent is None:
@@ -236,17 +248,16 @@ class BrowserResourceHandler(PlaywrightResourceHandler):
                         + ", for better odds at evading bot detection, set a user-agent or run in headful mode"
                     )
 
-                logger.warning(f"{resource_options=}")
                 browser = await self.playwright.chromium.launch(
                     headless=resource_options.headless,
-                    proxy=resource_options.proxy,
+                    proxy=resource_options.proxy.to_playwright() if resource_options.proxy is not None else None,
                     timeout=self.BROWSER_CREATION_TIMEOUT_SECONDS * 1000,
                     args=browser_args,
                 )
-            case BrowserEnum.FIREFOX:
+            case BrowserType.FIREFOX:
                 browser = await self.playwright.firefox.launch(
                     headless=resource_options.headless,
-                    proxy=resource_options.proxy,
+                    proxy=resource_options.proxy.to_playwright() if resource_options.proxy is not None else None,
                     timeout=self.BROWSER_CREATION_TIMEOUT_SECONDS * 1000,
                 )
         self.browser = browser
@@ -264,9 +275,10 @@ class BrowserResourceHandler(PlaywrightResourceHandler):
 
     @override
     async def get_browser_resource(self, resource_options: BrowserResourceOptions) -> BrowserResource:
-        browser = await self.create_playwright_browser(resource_options)
+        if self.browser is None:
+            self.browser = await self.create_playwright_browser(resource_options)
         async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
-            context = await browser.new_context(
+            context = await self.browser.new_context(
                 no_viewport=False,
                 viewport={
                     "width": self.config.viewport_width,
@@ -276,7 +288,7 @@ class BrowserResourceHandler(PlaywrightResourceHandler):
                     "clipboard-read",
                     "clipboard-write",
                 ],  # Needed for clipboard copy/paste to respect tabs / new lines
-                proxy=resource_options.proxy,  # already specified at browser level, but might as well
+                proxy=resource_options.proxy.to_playwright() if resource_options.proxy is not None else None,
                 user_agent=resource_options.user_agent,
             )
             if resource_options.cookies is not None:

@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from notte.actions.base import ExecutableAction
-from notte.browser import ProxySettings
 from notte.browser.observation import Observation, TrajectoryProgress
 from notte.browser.snapshot import BrowserSnapshot
 from notte.browser.window import BrowserWindow, BrowserWindowConfig
@@ -41,8 +40,10 @@ from notte.pipe.resolution.pipe import NodeResolutionPipe
 from notte.pipe.scraping.pipe import DataScrapingPipe, ScrapingConfig
 from notte.sdk.types import (
     DEFAULT_MAX_NB_STEPS,
+    BrowserType,
     PaginationParams,
     PaginationParamsDict,
+    ProxySettings,
     ScrapeParams,
     ScrapeParamsDict,
 )
@@ -111,6 +112,9 @@ class NotteEnvConfig(FrozenConfig):
 
     def set_proxy(self: Self, value: ProxySettings | None) -> Self:
         return self._copy_and_validate(window=self.window.set_proxy(value))
+
+    def set_browser_type(self: Self, value: BrowserType) -> Self:
+        return self._copy_and_validate(window=self.window.set_browser_type(value))
 
     def set_user_agent(self: Self, value: str | None) -> Self:
         return self._copy_and_validate(window=self.window.set_user_agent(value))
@@ -205,9 +209,6 @@ class NotteEnv(AsyncResource):
         llmserve: LLMService | None = None,
         act_callback: Callable[[BaseAction, Observation], None] | None = None,
     ) -> None:
-        if config is not None:
-            if config.verbose:
-                logger.info(f"🔧 Custom notte-env config: \n{config.model_dump_json(indent=2)}")
         self.config: NotteEnvConfig = config or NotteEnvConfig().use_llm()
         if llmserve is None:
             llmserve = LLMService(

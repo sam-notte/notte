@@ -11,6 +11,7 @@ from notte.sdk.client import NotteClient
 from notte.sdk.types import (
     DEFAULT_MAX_NB_STEPS,
     DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES,
+    BrowserType,
     ObserveRequestDict,
     ObserveResponse,
     SessionResponse,
@@ -90,7 +91,8 @@ def test_start_session(mock_post: MagicMock, client: NotteClient, api_key: str, 
         "timeout_minutes": DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES,
         "screenshot": None,
         "max_steps": DEFAULT_MAX_NB_STEPS,
-        "proxies": None,
+        "proxies": False,
+        "browser_type": BrowserType.CHROMIUM,
     }
     response = _start_session(mock_post=mock_post, client=client, session_id=session_id)
     assert response.session_id == session_id

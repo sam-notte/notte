@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 from typing import Annotated, Any, Generic, Literal, Required, TypeVar
 
+from patchright.async_api import ProxySettings as PlaywrightProxySettings
 from pydantic import BaseModel, Field, create_model, field_validator
 from typing_extensions import TypedDict
 
@@ -25,11 +26,60 @@ DEFAULT_MAX_NB_ACTIONS = 100
 DEFAULT_MAX_NB_STEPS = 20
 
 
+class BrowserType(StrEnum):
+    CHROMIUM = "chromium"
+    FIREFOX = "firefox"
+
+
+class ProxyGeolocation(BaseModel):
+    """
+    Geolocation settings for the proxy.
+    E.g. "New York, NY, US"
+    """
+
+    city: str
+    state: str
+    country: str
+
+
+class ProxyType(StrEnum):
+    NOTTE = "notte"
+    EXTERNAL = "external"
+
+
+class ProxySettings(BaseModel):
+    type: ProxyType
+    server: str | None
+    bypass: str | None
+    username: str | None
+    password: str | None
+    # TODO: enable geolocation later on
+    # geolocation: ProxyGeolocation | None
+
+    @field_validator("server")
+    @classmethod
+    def validate_server(cls, v: str | None, info: Any) -> str | None:
+        if info.data.get("type") == ProxyType.EXTERNAL and v is None:
+            raise ValueError("Server is required for external proxy type")
+        return v
+
+    def to_playwright(self) -> PlaywrightProxySettings:
+        if self.server is None:
+            raise ValueError("Proxy server is required")
+        return PlaywrightProxySettings(
+            server=self.server,
+            bypass=self.bypass,
+            username=self.username,
+            password=self.password,
+        )
+
+
 class SessionStartRequestDict(TypedDict, total=False):
     timeout_minutes: int
     screenshot: bool | None
     max_steps: int
-    proxies: list[str] | None
+    proxies: list[ProxySettings] | bool
+    browser_type: BrowserType
 
 
 class SessionRequestDict(TypedDict, total=False):
@@ -57,11 +107,12 @@ class SessionStartRequest(BaseModel):
     ] = DEFAULT_MAX_NB_STEPS
 
     proxies: Annotated[
-        list[str] | None,
+        list[ProxySettings] | bool,
         Field(
-            description="List of proxies to use for the session. If not provided, the default proxies will be used.",
+            description="List of custom proxies to use for the session. If True, the default proxies will be used.",
         ),
-    ] = None
+    ] = False
+    browser_type: BrowserType = BrowserType.CHROMIUM
 
     def __post_init__(self):
         """
@@ -115,6 +166,13 @@ class SessionResponse(BaseModel):
     status: Annotated[Literal["active", "closed", "error", "timed_out"], Field(description="Session status")]
     # TODO: discuss if this is the best way to handle errors
     error: Annotated[str | None, Field(description="Error message if the operation failed to complete")] = None
+    proxies: Annotated[
+        bool,
+        Field(
+            description="Whether proxies were used for the session. True if any proxy was applied during session creation."
+        ),
+    ] = False
+    browser_type: BrowserType = BrowserType.CHROMIUM
 
 
 class SessionResponseDict(TypedDict, total=False):
