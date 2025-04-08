@@ -1,3 +1,10 @@
+<div style="background: #ffe58a; padding: 6px; text-align: center;">
+  <a href="https://github.com/nottelabs/open-operator-evals" style="text-decoration: none; color: #333; font-weight: 600; font-size: 14px;">
+    fyi we're outperforming browser-use in speed, costs and reliability 👉🏼 read more on nottelabs/open-operator-evals
+  </a>
+</div>
+-
+
 <p align="center">
   <img src="docs/logo/banner.png" alt="Notte Logo" width="100%">
 </p>
@@ -20,6 +27,16 @@ $ agent.run("go to twitter and post: new era this is @nottecore taking over my a
 <p align="center">
   <img src="docs/gifs/v1.gif" alt="Demo" width="100%" href="https://video.twimg.com/ext_tw_video/1892967963344461824/pu/vid/avc1/1282x720/15sCfmmUUcAtBZaR.mp4">
 </p>
+
+## Benchmarks
+
+Read the full story here: [https://github.com/nottelabs/open-operator-evals](https://github.com/nottelabs/open-operator-evals)
+
+| Rank | Provider                                                    | Agent Self-Report | LLM Evaluation | Time per Task | Task Reliability |
+| ---- | ----------------------------------------------------------- | ----------------- | -------------- | ------------- | ---------------- |
+| 🏆   | [Notte](https://github.com/nottelabs/notte)                 | **86.2%**         | **79.0%**      | **47s**       | **96.6%**        |
+| 2️⃣   | [Browser-Use](https://github.com/browser-use/browser-use)   | 77.3%             | 60.2%          | 113s          | 83.3%            |
+| 3️⃣   | [Convergence](https://github.com/convergence-ai/proxy-lite) | 38.4%             | 31.4%          | 83s           | 50%              |
 
 ## Quickstart me
 
