@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/logo/banner.png" alt="Notte Logo" width="100%">
+  <img src="docs/logo/bgd.png" alt="Notte Logo" width="100%">
 </p>
 
 ## The full stack for the agentic internet layer
