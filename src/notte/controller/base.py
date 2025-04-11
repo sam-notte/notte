@@ -4,6 +4,7 @@ from typing_extensions import final
 
 from notte.browser.snapshot import BrowserSnapshot
 from notte.browser.window import BrowserWindow
+from notte.common.credential_vault import get_str_value
 from notte.controller.actions import (
     BaseAction,
     CheckAction,
@@ -27,7 +28,7 @@ from notte.controller.actions import (
 )
 from notte.errors.handler import capture_playwright_errors
 from notte.pipe.preprocessing.dom.dropdown_menu import dropdown_menu_options
-from notte.pipe.preprocessing.dom.locate import locale_element
+from notte.pipe.preprocessing.dom.locate import locate_element
 from notte.utils.code import text_contains_tabs
 from notte.utils.platform import platform_control_key
 
@@ -99,7 +100,7 @@ class BrowserController:
         if action.press_enter is not None:
             press_enter = action.press_enter
         # locate element (possibly in iframe)
-        locator: Locator = await locale_element(self.window.page, action.selector)
+        locator: Locator = await locate_element(self.window.page, action.selector)
         original_url = self.window.page.url
 
         action_timeout = self.window.config.wait.action_timeout
@@ -109,7 +110,7 @@ class BrowserController:
             case ClickAction():
                 await locator.click(timeout=action_timeout)
             case FillAction(value=value):
-                if text_contains_tabs(text=value):
+                if text_contains_tabs(text=get_str_value(value)):
                     if self.verbose:
                         logger.info(
                             "🪦 Indentation detected in fill action: simulating clipboard copy/paste for better string formatting"
@@ -141,7 +142,7 @@ class BrowserController:
 
                     await self.window.short_wait()
                 else:
-                    await locator.fill(value, timeout=action_timeout, force=action.clear_before_fill)
+                    await locator.fill(get_str_value(value), timeout=action_timeout, force=action.clear_before_fill)
                     await self.window.short_wait()
             case CheckAction(value=value):
                 if value:
@@ -157,7 +158,7 @@ class BrowserController:
                 elif option_selector is None:
                     raise ValueError(f"Option selector is required for {action.name()}")
                 else:
-                    option_locator = await locale_element(self.window.page, option_selector)
+                    option_locator = await locate_element(self.window.page, option_selector)
                     # Handle non-standard select
                     await option_locator.click()
 

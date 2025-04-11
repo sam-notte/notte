@@ -16,7 +16,7 @@ class Agent:
     def __init__(
         self,
         headless: bool = False,
-        reasoning_model: str = LlmModel.default(),  # type: ignore[reportCallInDefaultInitializer]
+        reasoning_model: LlmModel = LlmModel.default(),  # type: ignore[reportCallInDefaultInitializer]
         max_steps: int = DEFAULT_MAX_NB_STEPS,
         use_vision: bool = True,
         # /!\ web security is disabled by default to increase agent performance

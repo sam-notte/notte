@@ -1,9 +1,9 @@
 import time
-from typing import Any, ClassVar, Self
+from typing import Any, Callable, ClassVar, Self
 
 import httpx
 from loguru import logger
-from patchright.async_api import CDPSession, Page
+from patchright.async_api import CDPSession, Locator, Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
 from pydantic import BaseModel, Field
 from typing_extensions import override
@@ -85,6 +85,7 @@ class BrowserWindowConfig(FrozenConfig):
     wait: BrowserWaitConfig = BrowserWaitConfig.long()
     screenshot: bool | None = True
     empty_page_max_retry: int = 5
+    chrome_args: list[str] | None = None
 
     def set_headless(self: Self, value: bool = True) -> Self:
         return self._copy_and_validate(headless=value)
@@ -145,6 +146,7 @@ class BrowserWindowConfig(FrozenConfig):
             cdp_url=self.cdp_url,
             cookies=Cookie.from_json(self.cookies_path) if self.cookies_path is not None else None,
             browser_type=self.browser_type,
+            chrome_args=self.chrome_args,
         )
 
 
@@ -153,6 +155,7 @@ class BrowserWindow(BaseModel):
     handler: PlaywrightResourceHandler | None = None
     resource: BrowserResource | None = None
     internal_handler: bool = False
+    vault_replacement_fn: Callable[..., dict[str, str]] | None = None
 
     @override
     def model_post_init(cls, __context: Any) -> None:
@@ -262,6 +265,24 @@ class BrowserWindow(BaseModel):
             tabs=[await self.tab_metadata(i) for i, _ in enumerate(self.tabs)],
         )
 
+    async def collect_hidden_locators(self) -> list[Locator]:
+        hidden_values: set[str]
+        if self.vault_replacement_fn is None:
+            hidden_values = set()
+        else:
+            hidden_values = set(self.vault_replacement_fn().keys())
+
+        hidden_locators: list[Locator] = []
+        if len(hidden_values) > 0:
+            # might be able to evaluate all locators, at once
+            # fine for now
+            for input_el in await self.page.locator("input").all():
+                input_val = await input_el.evaluate("el => el.value")
+
+                if input_val in hidden_values:
+                    hidden_locators.append(input_el)
+        return hidden_locators
+
     async def snapshot(self, screenshot: bool | None = None, retries: int | None = None) -> BrowserSnapshot:
         if retries is None:
             retries = self.config.empty_page_max_retry
@@ -307,7 +328,9 @@ class BrowserWindow(BaseModel):
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
         take_screenshot = screenshot if screenshot is not None else self.config.screenshot
         try:
-            snapshot_screenshot = await self.page.screenshot() if take_screenshot else None
+            snapshot_screenshot = (
+                await self.page.screenshot(mask=await self.collect_hidden_locators()) if take_screenshot else None
+            )
         except PlaywrightTimeoutError:
             if self.config.handler.verbose:
                 logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
