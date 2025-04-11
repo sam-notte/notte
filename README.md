@@ -1,6 +1,6 @@
 <div align="center">
   <p>
-    ⚡️ fyi we're outperforming browser-use in speed, costs and reliability 👉🏼 <a href="https://github.com/nottelabs/open-operator-evals">read more on open-operator-evals</a>
+    ⚡️ we outperform other web agents in speed, costs and reliability 👉🏼 <a href="https://github.com/nottelabs/open-operator-evals">read more on open-operator-evals</a>
   </p>
 </div>
 
