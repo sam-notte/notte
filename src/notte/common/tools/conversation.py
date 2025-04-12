@@ -43,18 +43,28 @@ class Conversation:
     history: list[CachedMessage] = field(default_factory=list)
     json_extractor: StructuredContent = field(default_factory=lambda: StructuredContent(inner_tag="json"))
     autosize: bool = False
-    max_tokens: int = 16000
     model: str = LlmModel.default()
+    max_tokens: int | None = None
     conservative_factor: float = 0.8
 
     _total_tokens: int = field(default=0, init=False)
     convert_tools_to_assistant: bool = False
 
+    def __post_init__(self) -> None:
+        if self.max_tokens is None:
+            self.max_tokens = LlmModel.context_length(self.model)
+
+    @property
+    def default_max_tokens(self) -> int:
+        if self.max_tokens is None:
+            raise ValueError("max_tokens is not set")
+        return self.max_tokens
+
     @property
     def conservative_max_tokens(self) -> int:
         """Since token count isn't 100% accurate, allow to be
         slightly conservative, to make sure we trim under the total context length"""
-        return int(self.max_tokens * self.conservative_factor)
+        return int(self.default_max_tokens * self.conservative_factor)
 
     def count_tokens(self, content: AllMessageValues) -> int:
         """Count the number of tokens in a list of messages"""
@@ -70,12 +80,23 @@ class Conversation:
             return
 
         # Always keep system messages
-        system_messages = [msg for msg in self.history if msg.message["role"] == "system"]
-        other_messages = [msg for msg in self.history if msg.message["role"] != "system"]
+        init_messages: list[CachedMessage] = []
+        other_messages: list[CachedMessage] = []
+        is_init_msg = True
+        for msg in self.history:
+            match is_init_msg, msg.message["role"]:
+                case True, "system":
+                    init_messages.append(msg)
+                case True, "user":
+                    # keep first user message as init message (need task description)
+                    is_init_msg = False
+                    init_messages.append(msg)
+                case _, _:
+                    other_messages.append(msg)
 
         new_content_tokens = self.count_tokens(new_content)
-        system_tokens = sum(msg.token_count for msg in system_messages)
-        available_tokens = self.conservative_max_tokens - system_tokens - new_content_tokens
+        init_tokens = sum(msg.token_count for msg in init_messages)
+        available_tokens = self.conservative_max_tokens - init_tokens - new_content_tokens
 
         # Remove oldest non-system messages until we have room
         current_tokens = sum(msg.token_count for msg in other_messages)
@@ -86,9 +107,11 @@ class Conversation:
             has_trimmed += 1
 
         if has_trimmed > 0:
-            logger.info(f"Trimmed {has_trimmed} message(s) to stay under max token limit")
+            logger.info(
+                f"Trimmed {has_trimmed} message(s) to stay under max token limit (i.e {self.default_max_tokens // 1000}k)"
+            )
 
-        self.history = system_messages + other_messages
+        self.history = init_messages + other_messages
         self._total_tokens = sum(msg.token_count for msg in self.history)
 
     def _add_message(self, msg: AllMessageValues) -> None:

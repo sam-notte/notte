@@ -40,8 +40,8 @@ class AgentConfig(FrozenConfig, ABC):
         default=LlmModel.default(), description="The model to use for reasoning (i.e taking actions)."
     )
     include_screenshot: bool = Field(default=False, description="Whether to include a screenshot in the response.")
-    max_history_tokens: int = Field(
-        default=16000,
+    max_history_tokens: int | None = Field(
+        default=None,
         description="The maximum number of tokens in the history. When the history exceeds this limit, the oldest messages are discarded.",
     )
     max_error_length: int = Field(
