@@ -8,7 +8,7 @@ from notte_core.llms.engine import StructuredContent
 from notte_core.llms.service import LLMService
 
 
-class DocumentCategoryPipe:
+class PageCategoryPipe:
     def __init__(self, llmserve: LLMService, verbose: bool = False) -> None:
         self.llmserve: LLMService = llmserve
         self.verbose: bool = verbose
