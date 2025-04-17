@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13' and sys_platform == 'darwin'",
@@ -2444,6 +2445,7 @@ requires-dist = [
     { name = "notte-pools", marker = "extra == 'pools'", editable = "packages/notte-pools" },
     { name = "notte-sdk", editable = "packages/notte-sdk" },
 ]
+provides-extras = ["integrations", "eval", "pools"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2531,6 +2533,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.3" },
     { name = "tldextract", specifier = ">=5.2.0" },
 ]
+provides-extras = ["server"]
 
 [[package]]
 name = "notte-eval"
@@ -2634,6 +2637,7 @@ requires-dist = [
     { name = "tldextract", specifier = ">=5.2.0" },
     { name = "uvicorn", marker = "extra == 'api'", specifier = ">=0.29.0" },
 ]
+provides-extras = ["vault", "server", "embedding", "api", "discord", "slack", "browserbase", "camoufox", "browser-use", "convergence"]
 
 [package.metadata.requires-dev]
 dev = [
