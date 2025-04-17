@@ -16,7 +16,7 @@ jobs:
         id: check_user
         run: |
           actor="${{ github.actor }}"
-          team_members=("andreakiro" "giordano-lucas" "leo-notte")
+          team_members=("andreakiro" "giordano-lucas" "leo-notte" "jose-notte" "coderabbitai[bot]")
           is_external="true"
           for member in "${team_members[@]}"; do
             if [[ "$actor" == "$member" ]]; then
