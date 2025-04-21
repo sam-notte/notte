@@ -79,7 +79,7 @@ class HashiCorpVault(BaseVault):
         return tldextract.extract(url).domain or url
 
     @override
-    async def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
+    def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
         for cred in creds:
             if not cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as singleton credential: url-specific only")
@@ -93,7 +93,7 @@ class HashiCorpVault(BaseVault):
         )
 
     @override
-    async def get_singleton_credentials(self) -> list[CredentialField]:
+    def get_singleton_credentials(self) -> list[CredentialField]:
         try:
             secret = self.secrets.read_secret_version(path="singleton_credentials", mount_point=self._mount_path)
         except InvalidPath:
@@ -104,7 +104,7 @@ class HashiCorpVault(BaseVault):
         return [CredentialField.registry[key](value=value) for key, value in data.items()]
 
     @override
-    async def _add_credentials(self, creds: VaultCredentials) -> None:
+    def _add_credentials(self, creds: VaultCredentials) -> None:
         for cred in creds.creds:
             if cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as url specific credential: singleton only")
@@ -119,7 +119,7 @@ class HashiCorpVault(BaseVault):
         )
 
     @override
-    async def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
+    def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
         domain = HashiCorpVault.get_root_domain(url)
         try:
             secret = self.secrets.read_secret_version(path=f"credentials/{domain}", mount_point=self._mount_path)
@@ -136,7 +136,7 @@ class HashiCorpVault(BaseVault):
             return None
 
     @override
-    async def remove_credentials(self, url: str) -> None:
+    def remove_credentials(self, url: str) -> None:
         domain = HashiCorpVault.get_root_domain(url)
         self.secrets.delete_metadata_and_all_versions(path=f"credentials/{domain}", mount_point=self._mount_path)
 

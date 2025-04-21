@@ -33,7 +33,7 @@ class NotteVault(BaseVault):
         return ".".join((extracted.domain, extracted.suffix)) or url
 
     @override
-    async def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
+    def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
         for cred in creds:
             if not cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as singleton credential: url-specific only")
@@ -42,7 +42,7 @@ class NotteVault(BaseVault):
         _ = self.persona_client.add_credentials(self.persona_id, url=None, **creds_dict)
 
     @override
-    async def get_singleton_credentials(self) -> list[CredentialField]:
+    def get_singleton_credentials(self) -> list[CredentialField]:
         try:
             return self.persona_client.get_credentials(self.persona_id, url=None).credentials
         except Exception as e:
@@ -50,7 +50,7 @@ class NotteVault(BaseVault):
             return []
 
     @override
-    async def _add_credentials(self, creds: VaultCredentials) -> None:
+    def _add_credentials(self, creds: VaultCredentials) -> None:
         for cred in creds.creds:
             if cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as url specific credential: singleton only")
@@ -60,7 +60,7 @@ class NotteVault(BaseVault):
         _ = self.persona_client.add_credentials(self.persona_id, url=domain, **creds_dict)
 
     @override
-    async def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
+    def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
         try:
             domain = NotteVault.get_root_domain(url)
             creds = self.persona_client.get_credentials(self.persona_id, url=domain).credentials
@@ -69,5 +69,5 @@ class NotteVault(BaseVault):
             logger.warning(f"Failed to get creds: {traceback.format_exc()}")
 
     @override
-    async def remove_credentials(self, url: str | None) -> None:
+    def remove_credentials(self, url: str | None) -> None:
         _ = self.persona_client.delete_credentials(self.persona_id, url=url)
