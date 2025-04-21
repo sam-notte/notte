@@ -58,3 +58,23 @@ def is_valid_url(url: str, check_reachability: bool = True) -> bool:
         return response.status_code < 400  # Valid if status code is less than 400
     except requests.RequestException:
         return False
+
+
+def get_root_domain(url: str) -> str:
+    """Get the root domain of a URL.
+
+    Args:
+        url (str): The URL to get the root domain from.
+
+    Returns:
+        the root domain of the URL
+    """
+    if not url.startswith("http"):
+        url = f"https://{url}"
+    parsed_url = urlparse(url)
+    parsed = parsed_url.netloc
+    if parsed.startswith("."):
+        return ""
+    if parsed.startswith("www."):
+        parsed = parsed[4:]
+    return parsed

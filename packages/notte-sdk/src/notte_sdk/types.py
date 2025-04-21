@@ -15,6 +15,7 @@ from notte_core.credentials.base import BaseVault, CredentialField, CredentialsD
 from notte_core.data.space import DataSpace
 from notte_core.llms.engine import LlmModel
 from notte_core.utils.pydantic_schema import create_model_from_schema
+from notte_core.utils.url import get_root_domain
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing_extensions import TypedDict, override
 
@@ -27,6 +28,7 @@ DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES = 3
 DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES = 30
 DEFAULT_MAX_NB_ACTIONS = 100
 DEFAULT_MAX_NB_STEPS = 20
+DEFAULT_LIMIT_LIST_ITEMS = 10
 
 
 class PlaywrightProxySettings(TypedDict, total=False):
@@ -248,7 +250,7 @@ class ListRequestDict(TypedDict, total=False):
 
 class SessionListRequest(BaseModel):
     only_active: bool = True
-    limit: int = 10
+    limit: int = DEFAULT_LIMIT_LIST_ITEMS
 
 
 class SessionResponse(BaseModel):
@@ -370,7 +372,7 @@ class EmailsReadRequestDict(TypedDict, total=False):
 
 
 class EmailsReadRequest(BaseModel):
-    limit: Annotated[int, Field(description="Max number of emails to return")] = 10
+    limit: Annotated[int, Field(description="Max number of emails to return")] = DEFAULT_LIMIT_LIST_ITEMS
     timedelta: Annotated[
         dt.timedelta | None, Field(description="Return only emails that are not older than <timedelta>")
     ] = None
@@ -396,7 +398,7 @@ class SMSReadRequestDict(TypedDict, total=False):
 
 
 class SMSReadRequest(BaseModel):
-    limit: Annotated[int, Field(description="Max number of messages to return")] = 10
+    limit: Annotated[int, Field(description="Max number of messages to return")] = DEFAULT_LIMIT_LIST_ITEMS
     timedelta: Annotated[
         dt.timedelta | None, Field(description="Return only messages that are not older than <timedelta>")
     ] = None
@@ -438,9 +440,23 @@ class AddCredentialsRequestDict(CredentialsDict, total=False):
     url: str | None
 
 
+def validate_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    domain_url = get_root_domain(value)
+    if len(domain_url) == 0:
+        raise ValueError(f"Invalid URL: {value}. Please provide a valid URL with a domain name.")
+    return domain_url
+
+
 class AddCredentialsRequest(BaseModel):
     url: str | None
     credentials: Annotated[list[CredentialField], Field(description="Credentials to add")]
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return validate_url(value)
 
     @staticmethod
     def load(body: dict[str, Any]) -> "AddCredentialsRequest":
@@ -471,6 +487,11 @@ class GetCredentialsRequestDict(TypedDict, total=False):
 class GetCredentialsRequest(BaseModel):
     url: str | None
 
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return validate_url(value)
+
 
 class GetCredentialsResponse(BaseModel):
     credentials: Annotated[list[CredentialField], Field(description="Retrieved credentials")]
@@ -482,6 +503,11 @@ class DeleteCredentialsRequestDict(TypedDict, total=False):
 
 class DeleteCredentialsRequest(BaseModel):
     url: str | None
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return validate_url(value)
 
 
 class DeleteCredentialsResponse(BaseModel):
