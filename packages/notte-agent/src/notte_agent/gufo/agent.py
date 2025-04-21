@@ -130,7 +130,7 @@ class GufoAgent(BaseAgent):
 
                 assert isinstance(action_with_selector, InteractionAction) and action_with_selector.selector is not None
 
-                action = await self.vault.replace_credentials(
+                action = self.vault.replace_credentials(
                     action,
                     attrs,
                     self.env.snapshot,
@@ -163,7 +163,7 @@ class GufoAgent(BaseAgent):
         logger.info(f"🚀 starting agent with task: {task} and url: {url}")
         system_msg = self.prompt.system(task, url)
         if self.vault is not None:
-            system_msg += "\n" + await self.vault.instructions()
+            system_msg += "\n" + self.vault.instructions()
         self.conv.add_system_message(content=system_msg)
         self.conv.add_user_message(self.prompt.env_rules())
         async with self.env:
