@@ -3,13 +3,13 @@ from __future__ import annotations
 import traceback
 from typing import final
 
-import tldextract
 from loguru import logger
 from notte_core.credentials.base import (
     BaseVault,
     CredentialField,
     VaultCredentials,
 )
+from notte_core.utils.url import get_root_domain
 from typing_extensions import override
 
 from notte_sdk.endpoints.persona import PersonaClient
@@ -26,11 +26,6 @@ class NotteVault(BaseVault):
     @property
     def vault_id(self):
         return self.persona_id
-
-    @staticmethod
-    def get_root_domain(url: str) -> str:
-        extracted = tldextract.extract(url)
-        return ".".join((extracted.domain, extracted.suffix)) or url
 
     @override
     def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
@@ -55,14 +50,14 @@ class NotteVault(BaseVault):
             if cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as url specific credential: singleton only")
 
-        domain = NotteVault.get_root_domain(creds.url)
+        domain = get_root_domain(creds.url)
         creds_dict = BaseVault.credential_fields_to_dict(creds.creds)
         _ = self.persona_client.add_credentials(self.persona_id, url=domain, **creds_dict)
 
     @override
     def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
         try:
-            domain = NotteVault.get_root_domain(url)
+            domain = get_root_domain(url)
             creds = self.persona_client.get_credentials(self.persona_id, url=domain).credentials
             return VaultCredentials(url=url, creds=creds)
         except Exception:

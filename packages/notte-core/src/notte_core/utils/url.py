@@ -64,7 +64,8 @@ def get_root_domain(url: str) -> str:
     """Get the root domain of a URL.
 
     Args:
-        url (str): The URL to get the root domain from.
+        str: The root domain extracted from the URL (e.g., "example.com" from "https://www.example.com/path").
+        Returns an empty string for malformed URLs that start with a dot.
 
     Returns:
         the root domain of the URL

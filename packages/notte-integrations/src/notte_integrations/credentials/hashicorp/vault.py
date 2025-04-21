@@ -2,13 +2,13 @@ import os
 from dataclasses import dataclass
 from typing import Any, Protocol, final
 
-import tldextract
 from hvac.exceptions import InvalidPath
 from notte_core.credentials.base import (
     BaseVault,
     CredentialField,
     VaultCredentials,
 )
+from notte_core.utils.url import get_root_domain
 from typing_extensions import override
 
 
@@ -74,10 +74,6 @@ class HashiCorpVault(BaseVault):
             if "path is already in use" not in str(e):
                 raise e
 
-    @staticmethod
-    def get_root_domain(url: str) -> str:
-        return tldextract.extract(url).domain or url
-
     @override
     def _set_singleton_credentials(self, creds: list[CredentialField]) -> None:
         for cred in creds:
@@ -108,7 +104,7 @@ class HashiCorpVault(BaseVault):
         for cred in creds.creds:
             if cred.singleton:
                 raise ValueError(f"{cred.__class__} can't be set as url specific credential: singleton only")
-        domain = HashiCorpVault.get_root_domain(creds.url)
+        domain = get_root_domain(creds.url)
         self.secrets.create_or_update_secret(
             path=f"credentials/{domain}",
             secret=dict(
@@ -120,7 +116,7 @@ class HashiCorpVault(BaseVault):
 
     @override
     def _get_credentials_impl(self, url: str) -> VaultCredentials | None:
-        domain = HashiCorpVault.get_root_domain(url)
+        domain = get_root_domain(url)
         try:
             secret = self.secrets.read_secret_version(path=f"credentials/{domain}", mount_point=self._mount_path)
             data = secret["data"]["data"]
@@ -137,7 +133,7 @@ class HashiCorpVault(BaseVault):
 
     @override
     def remove_credentials(self, url: str) -> None:
-        domain = HashiCorpVault.get_root_domain(url)
+        domain = get_root_domain(url)
         self.secrets.delete_metadata_and_all_versions(path=f"credentials/{domain}", mount_point=self._mount_path)
 
     @classmethod
