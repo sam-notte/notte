@@ -14,7 +14,8 @@ from notte_core.controller.space import BaseActionSpace
 from notte_core.credentials.base import BaseVault, CredentialField, CredentialsDict
 from notte_core.data.space import DataSpace
 from notte_core.llms.engine import LlmModel
-from pydantic import BaseModel, Field, create_model, field_validator, model_validator
+from notte_core.utils.pydantic_schema import create_model_from_schema
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing_extensions import TypedDict, override
 
 # ############################################################
@@ -168,7 +169,6 @@ class ReplayResponse(BaseModel):
 
 class SessionStartRequestDict(TypedDict, total=False):
     timeout_minutes: int
-    screenshot: bool | None
     max_steps: int
     proxies: list[ProxySettings] | bool
     browser_type: BrowserType
@@ -176,7 +176,7 @@ class SessionStartRequestDict(TypedDict, total=False):
 
 
 class SessionRequestDict(TypedDict, total=False):
-    session_id: Required[str]
+    session_id: str | None
 
 
 class SessionStartRequest(BaseModel):
@@ -190,7 +190,7 @@ class SessionStartRequest(BaseModel):
     ] = DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES
 
     max_steps: Annotated[
-        int | None,
+        int,
         Field(
             gt=0,
             description="Maximum number of steps in the trajectory. An error will be raised if this limit is reached.",
@@ -314,8 +314,11 @@ class SessionResponseDict(TypedDict, total=False):
     created_at: dt.datetime
     last_accessed_at: dt.datetime
     duration: dt.timedelta
+    closed_at: dt.datetime | None
     status: Literal["active", "closed", "error", "timed_out"]
     error: str | None
+    proxies: bool
+    browser_type: BrowserType
 
 
 # ############################################################
@@ -535,8 +538,8 @@ class ScrapeParamsDict(TypedDict, total=False):
     use_llm: bool | None
 
 
-class ScrapeRequestDict(ObserveRequestDict, ScrapeParamsDict, total=False):
-    pass
+class ScrapeRequestDict(SessionRequestDict, ScrapeParamsDict, total=False):
+    url: str | None
 
 
 class ScrapeParams(BaseModel):
@@ -604,38 +607,21 @@ class ScrapeParams(BaseModel):
         if len(value.keys()) == 0:
             return None
 
-        # Map JSON Schema types to Pydantic types
-        type_mapping = {
-            "string": str,
-            "integer": int,
-            "number": float,
-            "boolean": bool,
-            "array": list,
-            "object": dict,
-            "null": None,
-        }
-        if "properties" not in value:
-            raise ValueError("response_format must contain a 'properties' key")
+        return create_model_from_schema(value)
 
-        if "$defs" in value:
-            raise ValueError("response_format currently does not support $defs")
-
-        # Extract field definitions with type annotations
-        field_definitions = {}
-        for field_name, field_schema in value["properties"].items():
-            field_type = field_schema.get("type")
-            if field_type:
-                python_type = type_mapping.get(field_type)
-                if python_type:
-                    field_definitions[field_name] = (python_type, ...)
-
-        model_name = str(value.get("title", "__DynamicResponseFormat"))
-
-        return create_model(model_name, **field_definitions)  # type: ignore[arg-type]
+    @override
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        dump = super().model_dump(*args, **kwargs)
+        if isinstance(self.response_format, type) and issubclass(self.response_format, BaseModel):  # pyright: ignore[reportUnnecessaryIsInstance]
+            dump["response_format"] = self.response_format.model_json_schema()
+        return dump
 
 
-class ScrapeRequest(ObserveRequest, ScrapeParams):
-    pass
+class ScrapeRequest(SessionRequest, ScrapeParams):
+    url: Annotated[
+        str | None,
+        Field(description="The URL to scrape. If not provided, uses the current page URL."),
+    ] = None
 
 
 class StepRequest(SessionRequest, PaginationParams):
@@ -720,37 +706,37 @@ class ObserveResponse(BaseModel):
 # ############################################################
 
 
-class AgentRequestDict(TypedDict, total=False):
-    task: Required[str]
-    url: str | None
-    reasoning_model: LlmModel
-
-
-class AgentRequest(BaseModel):
-    task: str
-    url: str | None = None
-
-
 class AgentStatus(StrEnum):
     active = "active"
     closed = "closed"
 
 
-class AgentSessionRequest(SessionRequest):
-    agent_id: Annotated[str | None, Field(description="The ID of the agent to run")] = None
+class AgentSessionRequest(BaseModel):
+    agent_id: Annotated[str, Field(description="The ID of the agent to run")]
 
 
-class AgentRunRequestDict(AgentRequestDict, SessionRequestDict, total=False):
+class AgentRunRequestDict(SessionRequestDict, total=False):
+    task: Required[str]
+    url: str | None
+    reasoning_model: LlmModel
     use_vision: bool
+    max_steps: int
     persona_id: str | None
     vault_id: str | None
 
 
-class AgentRunRequest(AgentRequest, SessionRequest):
-    reasoning_model: LlmModel = LlmModel.default()
-    use_vision: bool = True
-    persona_id: str | None = None
-    vault_id: str | None = None
+class AgentRunRequest(SessionRequest):
+    task: Annotated[str, Field(description="The task that the agent should perform")]
+    url: Annotated[str | None, Field(description="The URL that the agent should start on (optional)")] = None
+    reasoning_model: Annotated[LlmModel, Field(description="The reasoning model to use")] = LlmModel.default()
+    use_vision: Annotated[
+        bool, Field(description="Whether to use vision for the agent. Not all reasoning models support vision.")
+    ] = True
+    max_steps: Annotated[int, Field(description="The maximum number of steps the agent should take")] = (
+        DEFAULT_MAX_NB_STEPS
+    )
+    persona_id: Annotated[str | None, Field(description="The persona to use for the agent")] = None
+    vault_id: Annotated[str | None, Field(description="The vault to use for the agent")] = None
 
 
 class AgentStatusRequestDict(TypedDict, total=False):
@@ -760,13 +746,6 @@ class AgentStatusRequestDict(TypedDict, total=False):
 
 class AgentStatusRequest(AgentSessionRequest):
     replay: Annotated[bool, Field(description="Whether to include the replay in the response")] = False
-
-    @field_validator("agent_id", mode="before")
-    @classmethod
-    def validate_agent_id(cls, value: str | None) -> str | None:
-        if value is None:
-            raise ValueError("agent_id is required")
-        return value
 
 
 class AgentListRequest(SessionListRequest):
