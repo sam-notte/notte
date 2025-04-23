@@ -22,7 +22,7 @@ from notte_core.controller.actions import (
 from notte_core.errors.processing import InvalidInternalCheckError
 from notte_core.llms.engine import LlmModel
 from notte_core.llms.service import LLMService
-from notte_core.utils.webp_replay import ScreenshotReplay
+from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
 from notte_sdk.types import (
     DEFAULT_MAX_NB_STEPS,
     BrowserType,
@@ -131,6 +131,9 @@ class NotteEnvConfig(FrozenConfig):
         Enable or disable web security.
         """
         return self._copy_and_validate(window=self.window.set_web_security(value))
+
+    def set_chrome_args(self: Self, value: list[str] | None) -> Self:
+        return self._copy_and_validate(window=self.window.set_chrome_args(value))
 
     def disable_web_security(self: Self) -> Self:
         return self.web_security(False)
@@ -281,11 +284,11 @@ class NotteEnv(AsyncResource):
             current_step=len(self.trajectory),
         )
 
-    def replay(self) -> bytes:
+    def replay(self) -> WebpReplay:
         screenshots: list[bytes] = [step.obs.screenshot for step in self.trajectory if step.obs.screenshot is not None]
         if len(screenshots) == 0:
             raise ValueError("No screenshots found in agent trajectory")
-        return ScreenshotReplay.from_bytes(screenshots).summary_webp()
+        return ScreenshotReplay.from_bytes(screenshots).get()
 
     # ---------------------------- observe, step functions ----------------------------
 

@@ -1,13 +1,17 @@
 import time
 from collections.abc import Sequence
-from typing import Unpack
+from typing import Any, Unpack
 
 from loguru import logger
+from notte_core.utils.webp_replay import WebpReplay
 from pydantic import BaseModel
 from typing_extensions import final, override
 
 from notte_sdk.endpoints.base import BaseClient, NotteEndpoint
+from notte_sdk.endpoints.sessions import RemoteSessionFactory
 from notte_sdk.types import (
+    AgentCreateRequest,
+    AgentCreateRequestDict,
     AgentListRequest,
     AgentResponse,
     AgentRunRequest,
@@ -18,12 +22,13 @@ from notte_sdk.types import (
     ListRequestDict,
 )
 from notte_sdk.types import AgentStatusResponse as _AgentStatusResponse
+from notte_sdk.vault import NotteVault
 
 
 # proxy for: StepAgentOutput
 class _AgentResponse(BaseModel):
-    state: BaseModel
-    actions: list[BaseModel]
+    state: dict[str, Any]
+    actions: list[dict[str, dict[str, Any]]]
 
 
 AgentStatusResponse = _AgentStatusResponse[_AgentResponse]
@@ -226,7 +231,7 @@ class AgentsClient(BaseClient):
             if len(response.steps) >= last_step:
                 for step in response.steps[last_step:]:
                     for action in step.actions:
-                        logger.info(action.to_action().execution_message())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType, reportAttributeAccessIssue]
+                        logger.info(f"Executing action: {action}")
                 last_step = len(response.steps)
             logger.info(
                 f"Waiting {polling_interval_seconds} seconds for agent to complete (current step: {last_step})..."
@@ -234,7 +239,7 @@ class AgentsClient(BaseClient):
             time.sleep(polling_interval_seconds)
         raise TimeoutError("Agent did not complete in time")
 
-    def close(self, agent_id: str) -> AgentResponse:
+    def stop(self, agent_id: str) -> AgentResponse:
         """
         Stops the specified agent and clears the last agent response.
 
@@ -302,18 +307,167 @@ class AgentsClient(BaseClient):
     def replay(
         self,
         agent_id: str | None = None,
-        output_file: str | None = None,
-    ) -> bytes:
+    ) -> WebpReplay:
         """
         Downloads the replay for the specified agent in webp format.
 
         Args:
             agent_id: The identifier of the agent to download the replay for.
-            output_file: The path to save the replay file.
 
         Returns:
-            bytes: The replay file in webp format.
+            WebpReplay: The replay file in webp format.
         """
         agent_id = self.get_agent_id(agent_id)
         endpoint = AgentsClient.agent_replay_endpoint(agent_id=agent_id)
-        return self._request_file(endpoint, file_type="webp", output_file=output_file)
+        file_bytes = self._request_file(endpoint, file_type="webp")
+        return WebpReplay(file_bytes)
+
+
+@final
+class RemoteAgentFactory:
+    """
+    Factory for creating RemoteAgent instances.
+
+    This factory provides a convenient way to create RemoteAgent instances with
+    optional vault and session configurations. It handles the validation of
+    agent creation requests and sets up the appropriate connections.
+
+    Attributes:
+        client (AgentsClient): The client used to communicate with the Notte API.
+    """
+
+    class RemoteAgent:
+        """
+        A remote agent that can execute tasks through the Notte API.
+
+        This class provides an interface for running tasks, checking status, and managing replays
+        of agent executions. It maintains state about the current agent execution and provides
+        methods to interact with the agent through an AgentsClient.
+
+        Attributes:
+            request (AgentCreateRequest): The configuration request used to create this agent.
+            client (AgentsClient): The client used to communicate with the Notte API.
+            response (AgentResponse | None): The latest response from the agent execution.
+        """
+
+        def __init__(self, client: AgentsClient, request: AgentCreateRequest) -> None:
+            """
+            Initialize a new RemoteAgent instance.
+
+            Args:
+                client (AgentsClient): The client used to communicate with the Notte API.
+                request (AgentCreateRequest): The configuration request for this agent.
+            """
+            self.request: AgentCreateRequest = request
+            self.client: AgentsClient = client
+            self.response: AgentResponse | None = None
+
+        @property
+        def agent_id(self) -> str:
+            """
+            Get the ID of the current agent execution.
+
+            Returns:
+                str: The unique identifier of the current agent execution.
+
+            Raises:
+                ValueError: If the agent hasn't been run yet (no response available).
+            """
+            if self.response is None:
+                raise ValueError("You need to run the agent first to get the agent id")
+            return self.response.agent_id
+
+        def run(self, task: str, url: str | None = None) -> AgentResponse:
+            """
+            Execute a task with the agent.
+
+            Runs the specified task and waits for its completion. If a URL is provided,
+            the agent will start from that URL before executing the task.
+
+            Args:
+                task (str): The task description for the agent to execute.
+                url (str | None): Optional starting URL for the task.
+
+            Returns:
+                AgentResponse: The response from the completed agent execution.
+            """
+            self.response = self.client.run(**self.request.model_dump(), task=task, url=url)
+            # wait for completion
+            return self.client.wait_for_completion(agent_id=self.agent_id)
+
+        async def arun(self, task: str, url: str | None = None) -> AgentResponse:
+            """
+            Asynchronously execute a task with the agent.
+
+            This is currently a wrapper around the synchronous run method.
+            In future versions, this might be implemented as a true async operation.
+
+            Args:
+                task (str): The task description for the agent to execute.
+                url (str | None): Optional starting URL for the task.
+
+            Returns:
+                AgentResponse: The response from the completed agent execution.
+            """
+            return self.run(task, url)
+
+        def status(self) -> AgentStatusResponse:
+            """
+            Get the current status of the agent.
+
+            Returns:
+                AgentStatusResponse: The current status of the agent execution.
+
+            Raises:
+                ValueError: If the agent hasn't been run yet (no agent_id available).
+            """
+            return self.client.status(agent_id=self.agent_id)
+
+        def replay(self) -> WebpReplay:
+            """
+            Get a replay of the agent's execution in WEBP format.
+
+            Returns:
+                WebpReplay: The replay data in WEBP format.
+
+            Raises:
+                ValueError: If the agent hasn't been run yet (no agent_id available).
+            """
+            return self.client.replay(agent_id=self.agent_id)
+
+    def __init__(self, client: AgentsClient) -> None:
+        """
+        Initialize a new RemoteAgentFactory instance.
+
+        Args:
+            client (AgentsClient): The client used to communicate with the Notte API.
+        """
+        self.client = client
+
+    def __call__(
+        self,
+        vault: NotteVault | None = None,
+        session: RemoteSessionFactory.RemoteSession | None = None,
+        **data: Unpack[AgentCreateRequestDict],
+    ) -> RemoteAgent:
+        """
+        Create a new RemoteAgent instance with the specified configuration.
+
+        This method validates the agent creation request and sets up the appropriate
+        connections with the provided vault and session if specified.
+
+        Args:
+            vault (NotteVault | None): Optional vault for secure credential storage.
+            session (RemoteSessionFactory.RemoteSession | None): Optional session for persistent state.
+            **data: Additional keyword arguments for the agent creation request.
+
+        Returns:
+            RemoteAgent: A new RemoteAgent instance configured with the specified parameters.
+        """
+        request = AgentCreateRequest.model_validate(data)
+        if vault is not None:
+            request.vault_id = vault.vault_id
+            request.persona_id = vault.persona_id
+        if session is not None:
+            request.session_id = session.session_id
+        return RemoteAgentFactory.RemoteAgent(self.client, request)
