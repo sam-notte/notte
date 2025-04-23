@@ -3,8 +3,12 @@ from typing import Type, TypedDict, Union, get_type_hints
 from notte_core.llms.engine import LlmModel
 from notte_sdk.types import (
     DEFAULT_MAX_NB_STEPS,
+    AgentCreateRequest,
+    AgentCreateRequestDict,
     AgentRunRequest,
     AgentRunRequestDict,
+    AgentStartRequest,
+    AgentStartRequestDict,
     AgentStatusRequest,
     AgentStatusRequestDict,
     DeleteCredentialsRequest,
@@ -18,8 +22,6 @@ from notte_sdk.types import (
     PaginationParamsDict,
     PersonaCreateRequest,
     PersonaCreateRequestDict,
-    ScrapeParams,
-    ScrapeParamsDict,
     SessionListRequest,
     SessionRequest,
     SessionRequestDict,
@@ -130,13 +132,27 @@ def test_pagination_params_dict_alignment():
     _test_request_dict_alignment(PaginationParams, PaginationParamsDict)
 
 
-def test_scrape_params_dict_alignment():
-    _test_request_dict_alignment(ScrapeParams, ScrapeParamsDict)
+def test_agent_create_request_dict_alignment():
+    _test_request_dict_alignment(AgentCreateRequest, AgentCreateRequestDict)
+
+
+def test_agent_start_request_dict_alignment():
+    _test_request_dict_alignment(AgentStartRequest, AgentStartRequestDict)
 
 
 def test_agent_run_request_default_values():
     """Test that AgentRunRequest has the correct default values."""
     request = AgentRunRequest(
+        task="test_task",
+        url="https://notte.cc",
+    )
+
+    assert request.task == "test_task"
+    assert request.url == "https://notte.cc"
+
+
+def test_agent_start_request_default_values():
+    request = AgentStartRequest(
         task="test_task",
     )
 
