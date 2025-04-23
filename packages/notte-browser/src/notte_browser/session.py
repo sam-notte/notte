@@ -19,6 +19,7 @@ from notte_core.controller.actions import (
     ScrapeAction,
     WaitAction,
 )
+from notte_core.data.space import DataSpace
 from notte_core.errors.processing import InvalidInternalCheckError
 from notte_core.llms.engine import LlmModel
 from notte_core.llms.service import LLMService
@@ -52,7 +53,7 @@ class ScrapeAndObserveParamsDict(ScrapeParamsDict, PaginationParamsDict):
     pass
 
 
-class NotteEnvConfig(FrozenConfig):
+class NotteSessionConfig(FrozenConfig):
     max_steps: int = DEFAULT_MAX_NB_STEPS
     window: BrowserWindowOptions = BrowserWindowOptions()
     scraping: ScrapingConfig = ScrapingConfig()
@@ -192,15 +193,15 @@ class TrajectoryStep(BaseModel):
     action: BaseAction
 
 
-class NotteEnv(AsyncResource):
+class NotteSession(AsyncResource):
     def __init__(
         self,
-        config: NotteEnvConfig | None = None,
+        config: NotteSessionConfig | None = None,
         window: BrowserWindow | None = None,
         llmserve: LLMService | None = None,
         act_callback: Callable[[BaseAction, Observation], None] | None = None,
     ) -> None:
-        self.config: NotteEnvConfig = config or NotteEnvConfig().use_llm()
+        self.config: NotteSessionConfig = config or NotteSessionConfig().use_llm()
         if llmserve is None:
             llmserve = LLMService(
                 base_model=self.config.perception_model,
@@ -217,7 +218,7 @@ class NotteEnv(AsyncResource):
 
         # Track initialization
         capture_event(
-            "env.initialized",
+            "page.initialized",
             {
                 "config": {
                     "perception_model": self.config.perception_model,
@@ -347,13 +348,13 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("goto")
-    @track_usage("env.goto")
+    @track_usage("page.goto")
     async def goto(self, url: str | None) -> Observation:
         snapshot = await self.window.goto(url)
         return self._preobserve(snapshot, action=GotoAction(url=snapshot.metadata.url))
 
     @timeit("observe")
-    @track_usage("env.observe")
+    @track_usage("page.observe")
     async def observe(
         self,
         url: str | None = None,
@@ -369,7 +370,7 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("execute")
-    @track_usage("env.execute")
+    @track_usage("page.execute")
     async def execute(
         self,
         action_id: str,
@@ -378,7 +379,9 @@ class NotteEnv(AsyncResource):
     ) -> Observation:
         if action_id == BrowserActionId.SCRAPE.value:
             # Scrape action is a special case
-            return await self.scrape()
+            self.obs.data = await self.scrape()
+            return self.obs
+
         exec_action = ExecutableAction.parse(action_id, params, enter=enter)
         action = await NodeResolutionPipe.forward(exec_action, self._snapshot, verbose=self.config.verbose)
         snapshot = await self.controller.execute(self.window, action)
@@ -386,7 +389,7 @@ class NotteEnv(AsyncResource):
         return obs
 
     @timeit("act")
-    @track_usage("env.act")
+    @track_usage("page.act")
     async def act(
         self,
         action: BaseAction,
@@ -408,7 +411,7 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("step")
-    @track_usage("env.step")
+    @track_usage("page.step")
     async def step(
         self,
         action_id: str,
@@ -426,20 +429,21 @@ class NotteEnv(AsyncResource):
         )
 
     @timeit("scrape")
-    @track_usage("env.scrape")
+    @track_usage("page.scrape")
     async def scrape(
         self,
         url: str | None = None,
         **scrape_params: Unpack[ScrapeParamsDict],
-    ) -> Observation:
+    ) -> DataSpace:
         if url is not None:
             _ = await self.goto(url)
         params = ScrapeParams(**scrape_params)
-        self.obs.data = await self._data_scraping_pipe.forward(self.snapshot, params)
-        return self.obs
+        data = await self._data_scraping_pipe.forward(self.snapshot, params)
+        self.obs.data = data
+        return data
 
     @timeit("god")
-    @track_usage("env.god")
+    @track_usage("page.god")
     async def god(
         self,
         url: str | None = None,
@@ -462,7 +466,7 @@ class NotteEnv(AsyncResource):
         return self.obs
 
     @timeit("reset")
-    @track_usage("env.reset")
+    @track_usage("page.reset")
     @override
     async def reset(self) -> None:
         if self.config.verbose:

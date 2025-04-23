@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from litellm import AllMessageValues
-from notte_browser.env import TrajectoryStep
+from notte_browser.session import TrajectoryStep
 from notte_core.common.tracer import LlmUsageDictTracer
 from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from notte_agent.common.trajectory_history import TrajectoryStep as AgentTraject
 class AgentResponse(BaseModel):
     success: bool
     answer: str
-    env_trajectory: list[TrajectoryStep]
+    session_trajectory: list[TrajectoryStep]
     agent_trajectory: list[AgentTrajectoryStep[BaseModel]]
     messages: list[AllMessageValues] | None = None
     llm_usage: list[LlmUsageDictTracer.LlmUsage]
