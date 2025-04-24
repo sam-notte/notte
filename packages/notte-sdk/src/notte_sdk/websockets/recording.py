@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Callable
 
 import websockets.client
-from litellm import Field
 from loguru import logger
-from pydantic import BaseModel
+from notte_core.common.resource import SyncResource
+from pydantic import BaseModel, Field, PrivateAttr
+from typing_extensions import override
 
 
 class JupyterKernelViewer:
@@ -21,41 +22,36 @@ class JupyterKernelViewer:
         return display(image)
 
 
-class SessionRecordingWebSocket(BaseModel):
+class SessionRecordingWebSocket(BaseModel, SyncResource):  # type: ignore
     """WebSocket client for receiving session recording data in binary format."""
 
     wss_url: str
-    max_frames: int = 20
+    max_frames: int = 300
     frames: list[bytes] = Field(default_factory=list)
-    _thread: threading.Thread | None = None
-    _stop_event: threading.Event | None = None
+    on_frame: Callable[[bytes], None] | None = None
+    output_path: Path | None = None
+    _thread: threading.Thread | None = PrivateAttr(default=None)
+    _stop_event: threading.Event | None = PrivateAttr(default=None)
+    display_image: bool = True
 
-    def _run_async_loop(self, output_path: Path, on_frame: Callable[[bytes], None] | None = None) -> None:
-        """Run the async event loop in a separate thread.
-
-        Args:
-            output_path: Path where to save the recording
-            on_frame: Optional callback function to handle each frame
-        """
+    def _run_async_loop(self) -> None:
+        """Run the async event loop in a separate thread."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(self.watch(output_path, on_frame))
+            loop.run_until_complete(self.watch())
         finally:
             loop.close()
 
-    def start_recording(self, output_path: str | Path, on_frame: Callable[[bytes], None] | None = None) -> None:
-        """Start recording in a separate thread.
-
-        Args:
-            output_path: Path where to save the recording
-            on_frame: Optional callback function to handle each frame
-        """
+    @override
+    def start(self) -> None:
+        """Start recording in a separate thread."""
         self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._run_async_loop, args=(Path(output_path), on_frame))
+        self._thread = threading.Thread(target=self._run_async_loop)
         self._thread.start()
 
-    def stop_recording(self) -> None:
+    @override
+    def stop(self) -> None:
         """Stop the recording thread."""
         if self._stop_event:
             self._stop_event.set()
@@ -85,21 +81,17 @@ class SessionRecordingWebSocket(BaseModel):
             logger.error(f"WebSocket error: {e}")
             raise
 
-    async def watch(self, output_path: str | Path, on_frame: Callable[[bytes], None] | None = None) -> None:
-        """Save the recording stream to a file.
-
-        Args:
-            output_path: Path where to save the recording
-            on_frame: Optional callback function to handle each frame
-        """
+    async def watch(self) -> None:
+        """Save the recording stream to a file."""
+        output_path = self.output_path or Path("recording.mp4")
         output_path = Path(output_path)
         with output_path.open("wb") as f:
             async for chunk in self.connect():
                 if self._stop_event and self._stop_event.is_set():
                     break
                 _ = f.write(chunk)
-                if on_frame:
-                    on_frame(chunk)
-                else:
+                if self.on_frame:
+                    self.on_frame(chunk)
+                if self.display_image:
                     _ = JupyterKernelViewer.display_image(chunk)
         logger.info(f"Recording saved to {output_path}")
