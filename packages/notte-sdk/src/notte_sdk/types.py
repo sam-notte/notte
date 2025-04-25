@@ -266,7 +266,7 @@ class SessionListRequest(BaseModel):
 
 
 class SessionResponse(BaseModel):
-    session_id: Annotated[
+    id: Annotated[
         str,
         Field(
             description=(
@@ -275,6 +275,7 @@ class SessionResponse(BaseModel):
             )
         ),
     ]
+    session_id: str = Field(alias="id")
     timeout_minutes: Annotated[
         int,
         Field(description="Session timeout in minutes. Will timeout if now() > last access time + timeout_minutes"),
@@ -438,7 +439,13 @@ class PersonaCreateRequest(BaseModel):
 
 
 class PersonaCreateResponse(BaseModel):
-    persona_id: Annotated[str, Field(description="ID of the created persona")]
+    id: Annotated[str, Field(description="ID of the created persona")]
+    persona_id: str = Field(alias="id")
+
+
+class VaultCreateResponse(BaseModel):
+    id: Annotated[str, Field(description="ID of the created vault")]
+    vault_id: str = Field(alias="id")
 
 
 class VirtualNumberRequestDict(TypedDict, total=False):
@@ -815,7 +822,8 @@ class AgentStopRequest(AgentSessionRequest, ReplayResponse):
 
 
 class AgentResponse(BaseModel):
-    agent_id: Annotated[str, Field(description="The ID of the agent")]
+    id: Annotated[str, Field(description="The ID of the agent")]
+    agent_id: str = Field(alias="id")
     created_at: Annotated[dt.datetime, Field(description="The creation time of the agent")]
     session_id: Annotated[str, Field(description="The ID of the session")]
     status: Annotated[AgentStatus, Field(description="The status of the agent (active or closed)")]
