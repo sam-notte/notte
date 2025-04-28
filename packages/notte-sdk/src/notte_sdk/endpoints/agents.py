@@ -9,6 +9,7 @@ from typing_extensions import final, override
 
 from notte_sdk.endpoints.base import BaseClient, NotteEndpoint
 from notte_sdk.endpoints.sessions import RemoteSession
+from notte_sdk.endpoints.vaults import NotteVault
 from notte_sdk.types import (
     AgentCreateRequest,
     AgentCreateRequestDict,
@@ -23,7 +24,6 @@ from notte_sdk.types import (
     ListRequestDict,
 )
 from notte_sdk.types import AgentStatusResponse as _AgentStatusResponse
-from notte_sdk.vault import NotteVault
 
 
 # proxy for: StepAgentOutput
@@ -499,7 +499,6 @@ class RemoteAgentFactory:
         request = AgentCreateRequest.model_validate(data)
         if vault is not None:
             request.vault_id = vault.vault_id
-            request.persona_id = vault.persona_id
         if session is not None:
             request.session_id = session.session_id
         return RemoteAgent(self.client, request)
