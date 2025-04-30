@@ -177,3 +177,5 @@ traces/
 **/.DS_Store
 old
 notebook
+examples/benchmark_params.toml
+**/*/trending.csv
