@@ -1,7 +1,6 @@
 import pytest
 from notte_browser.session import NotteSession, NotteSessionConfig
-from notte_core.actions.base import BrowserAction
-from notte_core.controller.actions import BrowserActionId
+from notte_core.actions.base import BrowserAction, BrowserActionId
 
 from tests.mock.mock_service import MockLLMService
 

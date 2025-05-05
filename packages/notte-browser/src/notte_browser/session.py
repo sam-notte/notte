@@ -5,21 +5,21 @@ from collections.abc import Callable, Sequence
 from typing import Self, Unpack
 
 from loguru import logger
-from notte_core.actions.base import ExecutableAction
-from notte_core.browser.observation import Observation, TrajectoryProgress
-from notte_core.browser.snapshot import BrowserSnapshot
-from notte_core.common.config import FrozenConfig
-from notte_core.common.logging import timeit
-from notte_core.common.resource import AsyncResource
-from notte_core.common.telemetry import capture_event, track_usage
-from notte_core.controller.actions import (
+from notte_core.actions.base import (
     BaseAction,
     BrowserActionId,
     GotoAction,
     ScrapeAction,
     WaitAction,
 )
-from notte_core.controller.space import EmptyActionSpace
+from notte_core.actions.percieved import ExecPerceivedAction
+from notte_core.actions.space import ActionSpace
+from notte_core.browser.observation import Observation, TrajectoryProgress
+from notte_core.browser.snapshot import BrowserSnapshot
+from notte_core.common.config import FrozenConfig
+from notte_core.common.logging import timeit
+from notte_core.common.resource import AsyncResource
+from notte_core.common.telemetry import capture_event, track_usage
 from notte_core.data.space import DataSpace
 from notte_core.llms.engine import LlmModel
 from notte_core.llms.service import LLMService
@@ -36,6 +36,7 @@ from notte_sdk.types import (
 from pydantic import BaseModel
 from typing_extensions import override
 
+from notte_browser.action_selection.pipe import ActionSelectionOutput, ActionSelectionPipe
 from notte_browser.controller import BrowserController
 from notte_browser.dom.pipe import DomPreprocessingPipe
 from notte_browser.errors import BrowserNotStartedError, MaxStepsReachedError, NoSnapshotObservedError
@@ -218,6 +219,7 @@ class NotteSession(AsyncResource):
         self._action_space_pipe: MainActionSpacePipe = MainActionSpacePipe(llmserve=llmserve, config=self.config.action)
         self._data_scraping_pipe: DataScrapingPipe = DataScrapingPipe(llmserve=llmserve, config=self.config.scraping)
         self.act_callback: Callable[[BaseAction, Observation], None] | None = act_callback
+        self._action_selection_pipe: ActionSelectionPipe = ActionSelectionPipe(llmserve=llmserve)
 
         # Track initialization
         capture_event(
@@ -264,7 +266,7 @@ class NotteSession(AsyncResource):
         previous_obs: Observation = self.trajectory[-2].obs
         if self.obs.clean_url != previous_obs.clean_url:
             return None  # the page has significantly changed
-        actions = previous_obs.space.actions("all")
+        actions = previous_obs.space.actions
         if len(actions) == 0:
             return None
         return actions
@@ -293,7 +295,13 @@ class NotteSession(AsyncResource):
         if len(self.trajectory) >= self.config.max_steps:
             raise MaxStepsReachedError(max_steps=self.config.max_steps)
         self._snapshot = DomPreprocessingPipe.forward(snapshot)
-        preobs = Observation.from_snapshot(snapshot, space=EmptyActionSpace(), progress=self.progress())
+        preobs = Observation.from_snapshot(
+            snapshot,
+            space=ActionSpace(  # empty action space (to be filled later)
+                interaction_actions=[], description="No actions available"
+            ),
+            progress=self.progress(),
+        )
         self.trajectory.append(TrajectoryStep(obs=preobs, action=action))
         if self.act_callback is not None:
             self.act_callback(action, preobs)
@@ -360,17 +368,22 @@ class NotteSession(AsyncResource):
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
             logger.debug(f"ℹ️ snapshot inodes IDs: {[node.id for node in self.snapshot.interaction_nodes()]}")
-        return await self._observe(
+        obs = await self._observe(
             pagination=PaginationParams.model_validate(pagination),
             retry=self.config.observe_max_retry_after_snapshot_update,
         )
+        return obs
+
+    async def select(self, instructions: str) -> ActionSelectionOutput:
+        obs = await self.observe()
+        return self._action_selection_pipe.forward(obs, instructions)
 
     @timeit("execute")
     @track_usage("page.execute")
     async def execute(
         self,
         action_id: str,
-        params: dict[str, str] | str | None = None,
+        value: str | None = None,
         enter: bool | None = None,
     ) -> Observation:
         if action_id == BrowserActionId.SCRAPE.value:
@@ -378,7 +391,7 @@ class NotteSession(AsyncResource):
             self.obs.data = await self.scrape()
             return self.obs
 
-        exec_action = ExecutableAction.parse(action_id, params, enter=enter)
+        exec_action = ExecPerceivedAction(id=action_id, value=value, press_enter=enter)
         action = await NodeResolutionPipe.forward(exec_action, self._snapshot, verbose=self.config.verbose)
         snapshot = await self.controller.execute(self.window, action)
         obs = self._preobserve(snapshot, action=action)
@@ -411,11 +424,11 @@ class NotteSession(AsyncResource):
     async def step(
         self,
         action_id: str,
-        params: dict[str, str] | str | None = None,
+        value: str | None = None,
         enter: bool | None = None,
         **pagination: Unpack[PaginationParamsDict],
     ) -> Observation:
-        _ = await self.execute(action_id, params, enter=enter)
+        _ = await self.execute(action_id, value, enter=enter)
         if self.config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_actions or []]}")
             logger.debug(f"ℹ️ snapshot inodes IDs: {[node.id for node in self.snapshot.interaction_nodes()]}")

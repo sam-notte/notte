@@ -17,7 +17,7 @@ Webpage information:
 - URL: {obs.metadata.url}
 - Title: {obs.metadata.title}
 - Description: {space_description or "No description available"}
-- Timestamp: {obs.metadata.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+- Current date and time: {obs.metadata.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
 - Page category: {category or "No category available"}
 """
 
@@ -40,7 +40,7 @@ Here is some data that has been extracted from this page:
         return f"""
 Here are the available actions you can take on this page:
 <actions>
-{obs.space.markdown()}
+{obs.space.markdown}
 </actions>
 """
 
