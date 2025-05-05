@@ -21,6 +21,24 @@ def test_start_close_session_factory():
     assert session.response.status == "closed"
 
 
+def test_start_close_session_with_proxy():
+    client = NotteClient()
+    with client.Session(proxies=True, max_steps=1) as session:
+        assert session.session_id is not None
+        status = session.status()
+        assert status.status == "active"
+    assert session.response is not None
+
+
+def test_start_close_session_with_viewport():
+    client = NotteClient()
+    with client.Session(viewport_height=100, viewport_width=100, max_steps=1) as session:
+        assert session.session_id is not None
+        status = session.status()
+        assert status.status == "active"
+    assert session.response is not None
+
+
 @pytest.fixture
 def session_id() -> str:
     return "593103ec-76bb-4c31-a238-2b2859966704"
