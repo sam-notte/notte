@@ -6,15 +6,20 @@ from typing_extensions import override
 
 from notte_core.actions.base import (
     BaseAction,
+    FallbackObserveAction,
+    ToolAction,
     get_all_subclasses,
 )
+from notte_core.actions.percieved import ExecPerceivedAction, PerceivedAction
 
 
 class ActionRegistry(BaseModel):
     """Union of all possible actions"""
 
     action_map: dict[str, type[BaseAction]] = Field(default_factory=dict)
-    exclude_actions: set[type[BaseAction]] = Field(default_factory=set)
+    exclude_actions: set[type[BaseAction]] = Field(
+        default_factory=lambda: {FallbackObserveAction, ToolAction, PerceivedAction, ExecPerceivedAction}
+    )
 
     @override
     def model_post_init(self, __snapshot: Any) -> None:

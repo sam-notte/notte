@@ -7,7 +7,6 @@ from notte_core.actions.base import (
     BaseAction,
     ClickAction,
     CompletionAction,
-    FallbackObserveAction,
     FillAction,
     GotoAction,
     ScrapeAction,
@@ -38,7 +37,7 @@ class FalcoPrompt:
         prompt_type = PromptType.MULTI_ACTION if multi_act else PromptType.SINGLE_ACTION
         self.system_prompt: str = prompt_type.prompt_file().read_text()
         self.max_actions_per_step: int = max_actions_per_step
-        self.action_registry: ActionRegistry = ActionRegistry(exclude_actions={FallbackObserveAction})
+        self.action_registry: ActionRegistry = ActionRegistry()
 
     @staticmethod
     def _json_dump(steps: list[BaseAction]) -> str:
