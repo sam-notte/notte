@@ -72,11 +72,13 @@ class FalcoAgent(BaseAgent):
     def __init__(
         self,
         config: FalcoAgentConfig,
-        window: BrowserWindow | None = None,
+        window: BrowserWindow,
         vault: BaseVault | None = None,
         step_callback: Callable[[str, StepAgentOutput], None] | None = None,
     ):
-        super().__init__(session=NotteSession(config=config.session, window=window))
+        session = NotteSession(config=config.session, window=window)
+        super().__init__(session=session)
+
         self.config: FalcoAgentConfig = config
         self.vault: BaseVault | None = vault
 
@@ -155,7 +157,7 @@ class FalcoAgent(BaseAgent):
             answer=answer,
             success=success,
             session_trajectory=self.session.trajectory,
-            agent_trajectory=self.trajectory.steps,  # type: ignore[reportArgumentType]
+            agent_trajectory=self.trajectory.steps,  # pyright: ignore[reportArgumentType]
             messages=self.conv.messages(),
             duration_in_s=time.time() - self.start_time,
             llm_usage=self.tracer.usage,
@@ -299,44 +301,43 @@ class FalcoAgent(BaseAgent):
         if url is not None:
             task = f"Start on '{url}' and {task}"
 
-        async with self.session:
-            # hide vault leaked credentials within screenshots
-            if self.vault is not None:
-                self.session.window.screenshot_mask = VaultSecretsScreenshotMask(vault=self.vault)
+        # hide vault leaked credentials within screenshots
+        if self.vault is not None:
+            self.session.window.screenshot_mask = VaultSecretsScreenshotMask(vault=self.vault)
 
-            for step in range(self.session.config.max_steps):
-                logger.info(f"💡 Step {step}")
-                output: CompletionAction | None = await self.step(task)
-                # Check for captcha if human-in-the-loop is enabled
-                if self.config.human_in_the_loop:
-                    await self._human_in_the_loop()
-                if output is None:
-                    continue
-                # validate the output
-                if not output.success:
-                    logger.error(f"🚨 Agent terminated early with failure: {output.answer}")
-                    return self.output(output.answer, False)
-                # Sucessful execution and LLM output is not None
-                # Need to validate the output
-                logger.info(f"🔥 Validating agent output:\n{output.model_dump_json()}")
-                val = self.validator.validate(task, output, self.session.trajectory[-1])
-                if val.is_valid:
-                    # Successfully validated the output
-                    logger.info("✅ Task completed successfully")
-                    return self.output(output.answer, output.success)
-                else:
-                    # TODO handle that differently
-                    failed_val_msg = f"Final validation failed: {val.reason}. Continuing..."
-                    logger.error(failed_val_msg)
-                    # add the validation result to the trajectory and continue
-                    self.trajectory.add_step(
-                        ExecutionStatus(
-                            input=output,
-                            output=None,
-                            success=False,
-                            message=failed_val_msg,
-                        )
+        for step in range(self.session.config.max_steps):
+            logger.info(f"💡 Step {step}")
+            output: CompletionAction | None = await self.step(task)
+            # Check for captcha if human-in-the-loop is enabled
+            if self.config.human_in_the_loop:
+                await self._human_in_the_loop()
+            if output is None:
+                continue
+            # validate the output
+            if not output.success:
+                logger.error(f"🚨 Agent terminated early with failure: {output.answer}")
+                return self.output(output.answer, False)
+            # Sucessful execution and LLM output is not None
+            # Need to validate the output
+            logger.info(f"🔥 Validating agent output:\n{output.model_dump_json()}")
+            val = self.validator.validate(task, output, self.session.trajectory[-1])
+            if val.is_valid:
+                # Successfully validated the output
+                logger.info("✅ Task completed successfully")
+                return self.output(output.answer, output.success)
+            else:
+                # TODO handle that differently
+                failed_val_msg = f"Final validation failed: {val.reason}. Continuing..."
+                logger.error(failed_val_msg)
+                # add the validation result to the trajectory and continue
+                self.trajectory.add_step(
+                    ExecutionStatus(
+                        input=output,
+                        output=None,
+                        success=False,
+                        message=failed_val_msg,
                     )
+                )
 
         error_msg = f"Failed to solve task in {self.session.config.max_steps} steps"
         logger.info(f"🚨 {error_msg}")
