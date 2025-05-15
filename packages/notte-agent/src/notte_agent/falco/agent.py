@@ -320,14 +320,17 @@ class FalcoAgent(BaseAgent):
             # Sucessful execution and LLM output is not None
             # Need to validate the output
             logger.info(f"🔥 Validating agent output:\n{output.model_dump_json()}")
-            val = self.validator.validate(task, output, self.session.trajectory[-1])
+            val = self.validator.validate(task, output, self.trajectory)  # pyright: ignore [reportArgumentType]
             if val.is_valid:
                 # Successfully validated the output
                 logger.info("✅ Task completed successfully")
                 return self.output(output.answer, output.success)
             else:
                 # TODO handle that differently
-                failed_val_msg = f"Final validation failed: {val.reason}. Continuing..."
+                failed_val_msg = f"""Final validation failed: {val.reason}. Continuing...
+                CRITICAL: If you think this validation is wrong: argue why the task if finished, or
+                perform actions that would prove it is.
+                """
                 logger.error(failed_val_msg)
                 # add the validation result to the trajectory and continue
                 self.trajectory.add_step(
