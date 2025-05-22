@@ -30,6 +30,7 @@ from notte_core.errors.provider import (
     ContextWindowExceededError,
     InsufficentCreditsError,
     InvalidAPIKeyError,
+    InvalidJsonResponseForStructuredOutput,
     LLMProviderError,
     MissingAPIKeyForModel,
     ModelDoesNotSupportImageError,
@@ -45,6 +46,7 @@ class LlmModel(StrEnum):
     gemma = "openrouter/google/gemma-3-27b-it"
     cerebras = "cerebras/llama-3.3-70b"
     groq = "groq/llama-3.3-70b-versatile"
+    perplexity = "perplexity/sonar-pro"
 
     @staticmethod
     def context_length(model: str) -> int:
@@ -52,6 +54,8 @@ class LlmModel(StrEnum):
             return 16_000
         elif "groq" in model.lower():
             return 8_000
+        elif "perplexity" in model.lower():
+            return 64_000
         return 128_000
 
     @staticmethod
@@ -91,17 +95,27 @@ class LLMEngine:
         messages: list[AllMessageValues],
         response_format: type[TResponseFormat],
         model: str | None = None,
-        supports_structured_output: bool = False,
+        use_strict_response_format: bool = True,
     ) -> TResponseFormat:
         tries = self.structured_output_retries + 1
         content = None
 
-        litellm_response_format: dict[str, str] | type[BaseModel] = dict(type="json_schema")
-        if supports_structured_output:
+        litellm_response_format: dict[str, str] | type[BaseModel] = dict(type="json_object")
+        if use_strict_response_format:
             litellm_response_format = response_format
         while tries > 0:
             tries -= 1
-            content = self.single_completion(messages, model, response_format=litellm_response_format).strip()
+            try:
+                content = self.single_completion(messages, model, response_format=litellm_response_format).strip()
+            except InvalidJsonResponseForStructuredOutput as e:
+                if use_strict_response_format:
+                    # fallback to non-strict response format
+                    litellm_response_format = dict(type="json_object")
+                    use_strict_response_format = False
+                    continue
+                raise e
+            except Exception as e:
+                raise e
             content = self.sc.extract(content).strip()
 
             if self.verbose:
@@ -129,7 +143,9 @@ class LLMEngine:
                 )
                 continue
 
-        raise LLMParsingError(f"Error parsing LLM response: \n\n{content}\n\n")
+        raise LLMParsingError(
+            f"Error parsing LLM response into Structured Output (type: {response_format}). Content: \n\n{content}\n\n"
+        )
 
     def single_completion(
         self,
@@ -191,6 +207,8 @@ class LLMEngine:
                 raise MissingAPIKeyForModel(model) from e
             if "Input should be a valid string" in str(e):
                 raise ModelDoesNotSupportImageError(model) from e
+            if "Invalid JSON" in str(e):
+                raise InvalidJsonResponseForStructuredOutput(model, error_msg=e.message) from e
             raise LLMProviderError(
                 dev_message=f"Bad request to provider {model}. {str(e)}",
                 user_message="Invalid request parameters to LLM provider.",

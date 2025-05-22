@@ -96,6 +96,7 @@ class LLMService:
         prompt_id: str,
         response_format: type[TResponseFormat],
         variables: dict[str, Any] | None = None,
+        use_strict_response_format: bool = True,
     ) -> TResponseFormat:
         messages = self.lib.materialize(prompt_id, variables)
         base_model, _ = self.get_base_model(messages)
@@ -105,6 +106,7 @@ class LLMService:
             messages=messages,  # type: ignore[arg-type]
             response_format=response_format,
             model=base_model,
+            use_strict_response_format=use_strict_response_format,
         )
 
     def completion(
