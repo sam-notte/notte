@@ -6,15 +6,22 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Generic, Literal, Required, TypeVar
 
-from notte_core.actions.base import Action, ActionParameterValue, ExecutableAction
-from notte_core.actions.space import ActionSpace
+from notte_core.actions import (
+    ActionParameter,
+    ActionParameterValue,
+    ActionUnion,
+    BaseAction,
+    BrowserAction,
+    BrowserActionUnion,
+    InteractionActionUnion,
+    StepAction,
+)
 from notte_core.browser.observation import Observation, TrajectoryProgress
 from notte_core.browser.snapshot import SnapshotMetadata, TabsData
-from notte_core.controller.actions import ActionParameter, BaseAction, BrowserAction, BrowserActionUnion
-from notte_core.controller.space import BaseActionSpace, SpaceCategory
 from notte_core.credentials.base import Credential, CredentialsDict, CreditCardDict, Vault
 from notte_core.data.space import DataSpace
 from notte_core.llms.engine import LlmModel
+from notte_core.space import ActionSpace, SpaceCategory
 from notte_core.utils.pydantic_schema import create_model_from_schema
 from notte_core.utils.url import get_root_domain
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -826,7 +833,7 @@ class ScrapeRequest(ScrapeParams):
 
 
 class StepRequest(PaginationParams):
-    type: str = "executable"
+    type: str = "step"
     action_id: Annotated[str | None, Field(description="The ID of the action to execute")] = None
 
     value: Annotated[str | int | None, Field(description="The value to input for form actions")] = None
@@ -839,7 +846,7 @@ class StepRequest(PaginationParams):
     @field_validator("type", mode="before")
     @classmethod
     def validate_type(cls, value: str) -> str:
-        if value == "executable":
+        if value == "step":
             return value
         if not BrowserAction.validate_type(value):
             raise ValueError(f"Invalid action type: {value}")
@@ -853,16 +860,14 @@ class StepRequest(PaginationParams):
         if isinstance(self.value, str):
             value = ActionParameterValue(name="value", value=self.value)
             param = ActionParameter(name="value", type=type(self.value).__name__)
-        if self.type == "executable":
+        if self.type == "step":
             if self.action_id is None:
                 raise ValueError("executable action has to have an action_id")
             if self.action_id == "":
                 raise ValueError("executable action has to have a non-empty action_id")
-            return ExecutableAction(
+            return StepAction(
                 id=self.action_id,
                 description="ID only",
-                category="",
-                status="valid",
                 param=param,
                 value=value,
                 press_enter=self.enter,
@@ -879,26 +884,31 @@ class StepRequestDict(PaginationParamsDict, total=False):
 
 class ActionSpaceResponse(BaseModel):
     markdown: Annotated[str | None, Field(description="Markdown representation of the action space")] = None
-    actions: Annotated[
-        Sequence[Action],
-        Field(description="List of available actions in the current state"),
+    interaction_actions: Annotated[
+        Sequence[InteractionActionUnion],
+        Field(description="List of available interaction actions in the current state"),
     ]
     browser_actions: Annotated[
         Sequence[BrowserActionUnion],
-        Field(description="List of special actions, i.e browser actions"),
+        Field(description="List of browser actions, i.e scroll, navigate, etc."),
     ]
     # TODO: ActionSpaceResponse should be a subclass of ActionSpace
     description: str
     category: str | None = None
 
+    @computed_field
+    @property
+    def actions(self) -> Sequence[ActionUnion]:
+        return [*self.interaction_actions, *self.browser_actions]
+
     @staticmethod
-    def from_space(space: BaseActionSpace) -> "ActionSpaceResponse":
+    def from_space(space: ActionSpace) -> "ActionSpaceResponse":
         return ActionSpaceResponse(
-            markdown=space.markdown(),
+            markdown=space.markdown,
             description=space.description,
             category=space.category,
-            actions=space.actions(),  # type: ignore[arg-type]
-            browser_actions=space.browser_actions(),
+            interaction_actions=space.interaction_actions,
+            browser_actions=space.browser_actions,
         )
 
 
@@ -966,7 +976,7 @@ class ObserveResponse(BaseModel):
             space=(
                 ActionSpace(
                     description=self.space.description,
-                    raw_actions=self.space.actions,
+                    interaction_actions=self.space.interaction_actions,
                     category=None if self.space.category is None else SpaceCategory(self.space.category),
                 )
             ),

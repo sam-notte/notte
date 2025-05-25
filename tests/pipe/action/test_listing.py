@@ -4,10 +4,10 @@ import pytest
 from notte_browser.session import NotteSessionConfig
 from notte_browser.tagging.action.llm_taging.listing import ActionListingConfig, ActionListingPipe
 from notte_browser.tagging.action.llm_taging.parser import ActionListingParserConfig, ActionListingParserType
+from notte_core.actions import WaitAction
 from notte_core.browser.dom_tree import A11yNode, A11yTree, ComputedDomAttributes, DomNode
 from notte_core.browser.node_type import NodeType
 from notte_core.browser.snapshot import BrowserSnapshot, SnapshotMetadata, ViewportData
-from notte_core.controller.actions import WaitAction
 
 import notte
 from tests.mock.mock_service import MockLLMService
@@ -187,7 +187,7 @@ async def test_groundtruth_interactions():
         _ = await session.window.page.goto(url=f"file://{os.path.abspath(file_path)}")
 
         res = await session.step(WaitAction(time_ms=100))
-        actions = res.space.actions()
+        actions = res.space.interaction_actions
 
         action_ids = [action.id for action in actions]
 

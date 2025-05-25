@@ -4,24 +4,35 @@ from unittest.mock import patch
 
 import pytest
 from notte_browser.tagging.action.llm_taging.pipe import LlmActionSpaceConfig, LlmActionSpacePipe
-from notte_core.actions.base import Action
-from notte_core.actions.space import ActionSpace, PossibleActionSpace
+from notte_browser.tagging.type import PossibleAction, PossibleActionSpace
+from notte_core.actions import ClickAction, InteractionAction
 from notte_core.browser.dom_tree import A11yTree, ComputedDomAttributes, DomNode
 from notte_core.browser.node_type import NodeRole, NodeType
 from notte_core.browser.snapshot import BrowserSnapshot, SnapshotMetadata, ViewportData
+from notte_core.space import ActionSpace
 from notte_sdk.types import PaginationParams
 
 from tests.mock.mock_service import MockLLMService
 
 
-def actions_from_ids(ids: list[str]) -> Sequence[Action]:
+def interaction_actions_from_ids(ids: list[str]) -> Sequence[ClickAction]:
     return [
-        Action(
+        ClickAction(
             id=id,
             description="my description",
             category="my category",
             param=None,
-            status="valid",
+        )
+        for id in ids
+    ]
+
+
+def possible_actions_from_ids(ids: list[str]) -> Sequence[PossibleAction]:
+    return [
+        PossibleAction(
+            id=id,
+            description="my description",
+            category="my category",
         )
         for id in ids
     ]
@@ -78,19 +89,19 @@ def context_from_ids(ids: list[str]) -> BrowserSnapshot:
 
 def llm_patch_from_ids(
     ids: list[str],
-) -> Callable[[BrowserSnapshot, list[Action] | None], PossibleActionSpace]:
+) -> Callable[[BrowserSnapshot, Sequence[InteractionAction] | None], PossibleActionSpace]:
     return lambda context, previous_action_list: PossibleActionSpace(
         description="",
-        actions=actions_from_ids(ids),
+        actions=possible_actions_from_ids(ids),
     )
 
 
-def context_to_actions(snapshot: BrowserSnapshot) -> Sequence[Action]:
-    return actions_from_ids(ids=[node.id for node in snapshot.interaction_nodes()])
+def context_to_actions(snapshot: BrowserSnapshot) -> Sequence[InteractionAction]:
+    return interaction_actions_from_ids(ids=[node.id for node in snapshot.interaction_nodes()])
 
 
 def space_to_ids(space: ActionSpace) -> list[str]:
-    return [a.id for a in space.actions("valid")]
+    return [a.id for a in space.interaction_actions]
 
 
 def test_previous_actions_ids_not_in_context_inodes_not_listed(
@@ -102,7 +113,7 @@ def test_previous_actions_ids_not_in_context_inodes_not_listed(
         config=listing_config,
     )
     context = context_from_ids(["B1"])
-    previous_actions = actions_from_ids(["L1"])
+    previous_actions = interaction_actions_from_ids(["L1"])
     llm_patch = llm_patch_from_ids(["B1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -121,7 +132,7 @@ def test_previous_actions_ids_in_context_inodes_listed(
         config=listing_config,
     )
     context = context_from_ids(["B1", "L1"])
-    previous_actions = actions_from_ids(["L1"])
+    previous_actions = interaction_actions_from_ids(["L1"])
     llm_patch = llm_patch_from_ids(["B1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -140,7 +151,7 @@ def test_context_inodes_all_covered_by_previous_actions_listed(
         config=listing_config,
     )
     context = context_from_ids(["B1", "L1"])
-    previous_actions = actions_from_ids(["B1", "L1"])
+    previous_actions = interaction_actions_from_ids(["B1", "L1"])
     llm_patch = llm_patch_from_ids([])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -159,7 +170,7 @@ def test_context_inodes_empty_should_return_empty(
         config=listing_config,
     )
     context = context_from_ids([])
-    previous_actions = actions_from_ids(["B1"])
+    previous_actions = interaction_actions_from_ids(["B1"])
     llm_patch = llm_patch_from_ids(["C1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -178,7 +189,7 @@ def test_context_inodes_empty_previous_returns_llms(
         config=listing_config,
     )
     context = context_from_ids(["B1"])
-    previous_actions = actions_from_ids([])
+    previous_actions = interaction_actions_from_ids([])
     llm_patch = llm_patch_from_ids(["B1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -189,7 +200,7 @@ def test_context_inodes_empty_previous_returns_llms(
 
     # context[B1] + previous[] + llm(C1) => []
     context = context_from_ids(["B1"])
-    previous_actions = actions_from_ids([])
+    previous_actions = interaction_actions_from_ids([])
     llm_patch = llm_patch_from_ids(["C1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -200,7 +211,7 @@ def test_context_inodes_empty_previous_returns_llms(
 
     # context[B1] + previous[] + llm() => []
     context = context_from_ids(["B1"])
-    previous_actions = actions_from_ids([])
+    previous_actions = interaction_actions_from_ids([])
     llm_patch = llm_patch_from_ids([])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",
@@ -211,7 +222,7 @@ def test_context_inodes_empty_previous_returns_llms(
 
     # context[B1] + previous[] + llm(B1,B2,C1) => [B1]
     context = context_from_ids(["B1"])
-    previous_actions = actions_from_ids([])
+    previous_actions = interaction_actions_from_ids([])
     llm_patch = llm_patch_from_ids(["B1", "B2", "C1"])
     with patch(
         "notte_browser.tagging.action.llm_taging.listing.ActionListingPipe.forward",

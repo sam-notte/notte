@@ -11,6 +11,7 @@ from typing_extensions import override
 
 from notte_core.browser.dom_tree import NodeSelectors
 from notte_core.credentials.types import ValueWithPlaceholder
+from notte_core.errors.actions import InvalidActionError
 
 # ############################################################
 # Action enums
@@ -21,7 +22,7 @@ AllActionStatus = ActionStatus | Literal["all"]
 ActionRole = Literal["link", "button", "input", "special", "image", "option", "misc", "other"]
 AllActionRole = ActionRole | Literal["all"]
 
-EXCLUDED_ACTIONS = {"FallbackObserveAction"}
+EXCLUDED_ACTIONS = {"fallback_observe"}
 
 typeAlias = type
 
@@ -37,6 +38,11 @@ class ActionParameter(BaseModel):
         if len(self.values) > 0:
             base += f" = [{', '.join(self.values)}]"
         return base
+
+
+class ActionParameterValue(BaseModel):
+    name: str
+    value: str | ValueWithPlaceholder
 
 
 # ############################################################
@@ -80,6 +86,8 @@ class BaseAction(BaseModel, metaclass=ABCMeta):
         if not inspect.isabstract(cls):
             name = cls.name()
             if name in EXCLUDED_ACTIONS:
+                return
+            if name in {"browser", "interaction", "step", "action", "fallback_observe"}:
                 return
             if name in cls.ACTION_REGISTRY:
                 raise ValueError(f"Base Action {name} is duplicated")
@@ -463,11 +471,22 @@ class InteractionAction(BaseAction, metaclass=ABCMeta):
     category: str = "Interaction Actions"
     press_enter: bool | None = Field(default=None, exclude=True)
     text_label: str | None = Field(default=None, exclude=True)
+    param: ActionParameter | None = Field(default=None, exclude=True)
+
+    INTERACTION_ACTION_REGISTRY: ClassVar[dict[str, typeAlias["InteractionAction"]]] = {}
+
+    def __init_subclass__(cls, **kwargs: dict[Any, Any]):
+        super().__init_subclass__(**kwargs)
+
+        if not inspect.isabstract(cls):
+            name = cls.name()
+            if name in cls.INTERACTION_ACTION_REGISTRY:
+                raise ValueError(f"Base Action {name} is duplicated")
+            cls.INTERACTION_ACTION_REGISTRY[name] = cls
 
 
 class ClickAction(InteractionAction):
     type: Literal["click"] = "click"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = "Click on an element of the current page"
 
     @override
@@ -487,10 +506,10 @@ class FallbackObserveAction(BaseAction):
 
 class FillAction(InteractionAction):
     type: Literal["fill"] = "fill"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = "Fill an input field with a value"
     value: str | ValueWithPlaceholder
     clear_before_fill: bool = True
+    param: ActionParameter | None = Field(default=ActionParameter(name="value", type="str"), exclude=True)
 
     @field_validator("value", mode="before")
     @classmethod
@@ -505,10 +524,10 @@ class FillAction(InteractionAction):
 
 class MultiFactorFillAction(InteractionAction):
     type: Literal["multi_factor_fill"] = "multi_factor_fill"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = "Fill an MFA input field with a value. CRITICAL: Only use it when filling in an OTP."
     value: str | ValueWithPlaceholder
     clear_before_fill: bool = True
+    param: ActionParameter | None = Field(default=ActionParameter(name="value", type="str"), exclude=True)
 
     @field_validator("value", mode="before")
     @classmethod
@@ -523,10 +542,10 @@ class MultiFactorFillAction(InteractionAction):
 
 class FallbackFillAction(InteractionAction):
     type: Literal["fallback_fill"] = "fallback_fill"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = "Fill an input field with a value. Only use if explicitly asked, or you failed to input with the normal fill action"
     value: str | ValueWithPlaceholder
     clear_before_fill: bool = True
+    param: ActionParameter | None = Field(default=ActionParameter(name="value", type="str"), exclude=True)
 
     @field_validator("value", mode="before")
     @classmethod
@@ -541,9 +560,9 @@ class FallbackFillAction(InteractionAction):
 
 class CheckAction(InteractionAction):
     type: Literal["check"] = "check"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = "Check a checkbox. Use `True` to check, `False` to uncheck"
     value: bool
+    param: ActionParameter | None = Field(default=ActionParameter(name="value", type="bool"), exclude=True)
 
     @override
     def execution_message(self) -> str:
@@ -565,12 +584,12 @@ class CheckAction(InteractionAction):
 
 class SelectDropdownOptionAction(InteractionAction):
     type: Literal["select_dropdown_option"] = "select_dropdown_option"  # pyright: ignore [reportIncompatibleVariableOverride]
-    id: str
     description: str = (
         "Select an option from a dropdown. The `id` field should be set to the select element's id. "
         "Then you can either set the `value` field to the option's text or the `option_id` field to the option's `id`."
     )
     value: str | ValueWithPlaceholder
+    param: ActionParameter | None = Field(default=ActionParameter(name="value", type="str"), exclude=True)
 
     @field_validator("value", mode="before")
     @classmethod
@@ -590,4 +609,50 @@ class SelectDropdownOptionAction(InteractionAction):
 BrowserActionUnion = Annotated[
     reduce(operator.or_, BrowserAction.BROWSER_ACTION_REGISTRY.values()), Field(discriminator="type")
 ]
+InteractionActionUnion = Annotated[
+    reduce(operator.or_, InteractionAction.INTERACTION_ACTION_REGISTRY.values()), Field(discriminator="type")
+]
 ActionUnion = Annotated[reduce(operator.or_, BaseAction.ACTION_REGISTRY.values()), Field(discriminator="type")]
+
+
+class StepAction(InteractionAction):
+    """
+    An action that can be executed by the proxy.
+    """
+
+    # description is not needed for the proxy
+    type: Literal["step"] = "step"  # pyright: ignore [reportIncompatibleVariableOverride]
+    category: str = "Step Actions"
+    description: str = "Step action"
+    value: ActionParameterValue | None = None
+
+    @override
+    def execution_message(self) -> str:
+        return f"Executed action with description: {self.description} and text: {self.text_label}"
+
+    @property
+    def role(self, raise_error: bool = False) -> ActionRole:
+        if not self.id:
+            if raise_error:
+                raise InvalidActionError(self.id, "Action ID cannot be empty")
+            return "other"
+        match self.id[0]:
+            case "L":
+                return "link"
+            case "B":
+                return "button"
+            case "I":
+                return "input"
+            case "O":
+                return "option"
+            case "M":
+                return "misc"
+            case "F":
+                # figure / image
+                return "image"
+            case _:
+                if raise_error:
+                    raise InvalidActionError(
+                        self.id, f"First ID character must be one of {ActionRole} but got {self.id[0]}"
+                    )
+                return "other"
