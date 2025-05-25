@@ -4,21 +4,20 @@ from base64 import b64decode, b64encode
 from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Generic, Literal, Required, Self, TypeVar
+from typing import Annotated, Any, Generic, Literal, Required, TypeVar
 
-from notte_core.actions.base import Action, ActionParameter, ActionParameterValue, BrowserAction, ExecutableAction
+from notte_core.actions.base import Action, ActionParameterValue, ExecutableAction
 from notte_core.actions.space import ActionSpace
 from notte_core.browser.observation import Observation, TrajectoryProgress
 from notte_core.browser.snapshot import SnapshotMetadata, TabsData
-from notte_core.controller.actions import BaseAction
-from notte_core.controller.proxy import NotteActionProxy
+from notte_core.controller.actions import ActionParameter, BaseAction, BrowserAction, BrowserActionUnion
 from notte_core.controller.space import BaseActionSpace, SpaceCategory
 from notte_core.credentials.base import Credential, CredentialsDict, CreditCardDict, Vault
 from notte_core.data.space import DataSpace
 from notte_core.llms.engine import LlmModel
 from notte_core.utils.pydantic_schema import create_model_from_schema
 from notte_core.utils.url import get_root_domain
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 from pyotp import TOTP
 from typing_extensions import TypedDict, override
 
@@ -827,49 +826,54 @@ class ScrapeRequest(ScrapeParams):
 
 
 class StepRequest(PaginationParams):
-    action_id: Annotated[str, Field(description="The ID of the action to execute")]
+    type: str = "executable"
+    action_id: Annotated[str | None, Field(description="The ID of the action to execute")] = None
 
-    value: Annotated[str | None, Field(description="The value to input for form actions")] = None
+    value: Annotated[str | int | None, Field(description="The value to input for form actions")] = None
 
     enter: Annotated[
         bool | None,
         Field(description="Whether to press enter after inputting the value"),
     ] = None
 
-    def to_action(self) -> ExecutableAction:
+    @field_validator("type", mode="before")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        if value == "executable":
+            return value
+        if not BrowserAction.validate_type(value):
+            raise ValueError(f"Invalid action type: {value}")
+        return value
+
+    @computed_field
+    @property
+    def action(self) -> BaseAction:
         value: ActionParameterValue | None = None
         param: ActionParameter | None = None
         if isinstance(self.value, str):
             value = ActionParameterValue(name="value", value=self.value)
             param = ActionParameter(name="value", type=type(self.value).__name__)
-        # TODO: reneble if needed
-        # enter = enter if enter is not None else action_id.startswith("I")
-        return ExecutableAction(
-            id=self.action_id,
-            description="ID only",
-            category="",
-            status="valid",
-            param=param,
-            value=value,
-            press_enter=self.enter,
-        )
-
-    @model_validator(mode="after")
-    def check_action_is_valid(self) -> Self:
-        action = self.to_action()
-        if action.role == "input" and action.param is None:
-            raise ValueError("input action has to have param")
-        try:
-            if action.role == "special":
-                _ = NotteActionProxy.forward_special(action)
-        except Exception as e:
-            raise ValueError(f"Action is invalid: {e}")
-        return self
+        if self.type == "executable":
+            if self.action_id is None:
+                raise ValueError("executable action has to have an action_id")
+            if self.action_id == "":
+                raise ValueError("executable action has to have a non-empty action_id")
+            return ExecutableAction(
+                id=self.action_id,
+                description="ID only",
+                category="",
+                status="valid",
+                param=param,
+                value=value,
+                press_enter=self.enter,
+            )
+        return BrowserAction.from_param(self.type, self.value)
 
 
 class StepRequestDict(PaginationParamsDict, total=False):
-    action_id: str
-    value: str | None
+    type: str
+    action_id: str | None
+    value: str | int | None
     enter: bool | None
 
 
@@ -880,7 +884,7 @@ class ActionSpaceResponse(BaseModel):
         Field(description="List of available actions in the current state"),
     ]
     browser_actions: Annotated[
-        Sequence[BrowserAction],
+        Sequence[BrowserActionUnion],
         Field(description="List of special actions, i.e browser actions"),
     ]
     # TODO: ActionSpaceResponse should be a subclass of ActionSpace
@@ -894,7 +898,7 @@ class ActionSpaceResponse(BaseModel):
             description=space.description,
             category=space.category,
             actions=space.actions(),  # type: ignore[arg-type]
-            browser_actions=space.browser_actions(),  # type: ignore[arg-type]
+            browser_actions=space.browser_actions(),
         )
 
 
