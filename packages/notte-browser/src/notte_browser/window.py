@@ -1,7 +1,7 @@
 import time
 from collections.abc import Awaitable
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Self
+from typing import Any, Callable, Self
 
 import httpx
 from loguru import logger
@@ -12,13 +12,19 @@ from notte_core.browser.snapshot import (
     TabsData,
     ViewportData,
 )
-from notte_core.common.config import FrozenConfig
+from notte_core.common.config import BrowserType, config
 from notte_core.errors.processing import SnapshotProcessingError
 from notte_core.utils.url import is_valid_url
-from notte_sdk.types import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH, BrowserType, Cookie, ProxySettings
+from notte_sdk.types import (
+    DEFAULT_HEADLESS_VIEWPORT_HEIGHT,
+    DEFAULT_HEADLESS_VIEWPORT_WIDTH,
+    Cookie,
+    ProxySettings,
+    SessionStartRequest,
+)
 from patchright.async_api import CDPSession, Locator, Page
 from patchright.async_api import TimeoutError as PlaywrightTimeoutError
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from notte_browser.dom.parsing import ParseDomTreePipe
@@ -32,30 +38,33 @@ from notte_browser.errors import (
 )
 
 
-class BrowserWindowOptions(FrozenConfig):
-    headless: bool = True
-    user_agent: str | None = None
-    proxy: ProxySettings | None = None
-    viewport_width: int | None = None
-    viewport_height: int | None = None
-    browser_type: BrowserType = BrowserType.CHROMIUM
-    chrome_args: list[str] | None = None
-    web_security: bool = False
+class BrowserWindowOptions(BaseModel):
+    headless: bool
+    user_agent: str | None
+    proxy: ProxySettings | None
+    viewport_width: int | None
+    viewport_height: int | None
+    browser_type: BrowserType
+    chrome_args: list[str] | None
+    web_security: bool
 
     # Debugging args
-    cdp_url: str | None = None
-    debug_port: int | None = None
-    custom_devtools_frontend: str | None = None
+    cdp_url: str | None
+    debug_port: int | None
+    custom_devtools_frontend: str | None
 
-    @model_validator(mode="before")
-    @classmethod
-    def set_viewport_defaults_before(cls, data):  # pyright: ignore [reportUnknownParameterType, reportMissingParameterType]
-        if isinstance(data, dict):
-            headless = data.get("headless", True)  # pyright: ignore [reportUnknownVariableType, reportUnknownMemberType]
-            if headless and data.get("viewport_width") is None and data.get("viewport_height") is None:  # pyright: ignore [reportUnknownMemberType]
-                data["viewport_width"] = DEFAULT_VIEWPORT_WIDTH
-                data["viewport_height"] = DEFAULT_VIEWPORT_HEIGHT
-        return data  # pyright: ignore [reportUnknownVariableType]
+    def set_cdp_url(self, cdp_url: str) -> Self:
+        self.cdp_url = cdp_url
+        return self
+
+    @override
+    def model_post_init(self, __context: Any) -> None:
+        if self.headless and self.viewport_width is None and self.viewport_height is None:
+            logger.warning(
+                f"Headless mode detected. Setting default viewport width and height to {DEFAULT_HEADLESS_VIEWPORT_WIDTH}x{DEFAULT_HEADLESS_VIEWPORT_HEIGHT} to avoid issues."
+            )
+            self.viewport_width = DEFAULT_HEADLESS_VIEWPORT_WIDTH
+            self.viewport_height = DEFAULT_HEADLESS_VIEWPORT_HEIGHT
 
     def get_chrome_args(self) -> list[str]:
         chrome_args = self.chrome_args or []
@@ -96,50 +105,25 @@ class BrowserWindowOptions(FrozenConfig):
             chrome_args.append(f"--remote-debugging-port={self.debug_port}")
         return chrome_args
 
-    def set_port(self, port: int) -> Self:
-        return self._copy_and_validate(debug_port=port)
-
-    def set_cdp_url(self, value: str) -> Self:
-        return self._copy_and_validate(cdp_url=value)
-
-    def set_headless(self: Self, value: bool = True) -> Self:
-        return self._copy_and_validate(headless=value)
-
-    def set_proxy(self: Self, value: ProxySettings | None) -> Self:
-        return self._copy_and_validate(proxy=value)
-
-    def set_user_agent(self: Self, value: str | None) -> Self:
-        return self._copy_and_validate(user_agent=value)
-
-    def set_cdp_debug(self: Self, value: bool) -> Self:
-        return self._copy_and_validate(cdp_debug=value)
-
-    def set_web_security(self: Self, value: bool = True) -> Self:
-        if value:
-            return self._copy_and_validate(web_security=True)
-        else:
-            return self._copy_and_validate(web_security=False)
-
-    def set_screenshot(self: Self, value: bool | None) -> Self:
-        return self._copy_and_validate(screenshot=value)
-
-    def set_empty_page_max_retry(self: Self, value: int) -> Self:
-        return self._copy_and_validate(empty_page_max_retry=value)
-
-    def set_browser_type(self: Self, value: BrowserType) -> Self:
-        return self._copy_and_validate(browser_type=value)
-
-    def set_chrome_args(self: Self, value: list[str] | None) -> Self:
-        return self._copy_and_validate(chrome_args=value)
-
-    def disable_web_security(self: Self) -> Self:
-        return self.set_web_security(False)
-
-    def enable_web_security(self: Self) -> Self:
-        return self.set_web_security(True)
-
-    def set_viewport(self: Self, width: int | None = None, height: int | None = None) -> Self:
-        return self._copy_and_validate(viewport_width=width, viewport_height=height)
+    @staticmethod
+    def from_request(
+        request: SessionStartRequest,
+        headless: bool = config.headless,
+        user_agent: str | None = None,
+    ) -> "BrowserWindowOptions":
+        return BrowserWindowOptions(
+            headless=headless,
+            user_agent=user_agent,
+            proxy=request.load_proxy_settings(),
+            browser_type=request.browser_type,
+            chrome_args=request.chrome_args,
+            viewport_height=request.viewport_height,
+            viewport_width=request.viewport_width,
+            web_security=config.web_security,
+            cdp_url=config.cdp_url,
+            debug_port=config.debug_port,
+            custom_devtools_frontend=config.custom_devtools_frontend,
+        )
 
 
 class BrowserResource(BaseModel):
@@ -153,62 +137,19 @@ class BrowserResource(BaseModel):
     context_id: str | None = None
 
 
-class BrowserWaitConfig(FrozenConfig):
-    # need default values for frozen config
-    # so copying them from short
-    GOTO: ClassVar[int] = 10_000
-    GOTO_RETRY: ClassVar[int] = 1_000
-    RETRY: ClassVar[int] = 1_000
-    STEP: ClassVar[int] = 1_000
-    SHORT_WAIT: ClassVar[int] = 500
-    ACTION_TIMEOUT: ClassVar[int] = 1_000
-
-    goto: int = GOTO
-    goto_retry: int = GOTO_RETRY
-    retry: int = RETRY
-    step: int = STEP
-    short_wait: int = SHORT_WAIT
-    action_timeout: int = ACTION_TIMEOUT
-
-    @classmethod
-    def short(cls):
-        return cls(
-            goto=cls.GOTO,
-            goto_retry=cls.GOTO_RETRY,
-            retry=cls.RETRY,
-            step=cls.STEP,
-            short_wait=cls.SHORT_WAIT,
-            action_timeout=cls.ACTION_TIMEOUT,
-        )
-
-    @classmethod
-    def long(cls):
-        return cls(goto=10_000, goto_retry=1_000, retry=3_000, step=10_000, short_wait=500, action_timeout=5000)
-
-
-class BrowserWindowConfig(FrozenConfig):
-    wait: BrowserWaitConfig = BrowserWaitConfig.long()
-    screenshot: bool | None = True
-    empty_page_max_retry: int = 5
-
-    def set_wait(self: Self, value: BrowserWaitConfig) -> Self:
-        return self._copy_and_validate(wait=value)
-
-
 class ScreenshotMask(BaseModel):
     async def mask(self, page: Page) -> list[Locator]:  # pyright: ignore[reportUnusedParameter]
         return []
 
 
 class BrowserWindow(BaseModel):
-    config: BrowserWindowConfig = Field(default_factory=BrowserWindowConfig)
     resource: BrowserResource
     screenshot_mask: ScreenshotMask | None = None
     on_close: Callable[[], Awaitable[None]] | None = None
 
     @override
     def model_post_init(self, __context: Any) -> None:
-        self.resource.page.set_default_timeout(self.config.wait.step)
+        self.resource.page.set_default_timeout(config.timeout_default_ms)
 
     @property
     def page(self) -> Page:
@@ -255,17 +196,17 @@ class BrowserWindow(BaseModel):
     async def long_wait(self) -> None:
         start_time = time.time()
         try:
-            await self.page.wait_for_load_state("networkidle", timeout=self.config.wait.goto)
+            await self.page.wait_for_load_state("networkidle", timeout=config.timeout_goto_ms)
         except PlaywrightTimeoutError:
-            if self.config.verbose:
+            if config.verbose:
                 logger.warning(f"Timeout while waiting for networkidle state for '{self.page.url}'")
         await self.short_wait()
         # await self.page.wait_for_timeout(self._playwright.config.step_timeout)
-        if self.config.verbose:
+        if config.verbose:
             logger.info(f"Waited for networkidle state for '{self.page.url}' in {time.time() - start_time:.2f}s")
 
     async def short_wait(self) -> None:
-        await self.page.wait_for_timeout(self.config.wait.short_wait)
+        await self.page.wait_for_timeout(config.wait_short_ms)
 
     async def tab_metadata(self, tab_idx: int | None = None) -> TabsData:
         page = self.tabs[tab_idx] if tab_idx is not None else self.page
@@ -292,9 +233,9 @@ class BrowserWindow(BaseModel):
 
     async def snapshot(self, screenshot: bool | None = None, retries: int | None = None) -> BrowserSnapshot:
         if retries is None:
-            retries = self.config.empty_page_max_retry
+            retries = config.empty_page_max_retry
         if retries <= 0:
-            raise EmptyPageContentError(url=self.page.url, nb_retries=self.config.empty_page_max_retry)
+            raise EmptyPageContentError(url=self.page.url, nb_retries=config.empty_page_max_retry)
         html_content: str = ""
         a11y_simple: A11yNode | None = None
         a11y_raw: A11yNode | None = None
@@ -329,16 +270,15 @@ class BrowserWindow(BaseModel):
             )
 
         if dom_node is None:
-            if self.config.verbose:
-                logger.warning(f"Empty page content for {self.page.url}. Retry in {self.config.wait.short_wait}ms")
-            await self.page.wait_for_timeout(self.config.wait.short_wait)
+            if config.verbose:
+                logger.warning(f"Empty page content for {self.page.url}. Retry in {config.wait_retry_snapshot_ms}ms")
+            await self.page.wait_for_timeout(config.wait_retry_snapshot_ms)
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
-        take_screenshot = screenshot if screenshot is not None else self.config.screenshot
         try:
             mask = await self.screenshot_mask.mask(self.page) if self.screenshot_mask is not None else None
-            snapshot_screenshot = await self.page.screenshot(mask=mask) if take_screenshot else None
+            snapshot_screenshot = await self.page.screenshot(mask=mask)
         except PlaywrightTimeoutError:
-            if self.config.verbose:
+            if config.verbose:
                 logger.warning(f"Timeout while taking screenshot for {self.page.url}. Retrying...")
             return await self.snapshot(screenshot=screenshot, retries=retries - 1)
 
@@ -359,7 +299,7 @@ class BrowserWindow(BaseModel):
         if not is_valid_url(url, check_reachability=False):
             raise InvalidURLError(url=url)
         try:
-            _ = await self.page.goto(url, timeout=self.config.wait.goto)
+            _ = await self.page.goto(url, timeout=config.timeout_goto_ms)
         except PlaywrightTimeoutError:
             await self.long_wait()
         except Exception as e:
@@ -375,7 +315,7 @@ class BrowserWindow(BaseModel):
         if cookies is None:
             raise ValueError("No cookies provided")
 
-        if self.config.verbose:
+        if config.verbose:
             logger.info("Adding cookies to browser...")
         await self.page.context.add_cookies([cookie.model_dump(exclude_none=True) for cookie in cookies])  # type: ignore
 

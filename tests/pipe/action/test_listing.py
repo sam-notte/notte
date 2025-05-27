@@ -1,9 +1,9 @@
 import os
+from unittest.mock import patch
 
 import pytest
-from notte_browser.session import NotteSessionConfig
-from notte_browser.tagging.action.llm_taging.listing import ActionListingConfig, ActionListingPipe
-from notte_browser.tagging.action.llm_taging.parser import ActionListingParserConfig, ActionListingParserType
+from notte_browser.tagging.action.llm_taging.listing import ActionListingPipe
+from notte_browser.tagging.action.llm_taging.parser import ActionListingParserPipe, ActionListingParserType
 from notte_core.actions import WaitAction
 from notte_core.browser.dom_tree import A11yNode, A11yTree, ComputedDomAttributes, DomNode
 from notte_core.browser.node_type import NodeType
@@ -11,6 +11,9 @@ from notte_core.browser.snapshot import BrowserSnapshot, SnapshotMetadata, Viewp
 
 import notte
 from tests.mock.mock_service import MockLLMService
+from tests.mock.mock_service import patch_llm_service as _patch_llm_service
+
+patch_llm_service = _patch_llm_service
 
 
 @pytest.fixture
@@ -103,7 +106,6 @@ def test_listing_pipe(
     mock_response: str,
     request: pytest.FixtureRequest,
 ) -> None:
-    config = ActionListingConfig(parser=ActionListingParserConfig(type=parser))
     # Get the actual response string from the fixture
     response = request.getfixturevalue(mock_response)
 
@@ -121,68 +123,70 @@ homepage
 """
     )
 
-    pipe: ActionListingPipe = ActionListingPipe(llmserve=llm_service, config=config)
-    actions = pipe.forward(snapshot=mock_snapshot).actions
+    pipe: ActionListingPipe = ActionListingPipe(llmserve=llm_service)
+    with patch.object(ActionListingParserPipe, "type", parser):
+        assert ActionListingParserPipe.type == parser
+        actions = pipe.forward(snapshot=mock_snapshot).actions
 
-    # Test common expectations
-    assert len(actions) == 6  # Total number of actions
-    # Action 0
-    assert actions[0].id == "L37"
-    assert actions[0].description == "Shows flights from London to Tokyo"
-    assert actions[0].category == "Discovery & Exploration"
-    assert actions[0].param is None
+        # Test common expectations
+        assert len(actions) == 6  # Total number of actions
+        # Action 0
+        assert actions[0].id == "L37"
+        assert actions[0].description == "Shows flights from London to Tokyo"
+        assert actions[0].category == "Discovery & Exploration"
+        assert actions[0].param is None
 
-    # Action 1
-    assert actions[1].id == "B30"
-    assert actions[1].description == "Explores available flights"
-    assert actions[1].category == "Discovery & Exploration"
-    assert actions[1].param is None
+        # Action 1
+        assert actions[1].id == "B30"
+        assert actions[1].description == "Explores available flights"
+        assert actions[1].category == "Discovery & Exploration"
+        assert actions[1].param is None
 
-    # Action 2
-    assert actions[2].id == "I3"
-    assert actions[2].description == "Selects the origin location"
-    assert actions[2].category == "Search & Input"
-    assert actions[2].param is not None
-    assert actions[2].param.name == "origin"
-    assert actions[2].param.type == "str"
-    assert actions[2].param.default is None
-    assert actions[2].param.values == []
+        # Action 2
+        assert actions[2].id == "I3"
+        assert actions[2].description == "Selects the origin location"
+        assert actions[2].category == "Search & Input"
+        assert actions[2].param is not None
+        assert actions[2].param.name == "origin"
+        assert actions[2].param.type == "str"
+        assert actions[2].param.default is None
+        assert actions[2].param.values == []
 
-    # Action 3
-    assert actions[3].id == "I1"
-    assert actions[3].description == "Selects the ticket type"
-    assert actions[3].category == "Search & Input"
-    assert actions[3].param is not None
-    assert actions[3].param.name == "ticketType"
-    assert actions[3].param.type == "str"
-    if parser is ActionListingParserType.MARKDOWN:
-        assert actions[3].param.default is None
-    else:
-        assert actions[3].param.default == "Round trip"
-    assert actions[3].param.values == ["Round trip", "One way", "Multi-city"]
+        # Action 3
+        assert actions[3].id == "I1"
+        assert actions[3].description == "Selects the ticket type"
+        assert actions[3].category == "Search & Input"
+        assert actions[3].param is not None
+        assert actions[3].param.name == "ticketType"
+        assert actions[3].param.type == "str"
+        if parser is ActionListingParserType.MARKDOWN:
+            assert actions[3].param.default is None
+        else:
+            assert actions[3].param.default == "Round trip"
+        assert actions[3].param.values == ["Round trip", "One way", "Multi-city"]
 
-    # Action 4
-    assert actions[4].id == "B6"
-    assert actions[4].description == "Changes the number of passengers"
-    assert actions[4].category == "Search & Input"
-    assert actions[4].param is None
+        # Action 4
+        assert actions[4].id == "B6"
+        assert actions[4].description == "Changes the number of passengers"
+        assert actions[4].category == "Search & Input"
+        assert actions[4].param is None
 
-    # Action 5
-    assert actions[5].id == "I6"
-    assert actions[5].description == "Enters the return date"
-    assert actions[5].category == "Search & Input"
-    assert actions[5].param is not None
-    assert actions[5].param.name == "returnDate"
-    assert actions[5].param.type == "date"
-    assert actions[5].param.default is None
-    assert actions[5].param.values == []
+        # Action 5
+        assert actions[5].id == "I6"
+        assert actions[5].description == "Enters the return date"
+        assert actions[5].category == "Search & Input"
+        assert actions[5].param is not None
+        assert actions[5].param.name == "returnDate"
+        assert actions[5].param.type == "date"
+        assert actions[5].param.default is None
+        assert actions[5].param.values == []
 
 
 @pytest.mark.asyncio
 async def test_groundtruth_interactions():
-    config = NotteSessionConfig().disable_perception().disable_web_security().set_viewport(width=1280, height=720)
-
-    async with notte.Session(config=config) as session:
+    async with notte.Session(
+        headless=True, enable_perception=False, viewport_width=1280, viewport_height=720
+    ) as session:
         file_path = "tests/data/duckduckgo.html"
         _ = await session.window.page.goto(url=f"file://{os.path.abspath(file_path)}")
 

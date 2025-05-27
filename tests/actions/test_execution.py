@@ -2,10 +2,12 @@ import asyncio
 from dataclasses import dataclass
 
 import pytest
-from notte_browser.session import NotteSession, NotteSessionConfig
-from notte_browser.window import BrowserWindowOptions
+from notte_browser.session import NotteSession
 
 from tests.mock.mock_service import MockLLMService
+from tests.mock.mock_service import patch_llm_service as _patch_llm_service
+
+patch_llm_service = _patch_llm_service
 
 
 @pytest.fixture
@@ -27,6 +29,11 @@ class ExecutionTest:
 
 
 @pytest.fixture
+def mock_llm_service() -> MockLLMService:
+    return MockLLMService(mock_response="")
+
+
+@pytest.fixture
 def phantombuster_login() -> ExecutionTest:
     return ExecutionTest(
         url="https://phantombuster.com/login",
@@ -39,10 +46,9 @@ def phantombuster_login() -> ExecutionTest:
     )
 
 
-async def _test_execution(test: ExecutionTest, headless: bool) -> None:
+async def _test_execution(test: ExecutionTest, headless: bool, patch_llm_service: MockLLMService) -> None:
     async with NotteSession(
-        NotteSessionConfig(window=BrowserWindowOptions(headless=headless)),
-        llmserve=MockLLMService(mock_response=""),
+        headless=headless,
     ) as page:
         _ = await page.agoto(test.url)
         for step in test.steps:
@@ -52,5 +58,5 @@ async def _test_execution(test: ExecutionTest, headless: bool) -> None:
             _ = await page.aexecute(action_id=step.action_id, value=step.value, enter=step.enter)
 
 
-def test_execution(phantombuster_login: ExecutionTest, headless: bool) -> None:
-    asyncio.run(_test_execution(phantombuster_login, headless))
+def test_execution(phantombuster_login: ExecutionTest, headless: bool, patch_llm_service: MockLLMService) -> None:
+    asyncio.run(_test_execution(phantombuster_login, headless, patch_llm_service))
