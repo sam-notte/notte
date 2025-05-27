@@ -51,7 +51,7 @@ async def test_action_node_resolution_pipe(url: str, config: NotteSessionConfig)
     errors: list[str] = []
     total_count = 0
     async with NotteSession(config) as page:
-        _ = await page.goto(url)
+        _ = await page.agoto(url)
 
         for node in page.snapshot.interaction_nodes():
             total_count += 1
@@ -118,7 +118,7 @@ async def check_xpath_resolution_v2(page: Page, inodes: list[InteractionDomNode]
 
 async def _test_action_node_resolution_pipe_v2(config: NotteSessionConfig) -> None:
     async with NotteSession(config=config) as page:
-        _ = await page.step(GotoAction(url="https://www.reddit.com"))
+        _ = await page.astep(GotoAction(url="https://www.reddit.com"))
         inodes = page.snapshot.interaction_nodes()
         resolution_errors, total_count = await check_xpath_resolution_v2(page.window.page, inodes)
         if len(resolution_errors) > 0:
