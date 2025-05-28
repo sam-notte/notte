@@ -1,3 +1,4 @@
+import contextlib
 from enum import Enum
 from typing import Literal
 
@@ -19,6 +20,16 @@ class ErrorConfig:
         if mode not in [mode.value for mode in ErrorMessageMode]:
             raise ValueError(f"Invalid message mode: {mode}. Valid modes are: {list(ErrorMessageMode)}")
         cls._message_mode = ErrorMessageMode(mode)
+
+    @classmethod
+    @contextlib.contextmanager
+    def message_mode(cls, mode: ErrorMode):
+        saved_mode = cls._message_mode
+        try:
+            cls.set_message_mode(mode)
+            yield
+        finally:
+            cls._message_mode = saved_mode
 
     @classmethod
     def get_message_mode(cls) -> ErrorMessageMode:

@@ -18,7 +18,7 @@ from litellm.exceptions import (
 from litellm.exceptions import (
     ContextWindowExceededError as LiteLLMContextWindowExceededError,
 )
-from litellm.files.main import ModelResponse  # type: ignore
+from litellm.files.main import ModelResponse  # pyright: ignore [reportMissingTypeStubs]
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
@@ -55,14 +55,14 @@ class LLMEngine:
             tracer = LlmUsageFileTracer()
 
         self.tracer: LlmTracer = tracer
-        self.completion = trace_llm_usage(tracer=self.tracer)(self.completion)
+        self.completion = trace_llm_usage(tracer=self.tracer)(self.completion)  # pyright: ignore [reportAttributeAccessIssue]
         self.structured_output_retries: int = structured_output_retries
         self.verbose: bool = verbose
 
     def context_length(self) -> int:
         return LlmModel.context_length(self.model)
 
-    def structured_completion(
+    async def structured_completion(
         self,
         messages: list[AllMessageValues],
         response_format: type[TResponseFormat],
@@ -78,7 +78,9 @@ class LLMEngine:
         while tries > 0:
             tries -= 1
             try:
-                content = self.single_completion(messages, model, response_format=litellm_response_format).strip()
+                content = (
+                    await self.single_completion(messages, model, response_format=litellm_response_format)
+                ).strip()
             except InvalidJsonResponseForStructuredOutput as e:
                 if use_strict_response_format:
                     # fallback to non-strict response format
@@ -119,7 +121,7 @@ class LLMEngine:
             f"Error parsing LLM response into Structured Output (type: {response_format}). Content: \n\n{content}\n\n"
         )
 
-    def single_completion(
+    async def single_completion(
         self,
         messages: list[AllMessageValues],
         model: str | None = None,
@@ -127,16 +129,16 @@ class LLMEngine:
         response_format: dict[str, str] | type[BaseModel] | None = None,
     ) -> str:
         model = model or self.model
-        response = self.completion(
+        response = await self.completion(
             messages,
             model=model,
             temperature=temperature,
             n=1,
             response_format=response_format,
         )
-        return response.choices[0].message.content  # type: ignore
+        return response.choices[0].message.content  # pyright: ignore [reportReturnType, reportUnknownVariableType, reportUnknownMemberType, reportAttributeAccessIssue]
 
-    def completion(
+    async def completion(
         self,
         messages: list[AllMessageValues],
         model: str | None = None,
@@ -146,7 +148,7 @@ class LLMEngine:
     ) -> ModelResponse:
         model = model or self.model
         try:
-            response = litellm.completion(  # type: ignore[arg-type]
+            response = await litellm.acompletion(  # pyright: ignore [reportUnknownMemberType]
                 model,
                 messages,
                 temperature=temperature,

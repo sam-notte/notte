@@ -119,7 +119,7 @@ class FalcoAgent(BaseAgent):
 
         if self.vault is not None:
             # hide vault leaked credentials within llm inputs
-            self.llm.structured_completion = self.vault.patch_structured_completion(0, self.vault.get_replacement_map)(
+            self.llm.structured_completion = self.vault.patch_structured_completion(0, self.vault.get_replacement_map)(  # pyright: ignore [reportAttributeAccessIssue]
                 self.llm.structured_completion
             )
 
@@ -232,7 +232,7 @@ class FalcoAgent(BaseAgent):
     async def step(self, task: str) -> CompletionAction | None:
         """Execute a single step of the agent"""
         messages = await self.get_messages(task)
-        response: StepAgentOutput = self.llm.structured_completion(
+        response: StepAgentOutput = await self.llm.structured_completion(
             messages, response_format=StepAgentOutput, use_strict_response_format=False
         )
 
@@ -290,7 +290,7 @@ class FalcoAgent(BaseAgent):
 
     async def _human_in_the_loop(self) -> None:
         # Check for captcha if human-in-the-loop is enabled
-        captcha_result = self.captcha_detector.detect(self.session.trajectory[-1])
+        captcha_result = await self.captcha_detector.detect(self.session.trajectory[-1])
         if captcha_result.has_captcha:
             logger.warning(f"⚠️ Captcha detected: {captcha_result.description}")
             logger.info("🔄 Waiting for human intervention...")
@@ -333,7 +333,7 @@ class FalcoAgent(BaseAgent):
             # Sucessful execution and LLM output is not None
             # Need to validate the output
             logger.info(f"🔥 Validating agent output:\n{output.model_dump_json()}")
-            val = self.validator.validate(task, output, self.trajectory)  # pyright: ignore [reportArgumentType]
+            val = await self.validator.validate(task, output, self.trajectory)  # pyright: ignore [reportArgumentType]
             if val.is_valid:
                 # Successfully validated the output
                 logger.info("✅ Task completed successfully")
