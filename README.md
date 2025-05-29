@@ -1,4 +1,4 @@
-# Rapidly build reliable web agents
+# Rapidly build reliable and fast web agents
 
 <div align="center">
   <p>
