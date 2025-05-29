@@ -17,11 +17,11 @@ from notte_sdk.endpoints.page import PageClient
 from notte_sdk.types import (
     Cookie,
     GetCookiesResponse,
-    ListRequestDict,
     ObserveRequestDict,
     ScrapeRequestDict,
     SessionDebugResponse,
     SessionListRequest,
+    SessionListRequestDict,
     SessionResponse,
     SessionStartRequest,
     SessionStartRequestDict,
@@ -266,7 +266,7 @@ class SessionsClient(BaseClient):
         response = self.request(endpoint)
         return response
 
-    def list(self, **data: Unpack[ListRequestDict]) -> Sequence[SessionResponse]:
+    def list(self, **data: Unpack[SessionListRequestDict]) -> Sequence[SessionResponse]:
         """
         Retrieves a list of sessions from the API.
 
@@ -426,6 +426,9 @@ class RemoteSession(SyncResource):
             request (SessionStartRequest): The configuration request for this session.
         """
         self.request: SessionStartRequest = request
+        self._open_viewer: bool = not self.request.headless
+        # always run in headless mode on the API
+        self.request.headless = True
         self.client: SessionsClient = client
         self.response: SessionResponse | None = None
 
@@ -446,6 +449,8 @@ class RemoteSession(SyncResource):
         """
         self.response = self.client.start(**self.request.model_dump())
         logger.info(f"[Session] {self.session_id} started with request: {self.request.model_dump(exclude_none=True)}")
+        if self._open_viewer:
+            self.display_in_browser()
 
     @override
     def stop(self) -> None:
