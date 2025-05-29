@@ -979,6 +979,7 @@ class AgentCreateRequestDict(SessionRequestDict, total=False):
     use_vision: bool
     max_steps: int
     vault_id: str | None
+    notifier_config: dict[str, Any] | None
 
 
 class AgentRunRequestDict(TypedDict, total=False):
@@ -1001,6 +1002,7 @@ class AgentCreateRequest(SessionRequest):
         DEFAULT_MAX_NB_STEPS
     )
     vault_id: Annotated[str | None, Field(description="The vault to use for the agent")] = None
+    notifier_config: Annotated[dict[str, Any] | None, Field(description="Config used for the notifier")] = None
 
 
 class AgentRunRequest(BaseModel):

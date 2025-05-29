@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 from typing import List, Unpack  # pyright: ignore [reportDeprecated]
+from urllib.parse import urljoin
 from webbrowser import open as open_browser
 
 from loguru import logger
@@ -30,7 +31,7 @@ from notte_sdk.types import (
     TabSessionDebugRequest,
     TabSessionDebugResponse,
 )
-from notte_sdk.websockets.recording import SessionRecordingWebSocket
+from notte_sdk.websockets.jupyter import WebsocketJupyterDisplay
 
 
 @final
@@ -47,6 +48,8 @@ class SessionsClient(BaseClient):
     SESSION_STOP = "{session_id}/stop"
     SESSION_STATUS = "{session_id}"
     SESSION_LIST = ""
+    SESSION_VIEWER = "viewer"
+
     # upload cookies
     SESSION_SET_COOKIES = "{session_id}/cookies"
     SESSION_GET_COOKIES = "{session_id}/cookies"
@@ -322,12 +325,22 @@ class SessionsClient(BaseClient):
         file_bytes = self._request_file(endpoint, file_type="webp")
         return WebpReplay(file_bytes)
 
-    def recording(self, session_id: str) -> SessionRecordingWebSocket:
+    def display_in_browser(self, session_id: str) -> None:
         """
-        Returns a SessionRecordingWebSocket for the specified session.
+        Opens live session replay in browser (frame by frame)
         """
         debug_info = self.debug_info(session_id=session_id)
-        return SessionRecordingWebSocket(wss_url=debug_info.ws.recording)
+
+        base_url = urljoin(self.server_url + "/", f"{self.base_endpoint_path}/{self.SESSION_VIEWER}/")
+        viewer_url = urljoin(base_url, f"index.html?ws={debug_info.ws.recording}")
+        _ = open_browser(viewer_url, new=1)
+
+    def display_in_notebook(self, session_id: str) -> WebsocketJupyterDisplay:
+        """
+        Returns a WebsocketJupyterDisplay for displaying live session replay in Jupyter notebook.
+        """
+        debug_info = self.debug_info(session_id=session_id)
+        return WebsocketJupyterDisplay(wss_url=debug_info.ws.recording)
 
     def set_cookies(
         self,
@@ -479,11 +492,17 @@ class RemoteSession(SyncResource):
         """
         return self.client.replay(session_id=self.session_id)
 
-    def recording(self) -> SessionRecordingWebSocket:
+    def display_in_browser(self) -> None:
         """
-        Get a recording of the session's execution in WEBP format.
+        Opens live session replay in browser (frame by frame)
         """
-        return self.client.recording(session_id=self.session_id)
+        return self.client.display_in_browser(self.session_id)
+
+    def display_in_notebook(self) -> WebsocketJupyterDisplay:
+        """
+        Returns a WebsocketJupyterDisplay for displaying live session replay in Jupyter notebook.
+        """
+        return self.client.display_in_notebook(session_id=self.session_id)
 
     def viewer(self) -> None:
         """
