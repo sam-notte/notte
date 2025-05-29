@@ -4,9 +4,10 @@
   <p>
     We outperform all other web agents in <strong>speed</strong>, <strong>costs</strong>, and <strong>reliability</strong> 🔥 <a href="https://github.com/nottelabs/open-operator-evals">Read more on open-operator-evals</a>
   </p>
+  <p>
+    → [X](https://x.com/nottecore) • [LinkedIn](https://www.linkedin.com/company/nottelabsinc/) • [Console](https://console.notte.cc/) • [Landing](https://notte.cc)
+  </p>
 </div>
-
-→ [X](https://x.com/nottecore) • [LinkedIn](https://www.linkedin.com/company/nottelabsinc/) • [Console](https://console.notte.cc/) • [Landing](https://notte.cc)
 
 <p align="center">
   <img src="docs/logo/bgd.png" alt="Notte Logo" width="100%">
@@ -21,7 +22,6 @@
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/nottelabs/notte)
 [![Open Replit Template](https://replit.com/badge/github/@steel-dev/steel-playwright-starter)](https://replit.com/@andreakiro/notte-python-agent-starter)
 <a href="https://www.producthunt.com/posts/notte?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-notte" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=671911&theme=light&t=1748531689502" alt="Notte - Product Hunt" style="width: 150px; height: 32px;" width="150" height="32" /></a>
-
 
 ---
 
@@ -41,11 +41,13 @@ Notte provides the full-stack web AI agents framework that allows you to develop
 ```
 notte.agents.run("go to twitter and post: new era this is @nottecore taking over my acc")
 ```
+
 <p align="center">
   <img src="docs/gifs/v1.gif" alt="Demo" width="100%" href="https://video.twimg.com/ext_tw_video/1892967963344461824/pu/vid/avc1/1282x720/15sCfmmUUcAtBZaR.mp4">
 </p>
 
 Fast, reliable, agentic browsing (speed x2):
+
 - secure password vault
 - bypass bot detection
 
@@ -89,7 +91,6 @@ This is by far the closest attempt to AGI we've ever witnessed ;)
 
 Our main tech highlight is that we introduce a perception layer that turns the internet into an agent-friendly environment, by turning websites into structured maps described in natural language, ready to be digested by an LLM with less effort.
 
-
 ```python
 import notte
 
@@ -97,6 +98,7 @@ with notte.Session(headless=False) as page:
     obs = page.observe("https://www.google.com/travel/flights")
     print(obs.space.markdown)
 ```
+
 ```
 # Flight Search
 * I1: Enters departure location (departureLocation: str = "San Francisco")
@@ -125,6 +127,7 @@ from notte_sdk import NotteClient
 notte = NotteClient()
 notte.agents.run(task="search cheapest flight from paris to nyc on gflight")
 ```
+
 > left:browser-use, right:notte-agent (cerebras)
 
 <p align="center">
@@ -225,6 +228,7 @@ You use our [console]((https://console.notte.cc) to manage your agents and sessi
 Most of our open-source features are also available on the cloud-hosted version with a large free-tier!
 
 Example for webpage scraping & structured schema llm extraction
+
 ```python
 from notte_sdk import NotteClient
 notte = NotteClient()
@@ -272,4 +276,5 @@ If you use notte in your research or project, please cite:
 Built with luv from Earth 🌏
 
 ---
+
 Copyright © 2025 Notte Labs, Inc.
