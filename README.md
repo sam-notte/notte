@@ -2,8 +2,8 @@
 
 <div align="center">
   <p>
-    We outperform all other web agents in <strong>speed</strong>, <strong>costs</strong>, and <strong>reliability</strong> 🔥 <a href="https://github.com/nottelabs/open-operator-evals">Read more on open-operator-evals</a><br/>
-    → <a href="https://x.com/nottecore">X</a> • <a href="https://www.linkedin.com/company/nottelabsinc/">LinkedIn</a> • <a href="https://console.notte.cc/">Console</a> • <a href="https://notte.cc">Landing</a>
+    We outperform all other web agents in <strong>speed</strong>, <strong>costs</strong>, and <strong>reliability</strong> <br/>
+    → 🔥 <a href="https://github.com/nottelabs/open-operator-evals">Read more on open-operator-evals</a> • <a href="https://x.com/nottecore">X</a> • <a href="https://www.linkedin.com/company/nottelabsinc/">LinkedIn</a> • <a href="https://console.notte.cc/">Console</a> • <a href="https://notte.cc">Landing</a>
   </p>
 </div>
 
