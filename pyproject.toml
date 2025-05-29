@@ -3,6 +3,7 @@ name = "notte"
 version = "1.4.4.dev"
 description = "Notte, the full-stack web AI agent framework"
 readme = "README.md"
+license = "SSPL-1.0"
 authors = [
     { name = "Notte Team ", email = "hello@notte.cc" }
 ]

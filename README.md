@@ -1,4 +1,4 @@
-# The opensource framework for web browsing agents
+# Rapidly build reliable web agents
 
 <div align="center">
   <p>
@@ -11,7 +11,7 @@
 </p>
 
 [![GitHub stars](https://img.shields.io/github/stars/nottelabs/notte?style=social)](https://github.com/nottelabs/notte/stargazers)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: SSPL-1.0](https://img.shields.io/badge/License-SSPL%201.0-blue.svg)](https://spdx.org/licenses/SSPL-1.0.html)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://img.shields.io/pypi/v/notte?color=blue)](https://pypi.org/project/notte/)
 [![PyPI Downloads](https://static.pepy.tech/badge/notte?color=blue)](https://pepy.tech/projects/notte)
@@ -248,7 +248,8 @@ Find an issue, fork, open a PR, and merge :)
 
 ## License
 
-Notte is released under the [Apache 2.0 license](LICENSE)
+This project is licensed under the Server Side Public License v1.
+See the [LICENSE](LICENSE) file for details.
 
 ## Citation
 
@@ -261,9 +262,12 @@ If you use notte in your research or project, please cite:
   url = {https://github.com/nottelabs/notte},
   year = {2025},
   publisher = {GitHub},
-  license = {Apache-2.0}
+  license = {SSPL-1.0}
   version = {1.4.4},
 }
 ```
 
 Built with luv from Earth 🌏
+
+---
+Copyright © 2025 Notte Labs, Inc.
