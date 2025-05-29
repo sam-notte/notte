@@ -2,7 +2,7 @@
 
 <div align="center">
   <p>
-    We outperform all other web agents in <em>speed</em>, <em>costs</em>, and <em>reliability</em> 🔥 <a href="https://github.com/nottelabs/open-operator-evals">read more on open-operator-evals</a>
+    We outperform (reproducible) all other web agents in <em>speed</em>, <em>costs</em>, and <em>reliability</em> 🔥 <a href="https://github.com/nottelabs/open-operator-evals">Read more on open-operator-evals</a>
   </p>
 </div>
 
