@@ -6,6 +6,8 @@
   </p>
 </div>
 
+→ [X](https://x.com/nottecore) • [LinkedIn](https://www.linkedin.com/company/nottelabsinc/) • [Console](https://console.notte.cc/) • [Landing](https://notte.cc)
+
 <p align="center">
   <img src="docs/logo/bgd.png" alt="Notte Logo" width="100%">
 </p>
