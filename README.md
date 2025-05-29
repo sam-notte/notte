@@ -3,7 +3,7 @@
 <div align="center">
   <p>
     We outperform all other web agents in <strong>speed</strong>, <strong>costs</strong>, and <strong>reliability</strong> <br/>
-    → 🔥 <a href="https://github.com/nottelabs/open-operator-evals" target="_blank" rel="noopener noreferrer">Read more on open-operator-evals</a> • <a href="https://notte.cc?ref=github" target="_blank" rel="noopener noreferrer">Landing</a> • <a href="https://console.notte.cc/?ref=github" target="_blank" rel="noopener noreferrer">Console</a> • <a href="https://x.com/nottecore?ref=github" target="_blank" rel="noopener noreferrer">X</a> • <a href="https://www.linkedin.com/company/nottelabsinc/?ref=github" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    → 🔥 <a href="https://github.com/nottelabs/open-operator-evals" target="_blank" rel="noopener noreferrer">Read more on open-operator-evals</a> • <a href="https://x.com/nottecore?ref=github" target="_blank" rel="noopener noreferrer">X</a> • <a href="https://www.linkedin.com/company/nottelabsinc/?ref=github" target="_blank" rel="noopener noreferrer">LinkedIn</a> • <a href="https://notte.cc?ref=github" target="_blank" rel="noopener noreferrer">Landing</a> • <a href="https://console.notte.cc/?ref=github" target="_blank" rel="noopener noreferrer">Console</a>
   </p>
 </div>
 
