@@ -173,7 +173,7 @@ def parse_markdown_action_list(
                     "* none",
                 ]
             ):
-                logger.warning(f"Excluding {line} because it's a disabled action")
+                logger.trace(f"Excluding {line} because it's a disabled action")
                 continue
 
             # Check if it's a category header (starts with #)
@@ -190,7 +190,7 @@ def parse_markdown_action_list(
                 if current_category is None:
                     raise LLMParsingError("Category is required for each action but is currently None.")
                 if len(parameters) > 1:
-                    logger.error(
+                    logger.debug(
                         f"Action {action_id[0]} has more than one parameter: {parameters}. Taking the first one."
                     )
                 actions.append(
@@ -203,12 +203,12 @@ def parse_markdown_action_list(
                 )
             else:
                 if partial:
-                    logger.warning(f"[Markdown parsing] Failed to parse action line: {line}")
+                    logger.debug(f"[Markdown parsing] Failed to parse action line: {line}")
                     continue
                 raise LLMParsingError(f"Invalid action line: {line}. Action lines should start with '*' or '#'")
         except Exception as e:
             if partial:
-                logger.warning(f"[Markdown parsing] Failed to parse action line: {line} with error: {e}")
+                logger.debug(f"[Markdown parsing] Failed to parse action line: {line} with error: {e}")
                 continue
             raise e
     return actions
@@ -335,7 +335,7 @@ def parse_table(table_text: str, partial: bool = False) -> list[PossibleAction]:
             actions.append(action)
         except Exception as e:
             if partial:
-                logger.warning(f"[Markdown table parsing] Failed to parse action line: {line} with error: {e}")
+                logger.debug(f"[Markdown table parsing] Failed to parse action line: {line} with error: {e}")
                 continue
             raise e
 

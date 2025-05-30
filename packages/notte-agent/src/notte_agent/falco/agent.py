@@ -134,7 +134,7 @@ class FalcoAgent(BaseAgent):
             autosize=True,
             model=self.config.reasoning_model,
         )
-        self.trajectory: FalcoTrajectoryHistory = FalcoTrajectoryHistory()
+        self.trajectory: FalcoTrajectoryHistory = FalcoTrajectoryHistory(max_steps=self.config.max_steps)
 
         async def execute_action(action: BaseAction) -> Observation:
             if self.vault is not None and self.vault.contains_credentials(action):
@@ -145,7 +145,10 @@ class FalcoAgent(BaseAgent):
                         await FalcoAgent.compute_locator_attributes(locator),
                         self.session.snapshot,
                     )
-            return await self.session.astep(action)
+            _ = await self.session.astep(action)
+            obs = await self.session.aobserve()
+            obs.progress = self.trajectory.progress
+            return obs
 
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(func=execute_action)
 
@@ -183,7 +186,7 @@ class FalcoAgent(BaseAgent):
         # just for logging
         traj_msg = self.trajectory.perceive()
         if self.config.verbose:
-            logger.info(f"🔍 Trajectory history:\n{traj_msg}")
+            logger.trace(f"🔍 Trajectory history:\n{traj_msg}")
         # add trajectory to the conversation
         match self.config.history_type:
             case HistoryType.COMPRESSED:
@@ -240,7 +243,7 @@ class FalcoAgent(BaseAgent):
             self.step_callback(task, response)
 
         if self.config.verbose:
-            logger.info(f"🔍 LLM response:\n{response}")
+            logger.trace(f"🔍 LLM response:\n{response}")
 
         for text, data in response.log_state():
             logger.opt(colors=True).info(text, **data)
@@ -278,7 +281,7 @@ class FalcoAgent(BaseAgent):
 
     @override
     async def run(self, task: str, url: str | None = None) -> AgentResponse:
-        logger.info(f"Running task: {task}")
+        logger.trace(f"Running task: {task}")
         self.start_time: float = time.time()
         try:
             return await self._run(task, url=url)
@@ -292,7 +295,7 @@ class FalcoAgent(BaseAgent):
         # Check for captcha if human-in-the-loop is enabled
         captcha_result = await self.captcha_detector.detect(self.session.trajectory[-1])
         if captcha_result.has_captcha:
-            logger.warning(f"⚠️ Captcha detected: {captcha_result.description}")
+            logger.info(f"⚠️ Captcha detected: {captcha_result.description}")
             logger.info("🔄 Waiting for human intervention...")
             _ = input("Press Enter to continue after solving the captcha...")
             # Observe again after human intervention

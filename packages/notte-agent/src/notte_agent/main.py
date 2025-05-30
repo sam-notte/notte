@@ -50,6 +50,7 @@ class Agent:
                     vault=self.vault,
                     window=self.session.window,
                     step_callback=step_callback,
+                    **self.data,
                 )
             case AgentType.GUFO:
                 agent = GufoAgent(
@@ -57,6 +58,7 @@ class Agent:
                     window=self.session.window,
                     # TODO: fix this
                     # step_callback=step_callback,
+                    **self.data,
                 )
         if self.notifier:
             agent = NotifierAgent(agent, notifier=self.notifier)
@@ -67,13 +69,19 @@ class Agent:
             if self.auto_manage_session:
                 # need to start session before running the agent
                 await self.session.astart()
-
             agent = self.create_agent()
-
             return await agent.run(task, url=url)
         finally:
             if self.auto_manage_session:
                 await self.session.astop()
 
     def run(self, task: str, url: str | None = None) -> AgentResponse:
-        return asyncio.run(self.arun(task, url=url))
+        try:
+            if self.auto_manage_session:
+                # need to start session before running the agent
+                self.session.start()
+            agent = self.create_agent()
+            return asyncio.run(agent.run(task, url=url))
+        finally:
+            if self.auto_manage_session:
+                self.session.stop()

@@ -204,7 +204,6 @@ class ReplayResponse(BaseModel):
 class SessionStartRequestDict(TypedDict, total=False):
     headless: bool
     timeout_minutes: int
-    max_steps: int
     proxies: list[ProxySettings] | bool
     browser_type: BrowserType
     chrome_args: list[str] | None
@@ -227,14 +226,6 @@ class SessionStartRequest(BaseModel):
             le=DEFAULT_GLOBAL_SESSION_TIMEOUT_IN_MINUTES,
         ),
     ] = DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES
-
-    max_steps: Annotated[
-        int,
-        Field(
-            gt=0,
-            description="Maximum number of steps in the trajectory. An error will be raised if this limit is reached.",
-        ),
-    ] = DEFAULT_MAX_NB_STEPS
 
     proxies: Annotated[
         list[ProxySettings] | bool,
@@ -908,9 +899,9 @@ class StepRequest(PaginationParams):
                 param = ActionParameter(name="value", type=type(self.value).__name__)
             if self.type == "step":
                 if self.action_id is None:
-                    raise ValueError("executable action has to have an action_id")
+                    raise ValueError("Step action need to provide an action_id")
                 if self.action_id == "":
-                    raise ValueError("executable action has to have a non-empty action_id")
+                    raise ValueError("Step action has to provide a non-empty action_id")
                 self.action = StepAction(
                     id=self.action_id,
                     description="ID only",

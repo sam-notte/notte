@@ -68,7 +68,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         n_required = min(n_required, pagination.max_nb_actions)
         if n_listed >= n_required and pagination.min_nb_actions is None:
             if config.verbose:
-                logger.info(
+                logger.trace(
                     f"[ActionListing] Enough actions: {n_listed} >= {n_required}. Stop action listing prematurely."
                 )
             return True
@@ -79,13 +79,13 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
             for i, id in enumerate(inodes_ids[: pagination.min_nb_actions]):
                 if id not in listed_ids:
                     if config.verbose:
-                        logger.warning(
+                        logger.debug(
                             f"[ActionListing] min_nb_actions = {pagination.min_nb_actions} but action {id} "
                             + f"({i + 1}th action) is not in the action list. Retry listng."
                         )
                     return False
             if config.verbose:
-                logger.info(
+                logger.trace(
                     (
                         f"[ActionListing] Min_nb_actions = {pagination.min_nb_actions} and all "
                         "actions are in the action list. Stop action listing prematurely."
@@ -94,7 +94,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
             return True
 
         if config.verbose:
-            logger.warning(
+            logger.debug(
                 (
                     f"Not enough actions listed: {len(inodes_ids)} total, "
                     f"{n_required} required for completion but only {n_listed} listed"
@@ -129,7 +129,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
 
         if not completed and n_trials > 0:
             if config.verbose:
-                logger.info(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
+                logger.trace(f"[ActionListing] Retry listing actions with {n_trials} trials left.")
             return await self.forward_unfiltered(
                 snapshot,
                 merged_actions,
@@ -150,7 +150,7 @@ class LlmActionSpacePipe(BaseActionSpacePipe):
         if self.include_images:
             return snapshot
         if config.verbose:
-            logger.info("🏞️ Excluding images from the action tagging process")
+            logger.trace("🏞️ Excluding images from the action tagging process")
         _snapshot = snapshot.subgraph_without(actions=[], roles=NodeCategory.IMAGE.roles())
         if _snapshot is None:
             raise NodeFilteringResultsInEmptyGraph(
