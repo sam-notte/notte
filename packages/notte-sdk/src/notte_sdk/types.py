@@ -15,7 +15,7 @@ from notte_core.actions import (
     BrowserAction,
     StepAction,
 )
-from notte_core.browser.observation import Observation
+from notte_core.browser.observation import Observation, StepResult
 from notte_core.browser.snapshot import TabsData
 from notte_core.common.config import BrowserType, LlmModel, config
 from notte_core.credentials.base import Credential, CredentialsDict, CreditCardDict, Vault
@@ -936,9 +936,12 @@ class StepRequest(PaginationParams):
         return dump
 
 
-class ScrapeResponse(BaseModel):
+class StepResponse(StepResult):
     session: Annotated[SessionResponse, Field(description="Browser session information")]
-    data: Annotated[DataSpace, Field(description="Data extracted from the current page")]
+
+
+class ScrapeResponse(DataSpace):
+    session: Annotated[SessionResponse, Field(description="Browser session information")]
 
 
 class ObserveResponse(Observation):

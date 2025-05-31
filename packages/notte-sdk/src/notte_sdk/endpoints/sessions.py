@@ -1,13 +1,12 @@
 from collections.abc import Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import List, Unpack  # pyright: ignore [reportDeprecated]
 from urllib.parse import urljoin
 from webbrowser import open as open_browser
 
 from loguru import logger
-from notte_core.browser.observation import Observation
 from notte_core.common.resource import SyncResource
-from notte_core.data.space import DataSpace
 from notte_core.utils.webp_replay import WebpReplay
 from pydantic import BaseModel
 from typing_extensions import final, override
@@ -18,7 +17,9 @@ from notte_sdk.types import (
     Cookie,
     GetCookiesResponse,
     ObserveRequestDict,
+    ObserveResponse,
     ScrapeRequestDict,
+    ScrapeResponse,
     SessionDebugResponse,
     SessionListRequest,
     SessionListRequestDict,
@@ -28,10 +29,17 @@ from notte_sdk.types import (
     SetCookiesRequest,
     SetCookiesResponse,
     StepRequestDict,
+    StepResponse,
     TabSessionDebugRequest,
     TabSessionDebugResponse,
 )
 from notte_sdk.websockets.jupyter import WebsocketJupyterDisplay
+
+
+class SessionViewerType(StrEnum):
+    CDP = "cdp"
+    BROWSER = "browser"
+    JUPYTER = "jupyter"
 
 
 @final
@@ -62,6 +70,7 @@ class SessionsClient(BaseClient):
         self,
         api_key: str | None = None,
         verbose: bool = False,
+        viewer_type: SessionViewerType = SessionViewerType.BROWSER,
     ):
         """
         Initialize a SessionsClient instance.
@@ -71,6 +80,7 @@ class SessionsClient(BaseClient):
         """
         super().__init__(base_endpoint_path="sessions", api_key=api_key, verbose=verbose)
         self.page: PageClient = PageClient(api_key=api_key, verbose=verbose)
+        self.viewer_type: SessionViewerType = viewer_type
 
     @staticmethod
     def session_start_endpoint() -> NotteEndpoint[SessionResponse]:
@@ -450,7 +460,13 @@ class RemoteSession(SyncResource):
         self.response = self.client.start(**self.request.model_dump())
         logger.info(f"[Session] {self.session_id} started with request: {self.request.model_dump(exclude_none=True)}")
         if self._open_viewer:
-            self.display_in_browser()
+            match self.client.viewer_type:
+                case SessionViewerType.BROWSER:
+                    self.display_in_browser()
+                case SessionViewerType.JUPYTER:
+                    _ = self.display_in_notebook()
+                case SessionViewerType.CDP:
+                    self.viewer()
 
     @override
     def stop(self) -> None:
@@ -591,13 +607,13 @@ class RemoteSession(SyncResource):
     # ############################# PAGE ####################################
     # #######################################################################
 
-    def scrape(self, **data: Unpack[ScrapeRequestDict]) -> DataSpace:
+    def scrape(self, **data: Unpack[ScrapeRequestDict]) -> ScrapeResponse:
         return self.client.page.scrape(session_id=self.session_id, **data)
 
-    def observe(self, **data: Unpack[ObserveRequestDict]) -> Observation:
+    def observe(self, **data: Unpack[ObserveRequestDict]) -> ObserveResponse:
         return self.client.page.observe(session_id=self.session_id, **data)
 
-    def step(self, **data: Unpack[StepRequestDict]) -> Observation:
+    def step(self, **data: Unpack[StepRequestDict]) -> StepResponse:
         return self.client.page.step(session_id=self.session_id, **data)
 
 

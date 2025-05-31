@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from typing import TypeVar, Unpack
 
-from notte_core.data.space import DataSpace
 from pydantic import BaseModel
 from typing_extensions import final, override
 
@@ -16,6 +15,7 @@ from notte_sdk.types import (
     SessionRequest,
     StepRequest,
     StepRequestDict,
+    StepResponse,
 )
 
 TSessionRequestDict = TypeVar("TSessionRequestDict", bound=SessionRequest)
@@ -80,7 +80,7 @@ class PageClient(BaseClient):
         return NotteEndpoint(path=path, response=ObserveResponse, method="POST")
 
     @staticmethod
-    def page_step_endpoint(session_id: str | None = None) -> NotteEndpoint[ObserveResponse]:
+    def page_step_endpoint(session_id: str | None = None) -> NotteEndpoint[StepResponse]:
         """
         Creates a NotteEndpoint for initiating a step action.
 
@@ -89,7 +89,7 @@ class PageClient(BaseClient):
         path = PageClient.PAGE_STEP
         if session_id is not None:
             path = path.format(session_id=session_id)
-        return NotteEndpoint(path=path, response=ObserveResponse, method="POST")
+        return NotteEndpoint(path=path, response=StepResponse, method="POST")
 
     @override
     @staticmethod
@@ -106,7 +106,7 @@ class PageClient(BaseClient):
             PageClient.page_step_endpoint(),
         ]
 
-    def scrape(self, session_id: str, **data: Unpack[ScrapeRequestDict]) -> DataSpace:
+    def scrape(self, session_id: str, **data: Unpack[ScrapeRequestDict]) -> ScrapeResponse:
         """
         Scrapes a page using provided parameters via the Notte API.
 
@@ -129,11 +129,11 @@ class PageClient(BaseClient):
         response = self.request(endpoint.with_request(request))
         # Manually override the data.structured space to better match the response format
         response_format = request.response_format
-        structured = response.data.structured
+        structured = response.structured
         if response_format is not None and structured is not None:
             if structured.success and structured.data is not None:
                 structured.data = response_format.model_validate(structured.data.model_dump())
-        return response.data
+        return response
 
     def observe(self, session_id: str, **data: Unpack[ObserveRequestDict]) -> ObserveResponse:
         """
@@ -155,7 +155,7 @@ class PageClient(BaseClient):
         obs_response = self.request(endpoint.with_request(request))
         return obs_response
 
-    def step(self, session_id: str, **data: Unpack[StepRequestDict]) -> ObserveResponse:
+    def step(self, session_id: str, **data: Unpack[StepRequestDict]) -> StepResponse:
         """
         Sends a step action request and returns an Observation.
 
