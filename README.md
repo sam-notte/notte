@@ -75,6 +75,7 @@ uv pip install notte-sdk
 ...and spin up your crazy cool and dead simple agent on our remote machine:
 
 ```python
+import os
 from notte_sdk import NotteClient
 
 notte = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
