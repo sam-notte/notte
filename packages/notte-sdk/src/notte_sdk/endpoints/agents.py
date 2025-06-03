@@ -275,7 +275,7 @@ class AgentsClient(BaseClient):
                         counter += 1
 
                         if response.is_done():
-                            logger.info(f"Agent completed in {counter} steps")
+                            logger.info(f"Agent {agent_id} completed in {counter} steps")
                             break
 
                         if counter >= max_steps:
@@ -459,10 +459,7 @@ class RemoteAgent:
             AgentResponse: The response from the completed agent execution.
         """
 
-        self.response = self.client.start(**self.request.model_dump(), **data)
-        logger.info(f"[Agent] {self.agent_id} started")
-        _ = asyncio.run(self.watch())
-        return self.status()
+        return asyncio.run(self.arun(**data))
 
     async def arun(self, **data: Unpack[AgentRunRequestDict]) -> AgentStatusResponse:
         """
@@ -478,7 +475,20 @@ class RemoteAgent:
         Returns:
             AgentResponse: The response from the completed agent execution.
         """
-        return self.run(**data)
+        self.response = self.client.start(**self.request.model_dump(), **data)
+        logger.info(f"[Agent] {self.agent_id} started")
+        _ = await self.watch()
+        # Wait max 9 seconds for the agent to complete
+        TOTAL_WAIT_TIME, ITERATIONS = 3, 3
+        for _ in range(ITERATIONS):
+            time.sleep(TOTAL_WAIT_TIME / ITERATIONS)
+            status = self.status()
+            if status.status == AgentStatus.closed:
+                return status
+        logger.error(
+            f"[Agent] {self.agent_id} failed to complete in time. Try runnig `agent.status()` after a few seconds."
+        )
+        return self.status()
 
     def status(self) -> AgentStatusResponse:
         """
