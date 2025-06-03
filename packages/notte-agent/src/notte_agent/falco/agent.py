@@ -21,7 +21,7 @@ from notte_core.common.tracer import LlmUsageDictTracer
 from notte_core.credentials.base import BaseVault, LocatorAttributes
 from notte_core.llms.engine import LLMEngine
 from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
-from notte_sdk.types import AgentCreateRequestDict
+from notte_sdk.types import AgentCreateRequestDict, AgentRunRequest, AgentRunRequestDict
 from patchright.async_api import Locator
 from pydantic import computed_field, field_validator
 
@@ -129,9 +129,7 @@ class FalcoAgent(BaseAgent):
             )
 
         self.perception: FalcoPerception = FalcoPerception()
-        self.validator: CompletionValidator = CompletionValidator(
-            llm=self.llm, perception=self.perception, use_vision=self.config.use_vision
-        )
+        self._validator: CompletionValidator | None = None
         self.captcha_detector: CaptchaDetector = CaptchaDetector(llm=self.llm, perception=self.perception)
         self.prompt: FalcoPrompt = FalcoPrompt(max_actions_per_step=self.config.max_actions_per_step)
         self.conv: Conversation = Conversation(
@@ -154,6 +152,16 @@ class FalcoAgent(BaseAgent):
             return await self.session.aobserve()
 
         self.step_executor: SafeActionExecutor[BaseAction, Observation] = SafeActionExecutor(func=execute_action)
+
+    @property
+    def validator(self) -> CompletionValidator:
+        if self._validator is not None:
+            return self._validator
+
+        self._validator = CompletionValidator(
+            llm=self.llm, perception=self.perception, use_vision=self.config.use_vision
+        )
+        return self._validator
 
     @staticmethod
     async def compute_locator_attributes(locator: Locator) -> LocatorAttributes:
@@ -283,11 +291,12 @@ class FalcoAgent(BaseAgent):
         return None
 
     @override
-    async def run(self, task: str, url: str | None = None) -> AgentResponse:
-        logger.trace(f"Running task: {task}")
+    async def run(self, **kwargs: typing.Unpack[AgentRunRequestDict]) -> AgentResponse:
+        request = AgentRunRequest.model_validate(kwargs)
+        logger.trace(f"Running task: {request.task}")
         self.start_time: float = time.time()
         try:
-            return await self._run(task, url=url)
+            return await self._run(request)
 
         except Exception as e:
             if self.config.raise_condition is RaiseCondition.NEVER:
@@ -312,13 +321,13 @@ class FalcoAgent(BaseAgent):
                 )
             )
 
-    async def _run(self, task: str, url: str | None = None) -> AgentResponse:
+    async def _run(self, request: AgentRunRequest) -> AgentResponse:
         """Execute the task with maximum number of steps"""
         # change this to DEV if you want more explicit error messages
         # when you are developing your own agent
         notte_core.set_error_mode("agent")
-        if url is not None:
-            task = f"Start on '{url}' and {task}"
+        if request.url is not None:
+            request.task = f"Start on '{request.url}' and {request.task}"
 
         # hide vault leaked credentials within screenshots
         if self.vault is not None:
@@ -326,7 +335,7 @@ class FalcoAgent(BaseAgent):
 
         for step in range(self.config.max_steps):
             logger.info(f"💡 Step {step}")
-            output: CompletionAction | None = await self.step(task)
+            output: CompletionAction | None = await self.step(task=request.task)
             # Check for captcha if human-in-the-loop is enabled
             if self.config.human_in_the_loop:
                 await self._human_in_the_loop()
@@ -339,7 +348,12 @@ class FalcoAgent(BaseAgent):
             # Sucessful execution and LLM output is not None
             # Need to validate the output
             logger.info(f"🔥 Validating agent output:\n{output.model_dump_json()}")
-            val = await self.validator.validate(task, output, self.trajectory)  # pyright: ignore [reportArgumentType]
+            val = await self.validator.validate(
+                task=request.task,
+                output=output,
+                history=self.trajectory,  # pyright: ignore [reportArgumentType]
+                response_format=request.response_format,
+            )
             if val.is_valid:
                 # Successfully validated the output
                 logger.info("✅ Task completed successfully")

@@ -4,7 +4,7 @@ import chevron
 from notte_core.actions import CompletionAction
 from notte_core.browser.observation import Observation
 from notte_core.llms.engine import LLMEngine
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from notte_agent.common.conversation import Conversation
 from notte_agent.common.perception import BasePerception
@@ -78,11 +78,38 @@ Agent task output:
 {output}
 """
 
+    @staticmethod
+    def validate_response_format(output: CompletionAction, response_format: type[BaseModel]) -> CompletionValidation:
+        """Check that json output fits json schema"""
+        try:
+            _ = response_format.model_validate_json(output.answer)
+        except ValidationError as e:
+            return CompletionValidation(is_valid=False, reason=str(e))
+        return CompletionValidation(
+            is_valid=True, reason="The output returned by the agent is a valid according to the response format."
+        )
+
     async def validate(
-        self, task: str, output: CompletionAction, history: TrajectoryHistory[BaseModel]
+        self,
+        task: str,
+        output: CompletionAction,
+        history: TrajectoryHistory[BaseModel],
+        response_format: type[BaseModel] | None = None,
     ) -> CompletionValidation:
         """Validate the output of the last action is what the user wanted"""
-        last_obs = history.observations()[-1]
+
+        # first, validate the output if provided a schema
+        if response_format is not None:
+            validation = CompletionValidator.validate_response_format(output, response_format)
+            if not validation.is_valid:
+                return validation
+
+        observations = history.observations()
+        if len(observations) == 0:
+            return CompletionValidation(is_valid=True, reason="No observations")
+
+        # then, validate that the answer is correct
+        last_obs = observations[-1]
 
         self.conv.reset()
         system_prompt = chevron.render(system_rules, {"task": task, "example": self.example().model_dump_json()})

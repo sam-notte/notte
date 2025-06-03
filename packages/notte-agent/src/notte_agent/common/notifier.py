@@ -1,4 +1,7 @@
+from typing import Unpack
+
 from notte_core.common.notifier import BaseNotifier
+from notte_sdk.types import AgentRunRequestDict
 from typing_extensions import override
 
 from notte_agent.common.base import BaseAgent
@@ -14,8 +17,8 @@ class NotifierAgent(BaseAgent):
         self.notifier: BaseNotifier = notifier
 
     @override
-    async def run(self, task: str, url: str | None = None) -> AgentResponse:
+    async def run(self, **data: Unpack[AgentRunRequestDict]) -> AgentResponse:
         """Run the agent and send notification about the result."""
-        result = await self.agent.run(task, url)
-        self.notifier.notify(task, result)  # pyright: ignore [reportArgumentType]
+        result = await self.agent.run(**data)
+        self.notifier.notify(data["task"], result)  # pyright: ignore [reportArgumentType]
         return result
