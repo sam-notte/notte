@@ -15,16 +15,22 @@ def mock_llm_service() -> MockLLMService:
 
 @pytest.mark.asyncio
 async def test_google_flights(patch_llm_service) -> None:
-    async with NotteSession(headless=True, viewport_width=1280, viewport_height=1080) as page:
-        _ = await page.agoto("https://www.google.com/travel/flights")
+    async with NotteSession(headless=True, viewport_width=1280, viewport_height=1080, enable_perception=False) as page:
+        _ = await page.aobserve("https://www.google.com/travel/flights")
         cookie_node = page.snapshot.dom_node.find("B2")
         if cookie_node is not None and "reject" in cookie_node.text.lower():
             _ = await page.astep(action_id="B2", enter=False)  # reject cookies
+            _ = await page.aobserve()
         _ = await page.astep(action_id="I3", value="Paris", enter=True)
+        _ = await page.aobserve()
         _ = await page.astep(action_id="I4", value="London", enter=True)
+        _ = await page.aobserve()
         _ = await page.astep(action_id="I5", value="14/06/2025", enter=True)
+        _ = await page.aobserve()
         _ = await page.astep(action_id="I6", value="02/07/2025", enter=True)
+        _ = await page.aobserve()
         _ = await page.astep(action_id="B7")
+        _ = await page.aobserve()
 
 
 async def test_google_flights_with_agent(patch_llm_service) -> None:
