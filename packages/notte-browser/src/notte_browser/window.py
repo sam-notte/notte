@@ -12,14 +12,13 @@ from notte_core.browser.snapshot import (
     TabsData,
     ViewportData,
 )
-from notte_core.common.config import BrowserType, config
+from notte_core.common.config import BrowserType, PlaywrightProxySettings, config
 from notte_core.errors.processing import SnapshotProcessingError
 from notte_core.utils.url import is_valid_url
 from notte_sdk.types import (
     DEFAULT_HEADLESS_VIEWPORT_HEIGHT,
     DEFAULT_HEADLESS_VIEWPORT_WIDTH,
     Cookie,
-    ProxySettings,
     SessionStartRequest,
 )
 from patchright.async_api import CDPSession, Locator, Page
@@ -41,7 +40,7 @@ from notte_browser.errors import (
 class BrowserWindowOptions(BaseModel):
     headless: bool
     user_agent: str | None
-    proxy: ProxySettings | None
+    proxy: PlaywrightProxySettings | None
     viewport_width: int | None
     viewport_height: int | None
     browser_type: BrowserType
@@ -110,7 +109,7 @@ class BrowserWindowOptions(BaseModel):
         return BrowserWindowOptions(
             headless=request.headless,
             user_agent=request.user_agent,
-            proxy=request.load_proxy_settings(),
+            proxy=request.playwright_proxy,
             browser_type=request.browser_type,
             chrome_args=request.chrome_args,
             viewport_height=request.viewport_height,
@@ -270,6 +269,7 @@ class BrowserWindow(BaseModel):
         a11y_tree = None
         if a11y_simple is None or a11y_raw is None or len(a11y_simple.get("children", [])) == 0:
             logger.warning("A11y tree is empty, this might cause unforeseen issues")
+
         else:
             a11y_tree = A11yTree(
                 simple=a11y_simple,
@@ -291,11 +291,8 @@ class BrowserWindow(BaseModel):
             screenshot=snapshot_screenshot,
         )
 
-    async def goto(
-        self,
-        url: str | None = None,
-    ) -> None:
-        if url is None or url == self.page.url:
+    async def goto(self, url: str) -> None:
+        if url == self.page.url:
             return
         if not is_valid_url(url, check_reachability=False):
             raise InvalidURLError(url=url)
