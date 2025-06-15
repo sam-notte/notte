@@ -20,3 +20,7 @@ def test_default_config():
     assert config.wait_short_ms == 500
     assert config.empty_page_max_retry == 5
     assert config.viewport_expansion == 0
+
+
+def test_default_is_headless():
+    assert config.headless, "headless should be true by default for tests"

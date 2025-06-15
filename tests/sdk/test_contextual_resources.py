@@ -13,7 +13,7 @@ def notte() -> NotteClient:
 
 def test_start_agent_with_contextual_session_should_raise_error(notte: NotteClient):
     assert get_context_session_id() is None
-    with notte.Session() as session:
+    with notte.Session(headless=True) as session:
         assert get_context_session_id() is not None
         assert get_context_session_id() == session.session_id
         with pytest.raises(ValueError):
