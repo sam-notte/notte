@@ -109,14 +109,12 @@ class TwitterPost(BaseModel):
     url: str
 
 notte = NotteClient()
-
-vault = notte.Vault()
-vault.add_credentials(
-    url="https://x.com",
-    username="your-email",
-    password="your-password",
-)
-with notte.Session(headless=False, proxies=False, browser_type="chrome") as session:
+with notte.Vault() as vault, notte.Session(headless=False, proxies=False, browser_type="chrome") as session:
+    vault.add_credentials(
+        url="https://x.com",
+        username="your-email",
+        password="your-password",
+    )
     agent = notte.Agent(session=session, vault=vault, max_steps=10)
     response = agent.run(
       task="go to twitter and post: new era this is @nottecore taking over my acc. Return the post url.",

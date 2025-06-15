@@ -1,3 +1,4 @@
+from notte_core.common.config import LlmModel
 from notte_core.errors.base import NotteBaseError
 
 
@@ -11,7 +12,11 @@ class RateLimitError(LLMProviderError):
     def __init__(self, provider: str) -> None:
         super().__init__(
             dev_message=f"Rate limit exceeded for provider {provider}",
-            user_message="Service is temporarily unavailable due to high traffic.",
+            user_message=(
+                "Service is temporarily unavailable due to high traffic. "
+                "Please try another model or wait a few minutes. "
+                f"Available models: {', '.join(LlmModel.valid())}"
+            ),
             should_retry_later=True,
             agent_message="Rate limit exceeded. Cannot proceed with the request. Please wait 30s before retrying.",
         )

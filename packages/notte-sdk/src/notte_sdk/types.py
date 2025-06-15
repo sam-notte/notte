@@ -1167,7 +1167,7 @@ class AgentSessionRequest(SdkBaseModel):
 
 
 class AgentCreateRequestDict(SessionRequestDict, total=False):
-    reasoning_model: LlmModel
+    reasoning_model: LlmModel | str
     use_vision: bool
     max_steps: int
     vault_id: str | None
@@ -1185,7 +1185,7 @@ class AgentStartRequestDict(AgentCreateRequestDict, AgentRunRequestDict, total=F
 
 
 class AgentCreateRequest(SessionRequest):
-    reasoning_model: Annotated[LlmModel, Field(description="The reasoning model to use")] = Field(
+    reasoning_model: Annotated[LlmModel | str, Field(description="The reasoning model to use")] = Field(
         default_factory=LlmModel.default
     )
     use_vision: Annotated[
@@ -1196,6 +1196,16 @@ class AgentCreateRequest(SessionRequest):
     )
     vault_id: Annotated[str | None, Field(description="The vault to use for the agent")] = None
     notifier_config: Annotated[dict[str, Any] | None, Field(description="Config used for the notifier")] = None
+
+    @field_validator("reasoning_model")
+    @classmethod
+    def validate_reasoning_model(cls, value: LlmModel) -> LlmModel:
+        provider = LlmModel.get_provider(value)
+        if not provider.has_apikey_in_env():
+            raise ValueError(
+                f"Model '{value}' requires the {provider.apikey_name} variable to be configured in the environment"
+            )
+        return value
 
 
 class AgentRunRequest(SdkBaseModel):
