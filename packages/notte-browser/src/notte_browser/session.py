@@ -20,6 +20,7 @@ from notte_core.common.resource import AsyncResource, SyncResource
 from notte_core.common.telemetry import capture_event, track_usage
 from notte_core.data.space import DataSpace
 from notte_core.llms.service import LLMService
+from notte_core.profiling import profiler
 from notte_core.space import ActionSpace
 from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
 from notte_sdk.types import (
@@ -210,6 +211,7 @@ class NotteSession(AsyncResource, SyncResource):
 
     @timeit("observe")
     @track_usage("page.observe")
+    @profiler.profiled()
     async def aobserve(
         self,
         url: str | None = None,
@@ -287,6 +289,7 @@ class NotteSession(AsyncResource, SyncResource):
 
     @timeit("step")
     @track_usage("page.step")
+    @profiler.profiled()
     async def astep(self, action: BaseAction | None = None, **data: Unpack[StepRequestDict]) -> StepResult:  # pyright: ignore[reportGeneralTypeIssues]
         # --------------------------------
         # ---- Step 0: action parsing ----
@@ -335,6 +338,7 @@ class NotteSession(AsyncResource, SyncResource):
 
     @timeit("scrape")
     @track_usage("page.scrape")
+    @profiler.profiled()
     async def ascrape(
         self,
         url: str | None = None,
