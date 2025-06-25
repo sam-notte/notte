@@ -608,7 +608,6 @@ class SessionResponse(SdkBaseModel):
         ),
     ] = False
     browser_type: BrowserType = BrowserType.CHROMIUM
-    cdp_url: Annotated[str | None, Field(description="The CDP URL of the session")] = None
 
     @field_validator("closed_at", mode="before")
     @classmethod
@@ -644,7 +643,6 @@ class SessionResponseDict(TypedDict, total=False):
     error: str | None
     proxies: bool
     browser_type: BrowserType
-    cdp_url: str | None
 
 
 # ############################################################
