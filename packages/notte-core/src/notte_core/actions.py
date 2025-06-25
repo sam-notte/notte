@@ -12,7 +12,6 @@ from typing_extensions import override
 
 from notte_core.browser.dom_tree import NodeSelectors
 from notte_core.credentials.types import ValueWithPlaceholder
-from notte_core.errors.actions import InvalidActionError
 
 warnings.filterwarnings(
     "ignore", message='Field name "id" in "InteractionAction" shadows an attribute', category=UserWarning
@@ -27,11 +26,6 @@ warnings.filterwarnings(
 # ############################################################
 # Action enums
 # ############################################################
-
-ActionStatus = Literal["valid", "failed", "excluded"]
-AllActionStatus = ActionStatus | Literal["all"]
-ActionRole = Literal["link", "button", "input", "special", "image", "option", "misc", "other"]
-AllActionRole = ActionRole | Literal["all"]
 
 EXCLUDED_ACTIONS = {"fallback_observe"}
 
@@ -657,13 +651,16 @@ class InteractionAction(BaseAction, metaclass=ABCMeta):
 
     @staticmethod
     def from_param(
-        action_type: str, value: bool | str | int | None = None, selector: str | None = None
+        action_type: str,
+        value: bool | str | int | None = None,
+        action_id: str | None = None,
+        selector: str | None = None,
     ) -> "InteractionAction":
         action_cls = InteractionAction.INTERACTION_ACTION_REGISTRY.get(action_type)
         if action_cls is None:
             raise ValueError(f"Invalid action type: {action_type}")
 
-        action_params: dict[str, Any] = {"id": ""}
+        action_params: dict[str, Any] = {"id": action_id or ""}
         if value is not None:
             action_params["value"] = value
 
@@ -806,46 +803,3 @@ ActionUnion = Annotated[reduce(operator.or_, BaseAction.ACTION_REGISTRY.values()
 
 class ActionValidation(BaseModel):
     action: ActionUnion
-
-
-class StepAction(InteractionAction):
-    """
-    An action that can be executed by the proxy.
-    """
-
-    # description is not needed for the proxy
-    type: Literal["step"] = "step"  # pyright: ignore [reportIncompatibleVariableOverride]
-    category: str = "Step Actions"
-    description: str = "Step action"
-    value: ActionParameterValue | None = None
-
-    @override
-    def execution_message(self) -> str:
-        return f"Executed action with description: {self.description} and text: {self.text_label}"
-
-    @property
-    def role(self, raise_error: bool = False) -> ActionRole:
-        if not self.id:
-            if raise_error:
-                raise InvalidActionError(self.id, "Action ID cannot be empty")
-            return "other"
-        match self.id[0]:
-            case "L":
-                return "link"
-            case "B":
-                return "button"
-            case "I":
-                return "input"
-            case "O":
-                return "option"
-            case "M":
-                return "misc"
-            case "F":
-                # figure / image
-                return "image"
-            case _:
-                if raise_error:
-                    raise InvalidActionError(
-                        self.id, f"First ID character must be one of {ActionRole} but got {self.id[0]}"
-                    )
-                return "other"
