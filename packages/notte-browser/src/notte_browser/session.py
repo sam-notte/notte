@@ -14,11 +14,13 @@ from notte_core.actions import (
 )
 from notte_core.browser.observation import Observation, StepResult
 from notte_core.browser.snapshot import BrowserSnapshot
-from notte_core.common.config import config
+from notte_core.common.config import RaiseCondition, config
 from notte_core.common.logging import timeit
 from notte_core.common.resource import AsyncResource, SyncResource
 from notte_core.common.telemetry import capture_event, track_usage
 from notte_core.data.space import DataSpace
+from notte_core.errors.base import NotteBaseError
+from notte_core.errors.provider import RateLimitError
 from notte_core.llms.service import LLMService
 from notte_core.profiling import profiler
 from notte_core.space import ActionSpace
@@ -35,7 +37,7 @@ from notte_sdk.types import (
     StepRequestDict,
 )
 from patchright.async_api import Locator
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing_extensions import override
 
 from notte_browser.action_selection.pipe import ActionSelectionPipe
@@ -52,8 +54,9 @@ enable_nest_asyncio()
 
 
 class SessionTrajectoryStep(BaseModel):
-    obs: Observation
     action: BaseAction
+    obs: Observation
+    result: StepResult
 
 
 class NotteSession(AsyncResource, SyncResource):
@@ -80,6 +83,7 @@ class NotteSession(AsyncResource, SyncResource):
         self.trajectory: list[SessionTrajectoryStep] = []
         self._snapshot: BrowserSnapshot | None = None
         self._action: BaseAction | None = None
+        self._action_result: StepResult | None = None
         self._scraped_data: DataSpace | None = None
 
         self.act_callback: Callable[[BaseAction, Observation], None] | None = act_callback
@@ -139,12 +143,6 @@ class NotteSession(AsyncResource, SyncResource):
         if self._snapshot is None:
             raise NoSnapshotObservedError()
         return self._snapshot
-
-    @property
-    def action(self) -> BaseAction:
-        if self._action is None:
-            raise NoActionObservedError()
-        return self._action
 
     @property
     def previous_interaction_actions(self) -> Sequence[InteractionAction] | None:
@@ -229,6 +227,12 @@ class NotteSession(AsyncResource, SyncResource):
         # ------ Step 1: snapshot --------
         # --------------------------------
 
+        # trigger exception at the begining of observe if no action is available
+        if self._action is None or self._action_result is None:
+            raise NoActionObservedError()
+        last_action = self._action
+        last_action_result = self._action_result
+
         self._snapshot = await self.window.snapshot()
         if config.verbose:
             logger.debug(f"ℹ️ previous actions IDs: {[a.id for a in self.previous_interaction_actions or []]}")
@@ -269,9 +273,9 @@ class NotteSession(AsyncResource, SyncResource):
 
         obs = Observation.from_snapshot(self._snapshot, space=space, data=data)
         # final step is to add obs, action pair to the trajectory and trigger the callback
-        self.trajectory.append(SessionTrajectoryStep(obs=obs, action=self.action))
+        self.trajectory.append(SessionTrajectoryStep(obs=obs, action=last_action, result=last_action_result))
         if self.act_callback is not None:
-            self.act_callback(self.action, obs)
+            self.act_callback(last_action, obs)
         return obs
 
     def observe(
@@ -312,26 +316,55 @@ class NotteSession(AsyncResource, SyncResource):
         # ----- Step 2: execution -------
         # --------------------------------
 
-        if isinstance(self._action, ScrapeAction):
-            # Scrape action is a special case
-            self._scraped_data = await self.ascrape(instructions=self._action.instructions)
-            success = True
-        else:
-            self._scraped_data = None
-            success = await self.controller.execute(self.window, self._action)
-
+        message = self._action.execution_message()
+        exception: Exception | None = None
+        try:
+            if isinstance(self._action, ScrapeAction):
+                # Scrape action is a special case
+                self._scraped_data = await self.ascrape(instructions=self._action.instructions)
+                success = True
+            else:
+                self._scraped_data = None
+                success = await self.controller.execute(self.window, self._action)
+        except RateLimitError as e:
+            success = False
+            message = "Rate limit reached. Waiting before retry."
+            exception = e
+        except NotteBaseError as e:
+            # When raise_on_failure is True, we use the dev message to give more details to the user
+            success = False
+            message = e.agent_message
+            exception = e
+        except ValidationError as e:
+            success = False
+            message = (
+                "JSON Schema Validation error: The output format is invalid. "
+                f"Please ensure your response follows the expected schema. Details: {str(e)}"
+            )
+        except Exception as e:
+            success = False
+            message = f"An unexpected error occurred: {e}"
+            exception = e
         # --------------------------------
         # ------- Step 3: tracing --------
         # --------------------------------
-
         if config.verbose:
-            logger.info(f"🌌 action '{self._action.type}' executed in browser.")
+            if success:
+                logger.info(f"🌌 action '{self._action.type}' executed in browser.")
+            else:
+                logger.error(f"❌ action '{self._action.type}' failed in browser with error: {message}")
         self._snapshot = None
-        return StepResult(
+        # check if exception should be raised immediately
+        if exception is not None and config.raise_condition is RaiseCondition.IMMEDIATELY:
+            raise exception
+
+        self._action_result = StepResult(
             success=success,
-            message=self._action.execution_message(),
+            message=message,
             data=self._scraped_data,
+            exception=exception,
         )
+        return self._action_result
 
     def step(self, action: BaseAction | None = None, **data: Unpack[StepRequestDict]) -> StepResult:  # pyright: ignore[reportGeneralTypeIssues]
         return asyncio.run(self.astep(action, **data))  # pyright: ignore[reportUnknownArgumentType, reportCallIssue, reportUnknownVariableType]

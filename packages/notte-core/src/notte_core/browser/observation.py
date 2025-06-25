@@ -2,11 +2,12 @@ from base64 import b64encode
 from typing import Annotated, Any
 
 from PIL import Image
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
 
 from notte_core.browser.snapshot import BrowserSnapshot, SnapshotMetadata
 from notte_core.data.space import DataSpace
+from notte_core.errors.base import NotteBaseError
 from notte_core.space import ActionSpace
 from notte_core.utils.url import clean_url
 
@@ -74,5 +75,14 @@ class Observation(BaseModel):
 
 class StepResult(BaseModel):
     success: bool
-    message: str | None = None
+    message: str
     data: DataSpace | None = None
+    exception: NotteBaseError | Exception | None = None
+
+    model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)  # type: ignore[reportUnknownMemberType]
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        if self.success:
+            if self.exception is not None:
+                raise ValueError("Exception should be None if success is True")

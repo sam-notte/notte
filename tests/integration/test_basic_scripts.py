@@ -62,5 +62,3 @@ async def test_observe_with_instructions() -> None:
         _ = await session.astep(action_id=action.id)
         obs = await session.aobserve()
         assert obs.metadata.url == "https://www.notte.cc/careers"
-        # agent = notte.Agent(headless=False)
-        # out = await agent.arun("Go to x.com and describe what you see")

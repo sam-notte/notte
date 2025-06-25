@@ -1,26 +1,10 @@
-from collections.abc import Awaitable
-from typing import Callable, Generic, TypeVar, final
+from typing import final
 
-from notte_core.common.config import RaiseCondition, config
+from notte_browser.session import NotteSession, SessionTrajectoryStep
+from notte_core.actions import BaseAction
+from notte_core.browser.observation import StepResult
+from notte_core.common.config import config
 from notte_core.errors.base import NotteBaseError
-from notte_core.errors.provider import RateLimitError
-from pydantic import BaseModel
-from pydantic_core import ValidationError
-
-S = TypeVar("S")  # Source type
-T = TypeVar("T")  # Target type
-
-
-class ExecutionStatus(BaseModel, Generic[S, T]):
-    input: S
-    output: T | None
-    success: bool
-    message: str
-
-    def get(self) -> T:
-        if self.output is None or not self.success:
-            raise ValueError(f"Execution failed with message: {self.message}")
-        return self.output
 
 
 class StepExecutionFailure(NotteBaseError):
@@ -44,58 +28,43 @@ class MaxConsecutiveFailuresError(NotteBaseError):
 
 
 @final
-class SafeActionExecutor(Generic[S, T]):
+class SafeActionExecutor:
     def __init__(
         self,
-        func: Callable[[S], Awaitable[T]],
+        session: NotteSession,
         max_consecutive_failures: int = config.max_consecutive_failures,
-        raise_on_failure: bool = config.raise_condition is RaiseCondition.IMMEDIATELY,
     ) -> None:
-        self.func = func
+        self.session = session
         self.max_consecutive_failures = max_consecutive_failures
         self.consecutive_failures = 0
-        self.raise_on_failure = raise_on_failure
 
     def reset(self) -> None:
         self.consecutive_failures = 0
 
-    def on_failure(self, input_data: S, error_msg: str, e: Exception) -> ExecutionStatus[S, T]:
-        self.consecutive_failures += 1
-        if self.consecutive_failures >= self.max_consecutive_failures:
-            raise MaxConsecutiveFailuresError(self.max_consecutive_failures) from e
-        if self.raise_on_failure:
-            raise StepExecutionFailure(error_msg) from e
-        return ExecutionStatus(
-            input=input_data,
-            output=None,
-            success=False,
-            message=error_msg,
+    async def fail(self, action: BaseAction, message: str, exception: Exception | None = None) -> SessionTrajectoryStep:
+        _ = await self.session.astep(action)
+        obs = await self.session.aobserve()
+        return SessionTrajectoryStep(
+            action=action,
+            obs=obs,
+            result=StepResult(success=False, message=message, exception=exception),
         )
 
-    async def execute(self, input_data: S) -> ExecutionStatus[S, T]:
-        try:
-            result = await self.func(input_data)
+    async def execute(self, action: BaseAction) -> SessionTrajectoryStep:
+        result = await self.session.astep(action)
+        if result.success:
             self.consecutive_failures = 0
-            return ExecutionStatus(
-                input=input_data,
-                success=True,
-                output=result,
-                message=f"Successfully executed action with input: {input_data}",
-            )
-        except RateLimitError as e:
-            return self.on_failure(input_data, "Rate limit reached. Waiting before retry.", e)
-        except NotteBaseError as e:
-            # When raise_on_failure is True, we use the dev message to give more details to the user
-            msg = e.dev_message if self.raise_on_failure else e.agent_message
-            return self.on_failure(input_data, msg, e)
-        except ValidationError as e:
-            return self.on_failure(
-                input_data,
-                (
-                    "JSON Schema Validation error: The output format is invalid. "
-                    f"Please ensure your response follows the expected schema. Details: {str(e)}"
-                ),
-                e,
-            )
-        except Exception as e:
-            return self.on_failure(input_data, f"An unexpected error occurred: {e}", e)
+        else:
+            self.consecutive_failures += 1
+            if self.consecutive_failures >= self.max_consecutive_failures:
+                # max consecutive failures reached, raise an exception
+                if result.exception is None:
+                    result.exception = ValueError(result.message)
+                raise MaxConsecutiveFailuresError(self.max_consecutive_failures) from result.exception
+
+        obs = await self.session.aobserve()
+        return SessionTrajectoryStep(
+            action=action,
+            obs=obs,
+            result=result,
+        )

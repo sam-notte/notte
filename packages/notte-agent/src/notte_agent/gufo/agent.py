@@ -7,10 +7,10 @@ from loguru import logger
 from notte_browser.session import NotteSession
 from notte_browser.vault import VaultSecretsScreenshotMask
 from notte_browser.window import BrowserWindow
-from notte_core.actions import CompletionAction
+from notte_core.actions import BaseAction, CompletionAction
 from notte_core.common.config import NotteConfig
 from notte_core.common.tracer import LlmUsageDictTracer
-from notte_core.credentials.base import BaseVault
+from notte_core.credentials.base import BaseVault, LocatorAttributes
 from notte_core.llms.engine import LLMEngine
 from notte_sdk.types import AgentCreateRequestDict, AgentRunRequestDict
 from pydantic import field_validator
@@ -20,7 +20,6 @@ from notte_agent.common.base import BaseAgent
 from notte_agent.common.conversation import Conversation
 from notte_agent.common.parser import NotteStepAgentOutput
 from notte_agent.common.types import AgentResponse
-from notte_agent.falco.agent import FalcoAgent
 from notte_agent.gufo.parser import GufoParser
 from notte_agent.gufo.perception import GufoPerception
 from notte_agent.gufo.prompt import GufoPrompt
@@ -111,6 +110,23 @@ class GufoAgent(BaseAgent):
             llm_usage=self.tracer.usage,
         )
 
+    async def action_with_credentials(self, action: BaseAction) -> BaseAction:
+        if self.vault is not None and self.vault.contains_credentials(action):
+            locator = await self.session.locate(action)
+            if locator is not None:
+                # compute locator attributes
+                attr_type = await locator.get_attribute("type")
+                autocomplete = await locator.get_attribute("autocomplete")
+                outer_html = await locator.evaluate("el => el.outerHTML")
+                attrs = LocatorAttributes(type=attr_type, autocomplete=autocomplete, outerHTML=outer_html)
+                # replace credentials
+                action = self.vault.replace_credentials(
+                    action,
+                    attrs,
+                    self.session.snapshot,
+                )
+        return action
+
     async def step(self, task: str) -> CompletionAction | None:
         # Processes the conversation history through the LLM to decide the next action.
         # logger.info(f"🤖 LLM prompt:\n{self.conv.messages()}")
@@ -131,16 +147,9 @@ class GufoAgent(BaseAgent):
             return parsed_response.completion
         action = parsed_response.action
         # Replace credentials if needed using the vault
-        if self.vault is not None and self.vault.contains_credentials(action):
-            locator = await self.session.locate(action)
-            if locator is not None:
-                action = self.vault.replace_credentials(
-                    action,
-                    await FalcoAgent.compute_locator_attributes(locator),
-                    self.session.snapshot,
-                )
+        action_with_credentials = await self.action_with_credentials(action)
         # Execute the action
-        _ = await self.session.astep(action)
+        _ = await self.session.astep(action_with_credentials)
         obs = await self.session.aobserve()
         text_obs = self.perception.perceive(obs)
         self.conv.add_user_message(

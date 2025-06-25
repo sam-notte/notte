@@ -98,8 +98,8 @@ class FalcoBench(AgentBenchmark[FalcoInput, FalcoOutput]):
         for (step, in_step_calls), hist in zip(out.per_step_calls, out.output.trajectory):
             last_url = ""
             for res in hist.results:
-                if res.success:
-                    obs = res.get()
+                if res.result.success:
+                    obs = res.obs
                     screen = obs.screenshot
                     if screen is not None:
                         screenshots.append(screen)
@@ -165,7 +165,7 @@ class FalcoBench(AgentBenchmark[FalcoInput, FalcoOutput]):
         steps: list[str] = []
         for step in agent_output.trajectory:
             for result in step.results:
-                action = result.input
+                action = result.action
                 action_name = action.model_dump()
                 steps.append(LINE_TAG.format(action_name=action_name))
 

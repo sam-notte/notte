@@ -5,6 +5,7 @@ from typing import Annotated, Any, Literal
 
 from litellm import AllMessageValues
 from loguru import logger
+from notte_browser.session import SessionTrajectoryStep
 from notte_core.actions import ActionUnion, BaseAction, ClickAction, CompletionAction
 from notte_core.browser.observation import Observation
 from notte_core.common.config import config
@@ -13,8 +14,6 @@ from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
 from notte_sdk.types import render_agent_status
 from pydantic import BaseModel, Field, computed_field, field_serializer
 from typing_extensions import override
-
-from notte_agent.common.safe_executor import ExecutionStatus
 
 
 class RelevantInteraction(BaseModel):
@@ -87,10 +86,10 @@ class AgentStepResponse(BaseModel):
 
 class AgentTrajectoryStep(BaseModel):
     agent_response: AgentStepResponse
-    results: list[ExecutionStatus[BaseAction, Observation]]
+    results: list[SessionTrajectoryStep]
 
     def observations(self) -> list[Observation]:
-        return [result.output for result in self.results if result.output is not None]
+        return [result.obs for result in self.results]
 
 
 class AgentResponse(BaseModel):
@@ -135,8 +134,8 @@ class AgentResponse(BaseModel):
 
         for step in self.trajectory:
             for result in step.results:
-                if result.output is not None and result.output.screenshot is not None:
-                    screenshots.append(result.output.screenshot)
+                if result.obs.screenshot is not None:
+                    screenshots.append(result.obs.screenshot)
                     texts.append(step.agent_response.state.next_goal)
 
         if len(screenshots) == 0:

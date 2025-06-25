@@ -1,11 +1,9 @@
-from notte_core.actions import BaseAction, GotoAction
+from notte_browser.session import SessionTrajectoryStep
+from notte_core.actions import GotoAction
 from notte_core.browser.observation import Observation, TrajectoryProgress
 from pydantic import BaseModel, Field
 
-from notte_agent.common.safe_executor import ExecutionStatus
 from notte_agent.common.types import AgentStepResponse, AgentTrajectoryStep
-
-ExecutionStepStatus = ExecutionStatus[BaseAction, Observation]
 
 
 def trim_message(message: str, max_length: int | None = None) -> str:
@@ -51,28 +49,28 @@ THIS SHOULD BE THE LAST RESORT.
 
     def perceive_step_result(
         self,
-        result: ExecutionStepStatus,
+        step: SessionTrajectoryStep,
         include_ids: bool = False,
         include_data: bool = False,
     ) -> str:
         return self.perceive_execution_result(
-            result, include_ids=include_ids, include_data=include_data, max_error_length=self.max_error_length
+            step, include_ids=include_ids, include_data=include_data, max_error_length=self.max_error_length
         )
 
     @staticmethod
     def perceive_execution_result(
-        result: ExecutionStepStatus,
+        step: SessionTrajectoryStep,
         include_ids: bool = False,
         include_data: bool = False,
         max_error_length: int | None = None,
     ) -> str:
-        action = result.input
+        action = step.action
         id_str = f" with id={action.id}" if include_ids else ""
-        if not result.success:
-            err_msg = trim_message(result.message, max_error_length)
+        if not step.result.success:
+            err_msg = trim_message(step.result.message, max_error_length)
             return f"❌ action '{action.name()}'{id_str} failed with error: {err_msg}"
         success_msg = f"✅ action '{action.name()}'{id_str} succeeded: '{action.execution_message()}'"
-        data = result.get().data
+        data = step.result.data
         if include_data and data is not None and data.structured is not None and data.structured.data is not None:
             return f"{success_msg}\n\nExtracted JSON data:\n{data.structured.data.model_dump_json()}"
         return success_msg
@@ -84,7 +82,7 @@ THIS SHOULD BE THE LAST RESORT.
         include_ids: bool = False,
         include_data: bool = True,
     ) -> str:
-        action_msg = "\n".join(["  - " + result.input.model_dump_agent_json() for result in step.results])
+        action_msg = "\n".join(["  - " + result.action.model_dump_agent_json() for result in step.results])
         status_msg = "\n".join(
             ["  - " + self.perceive_step_result(result, include_ids, include_data) for result in step.results]
         )
@@ -104,12 +102,11 @@ THIS SHOULD BE THE LAST RESORT.
     def add_agent_response(self, output: AgentStepResponse) -> None:
         self.steps.append(AgentTrajectoryStep(agent_response=output, results=[]))
 
-    def add_step(self, step: ExecutionStepStatus) -> None:
+    def add_step(self, step: SessionTrajectoryStep) -> None:
         if len(self.steps) == 0:
             raise ValueError("Cannot add step to empty trajectory. Use `add_agent_response` first.")
         else:
-            if step.output is not None:
-                step.output.progress = self.progress
+            step.obs.progress = self.progress
             self.steps[-1].results.append(step)
 
     def observations(self) -> list[Observation]:
@@ -121,6 +118,6 @@ THIS SHOULD BE THE LAST RESORT.
     def last_obs(self) -> Observation | None:
         for step in self.steps[::-1]:
             for step_result in step.results[::-1]:
-                if step_result.success and step_result.output is not None:
-                    return step_result.output
+                if step_result.result.success:
+                    return step_result.obs
         return None
