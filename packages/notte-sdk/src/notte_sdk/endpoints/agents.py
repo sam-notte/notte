@@ -1,7 +1,9 @@
 import asyncio
 import time
+import traceback
+from abc import ABC
 from collections.abc import Sequence
-from typing import Any, Callable, Unpack
+from typing import Any, Callable, Literal, Unpack, overload
 
 import websockets
 from halo import Halo  # pyright: ignore[reportMissingTypeStubs]
@@ -27,7 +29,8 @@ from notte_sdk.types import (
     AgentStartRequestDict,
     AgentStatus,
     AgentStatusRequest,
-    _AgentCreateRequest,  # pyright: ignore[reportPrivateUsage]
+    SessionStartRequest,
+    _AgentCreateRequest,  # pyright: ignore [reportPrivateUsage]
     render_agent_status,
 )
 from notte_sdk.types import AgentStatusResponse as _AgentStatusResponse
@@ -272,7 +275,7 @@ class AgentsClient(BaseClient):
 
         raise TimeoutError("Agent did not complete in time")
 
-    async def watch_logs(self, agent_id: str, max_steps: int) -> AgentStatusResponse | None:
+    async def watch_logs(self, agent_id: str, max_steps: int, log: bool = True) -> AgentStatusResponse | None:
         """
         Watch the logs of the specified agent.
         """
@@ -296,7 +299,8 @@ class AgentsClient(BaseClient):
                                 # termination condition
                                 return AgentStatusResponse.model_validate_json(message)
                             response = AgentStepResponse.model_validate_json(message)
-                            response.log_pretty_string()
+                            if log:
+                                response.log_pretty_string()
                             counter += 1
                         except Exception as e:
                             if "error" in message:
@@ -322,7 +326,7 @@ class AgentsClient(BaseClient):
 
         return await get_messages()
 
-    async def watch_logs_and_wait(self, agent_id: str, max_steps: int) -> AgentStatusResponse:
+    async def watch_logs_and_wait(self, agent_id: str, max_steps: int, log: bool = True) -> AgentStatusResponse:
         """
         Asynchronously execute a task with the agent.
 
@@ -336,7 +340,7 @@ class AgentsClient(BaseClient):
         Returns:
             AgentResponse: The response from the completed agent execution.
         """
-        response = await self.watch_logs(agent_id=agent_id, max_steps=max_steps)
+        response = await self.watch_logs(agent_id=agent_id, max_steps=max_steps, log=log)
         if response is not None:
             return response
         # Wait max 9 seconds for the agent to complete
@@ -449,6 +453,228 @@ class AgentsClient(BaseClient):
         return WebpReplay(file_bytes)
 
 
+class BatchAgent:
+    """
+    A batch agent that can execute multiple instances of the same task in parallel.
+
+    This class provides functionality to run multiple agents concurrently with different strategies:
+    - "first_success": Returns as soon as any agent succeeds
+    - "all_finished": Waits for all agents to complete and returns all results
+
+    The batch agent is useful for tasks that may have non-deterministic outcomes or
+    when you want to try multiple attempts in parallel to improve success rates.
+
+    Attributes:
+        headless (bool): Whether to run the agents in headless mode
+        open_viewer (Callable[[str], None]): Function to open the agent viewer
+        request (_AgentCreateRequest): The base configuration request for all agents
+        client (AgentsClient): The client used to communicate with the Notte API
+        response (AgentResponse | None): The latest response from any agent execution
+    """
+
+    def __init__(
+        self,
+        client: AgentsClient,
+        request: _AgentCreateRequest,
+        headless: bool,
+        open_viewer: Callable[[str], None],
+        session: RemoteSession | None = None,
+    ) -> None:
+        """
+        Initialize a new BatchAgent instance.
+
+        Args:
+            client: The client used to communicate with the Notte API
+            request: The base configuration request for all agents
+            headless: Whether to run the agents in headless mode
+            open_viewer: Function to open the agent viewer
+            session: Optional remote session to use (Note: sessions are not shared between batch agents)
+        """
+        self.headless: bool = headless
+        self.open_viewer: Callable[[str], None] = open_viewer
+        self.request: _AgentCreateRequest = request
+        self.client: AgentsClient = client
+        self.response: AgentResponse | None = None
+        self.session: RemoteSession | None = session
+
+    @overload
+    async def run(
+        self,
+        n_jobs: int = 2,
+        strategy: Literal["first_success"] = "first_success",
+        **args: Unpack[AgentStartRequestDict],
+    ) -> AgentStatusResponse: ...
+    @overload
+    async def run(
+        self,
+        n_jobs: int = 2,
+        strategy: Literal["all_finished"] = "all_finished",
+        **args: Unpack[AgentStartRequestDict],
+    ) -> list[AgentStatusResponse]: ...
+    async def run(
+        self,
+        n_jobs: int = 2,
+        strategy: Literal["all_finished", "first_success"] = "first_success",
+        **args: Unpack[AgentStartRequestDict],
+    ) -> AgentStatusResponse | list[AgentStatusResponse]:
+        """
+        Run multiple agents in parallel with the specified parameters.
+
+        Args:
+            n_jobs: Number of parallel agents to run
+            strategy: The execution strategy:
+                     - "first_success": Return as soon as any agent succeeds
+                     - "all_finished": Wait for all agents to complete
+            **args: Additional arguments passed to each agent's start method
+
+        Returns:
+            If strategy is "first_success": The first successful AgentStatusResponse
+            If strategy is "all_finished": List of all AgentStatusResponse objects
+        """
+        return await self._run_batch(
+            request_type="default",
+            request=args,
+            n_jobs=n_jobs,
+            strategy=strategy,
+        )
+
+    @overload
+    async def run_custom(
+        self,
+        request: BaseModel,
+        n_jobs: int = 2,
+        strategy: Literal["first_success"] = "first_success",
+    ) -> AgentStatusResponse: ...
+    @overload
+    async def run_custom(
+        self,
+        request: BaseModel,
+        n_jobs: int = 2,
+        strategy: Literal["all_finished"] = "all_finished",
+    ) -> list[AgentStatusResponse]: ...
+    async def run_custom(
+        self,
+        request: BaseModel,
+        n_jobs: int = 2,
+        strategy: Literal["all_finished", "first_success"] = "first_success",
+    ) -> AgentStatusResponse | list[AgentStatusResponse]:
+        """
+        Run multiple custom agents in parallel with the specified request.
+
+        Args:
+            request: The custom request model to use for each agent
+            n_jobs: Number of parallel agents to run
+            strategy: The execution strategy:
+                     - "first_success": Return as soon as any agent succeeds
+                     - "all_finished": Wait for all agents to complete
+
+        Returns:
+            If strategy is "first_success": The first successful AgentStatusResponse
+            If strategy is "all_finished": List of all AgentStatusResponse objects
+        """
+        return await self._run_batch(
+            request_type="custom",
+            request=request,
+            n_jobs=n_jobs,
+            strategy=strategy,
+        )
+
+    async def _run_batch(
+        self,
+        request_type: Literal["default", "custom"],
+        request: BaseModel | AgentStartRequestDict,
+        n_jobs: int = 2,
+        strategy: Literal["all_finished", "first_success"] = "first_success",
+    ) -> AgentStatusResponse | list[AgentStatusResponse]:
+        """
+        Internal method to run multiple agents in batch mode.
+
+        Args:
+            request_type: Type of request ("default" or "custom")
+            request: The request parameters for each agent
+            n_jobs: Number of parallel agents to run
+            strategy: The execution strategy:
+                     - "first_success": Return as soon as any agent succeeds
+                     - "all_finished": Wait for all agents to complete
+
+        Returns:
+            If strategy is "first_success": The first successful AgentStatusResponse
+            If strategy is "all_finished": List of all AgentStatusResponse objects
+        """
+        tasks: list[asyncio.Task[AgentStatusResponse]] = []
+        results: list[AgentStatusResponse] = []
+
+        async def agent_task() -> AgentStatusResponse:
+            session = None
+            agent = None
+            try:
+                agent_request = self.request.model_copy()
+                if self.session is not None:
+                    session = RemoteSession(self.session.client, self.session.request)
+                    session.start()
+                    agent_request.session_id = session.session_id
+
+                agent = RemoteAgent(self.client, agent_request, self.headless, open_viewer=self.open_viewer)
+                if request_type == "custom":
+                    assert isinstance(request, BaseModel)
+                    _ = agent.start_custom(request)
+                else:
+                    assert isinstance(request, dict)
+                    _ = agent.start(**request)
+                return await agent.watch_logs_and_wait(log=False)
+            finally:
+                if agent is not None:
+                    _ = agent.stop()
+                if session is not None:
+                    session.stop()
+
+        def log_steps(response: AgentStatusResponse):
+            for i, step in enumerate(response.steps):
+                logger.info(f"{response.agent_id} - Step {i} ")
+                step.log_pretty_string()
+
+        for _ in range(n_jobs):
+            task = asyncio.Task(agent_task())
+            tasks.append(task)
+
+        exception = None
+        for completed_task in asyncio.as_completed(tasks):
+            try:
+                result = await completed_task
+
+                if result.success and strategy == "first_success":
+                    for task in tasks:
+                        if not task.done():
+                            _ = task.cancel()
+
+                    log_steps(result)
+                    return result
+                else:
+                    results.append(result)
+            except Exception as e:
+                exception = e
+                logger.error(
+                    f"Batch task failed: {exception.__class__.__qualname__} {exception} {traceback.format_exc()}"
+                )
+                continue
+
+        # if first success, all failed, can just return any
+        if strategy == "first_success":
+            if len(results) > 0:
+                result = results[0]
+                log_steps(response=result)
+                return result
+            else:
+                if exception is None:
+                    exception = ValueError(
+                        "Every run of the task failed, yet no exception found: this should not happen"
+                    )
+                raise exception
+
+        # all finished, return the list
+        return results
+
+
 class RemoteAgent:
     """
     A remote agent that can execute tasks through the Notte API.
@@ -469,7 +695,6 @@ class RemoteAgent:
         request: _AgentCreateRequest,
         headless: bool,
         open_viewer: Callable[[str], None],
-        session: RemoteSession | None = None,
     ) -> None:
         """
         Initialize a new RemoteAgent instance.
@@ -515,17 +740,17 @@ class RemoteAgent:
         """
         return self.client.wait(agent_id=self.agent_id)
 
-    async def watch_logs(self) -> AgentStatusResponse | None:
+    async def watch_logs(self, log: bool = False) -> AgentStatusResponse | None:
         """
         Watch the logs of the agent.
         """
-        return await self.client.watch_logs(agent_id=self.agent_id, max_steps=self.request.max_steps)
+        return await self.client.watch_logs(agent_id=self.agent_id, max_steps=self.request.max_steps, log=log)
 
-    async def watch_logs_and_wait(self) -> AgentStatusResponse:
+    async def watch_logs_and_wait(self, log: bool = True) -> AgentStatusResponse:
         """
         Watch the logs of the agent and wait for completion.
         """
-        return await self.client.watch_logs_and_wait(agent_id=self.agent_id, max_steps=self.request.max_steps)
+        return await self.client.watch_logs_and_wait(agent_id=self.agent_id, max_steps=self.request.max_steps, log=log)
 
     def stop(self) -> AgentResponse:
         """
@@ -616,8 +841,7 @@ class RemoteAgent:
         return self.client.replay(agent_id=self.agent_id)
 
 
-@final
-class RemoteAgentFactory:
+class AgentFactory(ABC):
     """
     Factory for creating RemoteAgent instances.
 
@@ -636,9 +860,36 @@ class RemoteAgentFactory:
         Args:
             client (AgentsClient): The client used to communicate with the Notte API.
         """
-        self.client = client
-        self.open_viewer = open_viewer
+        self.client: AgentsClient = client
+        self.open_viewer: Callable[[str], None] = open_viewer
 
+    def __call__(
+        self,
+        headless: bool = config.headless,
+        vault: NotteVault | None = None,
+        notifier: BaseNotifier | None = None,
+        session: RemoteSession | None = None,
+        raise_on_existing_contextual_session: bool = True,
+        **data: Unpack[AgentCreateRequestDict],
+    ) -> BatchAgent | RemoteAgent:
+        raise NotImplementedError
+
+
+class RemoteAgentFactory(AgentFactory):
+    def __init__(self, client: AgentsClient, open_viewer: Callable[[str], None]) -> None:
+        """
+        Initialize a new RemoteAgentFactory instance.
+
+        A factory for creating single RemoteAgent instances. This factory ensures that agents
+        are created with non-batch mode enabled.
+
+        Args:
+            client: The client used to communicate with the Notte API.
+            open_viewer: Function to open the agent viewer.
+        """
+        super().__init__(client, open_viewer)
+
+    @override
     def __call__(
         self,
         headless: bool = config.headless,
@@ -710,3 +961,80 @@ class RemoteAgentFactory:
                 headless = session.headless
 
         return RemoteAgent(self.client, request, headless=headless, open_viewer=self.open_viewer)
+
+
+class BatchAgentFactory(AgentFactory):
+    def __init__(self, client: AgentsClient, open_viewer: Callable[[str], None]) -> None:
+        """
+        Initialize a new BatchAgentFactory instance.
+
+        A factory for creating BatchAgent instances that can run multiple agents in parallel.
+        This factory ensures that agents are created with batch mode enabled.
+
+        Args:
+            client: The client used to communicate with the Notte API.
+            open_viewer: Function to open the agent viewer.
+        """
+        super().__init__(client, open_viewer)
+        self.session_request: SessionStartRequest | None = None
+
+    @override
+    def __call__(
+        self,
+        headless: bool = config.headless,
+        vault: NotteVault | None = None,
+        notifier: BaseNotifier | None = None,
+        session: RemoteSession | None = None,
+        raise_on_existing_contextual_session: bool = True,
+        **data: Unpack[AgentCreateRequestDict],
+    ) -> BatchAgent:
+        request = _AgentCreateRequest.model_validate(data)
+        if notifier is not None:
+            notifier_config = notifier.model_dump()
+            request.notifier_config = notifier_config
+
+        # #########################################################
+        # ###################### Vault checks #####################
+        # #########################################################
+
+        if vault is not None:
+            if len(vault.vault_id) == 0:
+                raise ValueError("Vault ID cannot be empty")
+            request.vault_id = vault.vault_id
+
+        # #########################################################
+        # #################### Session checks #####################
+        # #########################################################
+
+        if session is None:
+            # check context var to provide better error message to users
+            session_id = get_context_session_id()
+            if session_id is not None:
+                error_msg = (
+                    f"[Session] {session_id} was found in the context. "
+                    "This is unexpected: BatchAgent is not supposed to be used within a running Session, it will create sessions itself."
+                    " Otherwise, you can silence this error by setting `notte.Agent(..., raise_on_existing_contextual_session=False)`."
+                )
+                if raise_on_existing_contextual_session:
+                    raise ValueError(error_msg)
+                logger.warning(error_msg)
+
+        if session is not None:
+            if not isinstance(session, RemoteSession):  # pyright: ignore[reportUnnecessaryIsInstance]
+                raise ValueError(
+                    "You are trying to use a local session with a remote agent. This is not supported. Use `notte.Agent(session=session)` instead."
+                )  # pyright: ignore[reportUnreachable]
+            if session.response is not None:
+                raise ValueError(
+                    "You are trying to pass a started session to BatchAgent. BatchAgent is only supposed to be provided non-running session, to get the parameters"
+                )
+            self.session_request = session.request
+
+            # headless check
+            if session.headless != headless:
+                logger.warning(
+                    f"Session headless is {session.headless} but agent is headless={headless}. This is unexpected. Session flags will be prioritized over agent flags."
+                )
+                headless = session.headless
+
+        return BatchAgent(self.client, request, headless=headless, open_viewer=self.open_viewer, session=session)

@@ -205,6 +205,16 @@ class FormFillAction(BrowserAction):
             "postal_code",
             "country",
             "phone",
+            "cc_name",
+            "cc_number",
+            "cc_exp_month",
+            "cc_exp_year",
+            "cc_exp",
+            "cc_cvv",
+            "username",
+            "current_password",
+            "new_password",
+            "totp",
         ],
         str | ValueWithPlaceholder,
     ]
@@ -590,6 +600,14 @@ class CompletionAction(BrowserAction):
     description: str = "Complete the task by returning the answer and terminate the browser session"
     success: bool
     answer: str
+
+    # useful because models like to output as dict when giving expected basemodel
+    @field_validator("answer", mode="before")
+    @classmethod
+    def convert_dict_to_json(cls, value: Any) -> str:
+        if isinstance(value, dict):
+            return json.dumps(value)
+        return value
 
     @override
     def execution_message(self) -> str:
