@@ -53,11 +53,11 @@ class NotteClient:
 
     @property
     def Agent(self) -> RemoteAgentFactory:
-        return RemoteAgentFactory(self.agents, open_viewer=self.sessions.viewer)
+        return RemoteAgentFactory(self.agents)
 
     @property
     def BatchAgent(self) -> BatchAgentFactory:
-        return BatchAgentFactory(self.agents, open_viewer=self.sessions.viewer)
+        return BatchAgentFactory(self.agents)
 
     @property
     def Session(self) -> RemoteSessionFactory:

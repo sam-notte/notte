@@ -7,7 +7,7 @@ from notte_core.actions import CompletionAction
 from notte_core.utils.pydantic_schema import convert_response_format_to_pydantic_model
 from pydantic import BaseModel, Field
 
-from notte import Agent
+import notte
 
 
 class Product(BaseModel):
@@ -116,20 +116,22 @@ def test_ge(output_ge: str, json_schema: dict[Any, Any]):
 
 
 def test_agent_with_schema():
-    agent = Agent()
-    valid = agent.run(
-        task='CRITICAL: dont do anything, return a completion action directly with output {"name": "my name", "price": -3}. You are allowed to shift the price if it fails.',
-        response_format=Product,
-    )
+    with notte.Session() as session:
+        agent = notte.Agent(session=session)
+        valid = agent.run(
+            task='CRITICAL: dont do anything, return a completion action directly with output {"name": "my name", "price": -3}. You are allowed to shift the price if it fails.',
+            response_format=Product,
+        )
     assert valid.success
     _ = Product.model_validate_json(valid.answer)
 
 
 def test_agent_with_output():
-    agent = Agent()
-    valid = agent.run(
-        task='CRITICAL: dont do anything, return a completion action directly with output {"name": "my name", "price": -3}. You are allowed to shift the price if it fails.',
-        response_format=Product,
-    )
+    with notte.Session() as session:
+        agent = notte.Agent(session=session)
+        valid = agent.run(
+            task='CRITICAL: dont do anything, return a completion action directly with output {"name": "my name", "price": -3}. You are allowed to shift the price if it fails.',
+            response_format=Product,
+        )
     assert valid.success
     _ = Product.model_validate_json(valid.answer)

@@ -19,7 +19,6 @@ test-sdk:
 .PHONY: test-agent
 test-agent:
 	uv run pytest tests/agent
-	uv run pytest tests/sdk/test_contextual_resources.py
 	uv run pytest tests/integration/sdk/test_vault.py
 
 .PHONY: test-sdk-staging

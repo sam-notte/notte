@@ -420,10 +420,6 @@ class SessionStartRequestDict(TypedDict, total=False):
     cdp_url: str | None
 
 
-class SessionRequestDict(TypedDict, total=False):
-    session_id: str | None
-
-
 class SessionStartRequest(SdkBaseModel):
     headless: Annotated[bool, Field(description="Whether to run the session in headless mode.")] = config.headless
     solve_captchas: Annotated[bool, Field(description="Whether to try to automatically solve captchas")] = (
@@ -539,13 +535,6 @@ class SessionStartRequest(SdkBaseModel):
                     password=base_proxy.password,
                 )
         raise ValueError(f"Unsupported proxy type: {base_proxy.type}")  # pyright: ignore[reportUnreachable]
-
-
-class SessionRequest(SdkBaseModel):
-    session_id: Annotated[
-        str | None,
-        Field(description="The ID of the session. A new session is created when not provided."),
-    ] = None
 
 
 class SessionStatusRequest(SdkBaseModel):
@@ -1202,12 +1191,16 @@ class AgentSessionRequest(SdkBaseModel):
     agent_id: Annotated[str, Field(description="The ID of the agent to run")]
 
 
-class AgentCreateRequestDict(SessionRequestDict, total=False):
+class AgentCreateRequestDict(TypedDict, total=False):
     reasoning_model: LlmModel | str
     use_vision: bool
     max_steps: int
     vault_id: str | None
     notifier_config: dict[str, Any] | None
+
+
+class SdkAgentCreateRequestDict(AgentCreateRequestDict, total=False):
+    session_id: str
 
 
 class AgentRunRequestDict(TypedDict, total=False):
@@ -1216,11 +1209,11 @@ class AgentRunRequestDict(TypedDict, total=False):
     response_format: type[BaseModel] | None
 
 
-class AgentStartRequestDict(AgentCreateRequestDict, AgentRunRequestDict, total=False):
+class SdkAgentStartRequestDict(SdkAgentCreateRequestDict, AgentRunRequestDict, total=False):
     pass
 
 
-class _AgentCreateRequest(SessionRequest):
+class __AgentCreateRequest(SdkBaseModel):
     reasoning_model: Annotated[LlmModel | str, Field(description="The reasoning model to use")] = Field(
         default_factory=LlmModel.default
     )
@@ -1234,7 +1227,7 @@ class _AgentCreateRequest(SessionRequest):
     notifier_config: Annotated[dict[str, Any] | None, Field(description="Config used for the notifier")] = None
 
 
-class AgentCreateRequest(_AgentCreateRequest):
+class AgentCreateRequest(__AgentCreateRequest):
     @field_validator("reasoning_model")
     @classmethod
     def validate_reasoning_model(cls, value: LlmModel) -> LlmModel:
@@ -1244,6 +1237,13 @@ class AgentCreateRequest(_AgentCreateRequest):
                 f"Model '{value}' requires the {provider.apikey_name} variable to be configured in the environment"
             )
         return value
+
+
+class SdkAgentCreateRequest(__AgentCreateRequest):
+    session_id: Annotated[
+        str,
+        Field(description="The ID of the session to run the agent on"),
+    ]
 
 
 class AgentRunRequest(SdkBaseModel):
@@ -1286,7 +1286,7 @@ class AgentRunRequest(SdkBaseModel):
         return json.dumps(dump)
 
 
-class AgentStartRequest(AgentCreateRequest, AgentRunRequest):
+class AgentStartRequest(SdkAgentCreateRequest, AgentRunRequest):
     pass
 
 

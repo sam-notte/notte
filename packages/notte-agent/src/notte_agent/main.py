@@ -4,7 +4,6 @@ from enum import StrEnum
 from typing import Unpack
 
 from notte_browser.session import NotteSession
-from notte_core.common.config import config
 from notte_core.common.notifier import BaseNotifier
 from notte_core.credentials.base import BaseVault
 from notte_sdk.types import AgentCreateRequestDict, AgentRunRequest, AgentRunRequestDict
@@ -24,10 +23,9 @@ class AgentType(StrEnum):
 class Agent:
     def __init__(
         self,
-        headless: bool = config.headless,
+        session: NotteSession,
         vault: BaseVault | None = None,
         notifier: BaseNotifier | None = None,
-        session: NotteSession | None = None,
         agent_type: AgentType = AgentType.FALCO,
         **data: Unpack[AgentCreateRequestDict],
     ):
@@ -35,8 +33,7 @@ class Agent:
         self.data: AgentCreateRequestDict = data
         self.vault: BaseVault | None = vault
         self.notifier: BaseNotifier | None = notifier
-        self.session: NotteSession = session or NotteSession(headless=headless)
-        self.auto_manage_session: bool = session is None
+        self.session: NotteSession = session
         self.agent_type: AgentType = agent_type
 
     def create_agent(
@@ -64,31 +61,10 @@ class Agent:
         return agent
 
     async def arun(self, **data: Unpack[AgentRunRequestDict]) -> AgentResponse:
-        try:
-            if self.auto_manage_session:
-                # need to start session before running the agent
-                await self.session.astart()
-            agent = self.create_agent()
-            # validate args
-            res = AgentRunRequest.model_validate(data)
-            return await agent.run(**res.model_dump())
-        except Exception as e:
-            raise e
-        finally:
-            if self.auto_manage_session:
-                await self.session.astop()
+        agent = self.create_agent()
+        # validate args
+        res = AgentRunRequest.model_validate(data)
+        return await agent.run(**res.model_dump())
 
     def run(self, **data: Unpack[AgentRunRequestDict]) -> AgentResponse:
-        try:
-            if self.auto_manage_session:
-                # need to start session before running the agent
-                self.session.start()
-            agent = self.create_agent()
-            # validate args
-            res = AgentRunRequest.model_validate(data)
-            return asyncio.run(agent.run(**res.model_dump()))
-        except Exception as e:
-            raise e
-        finally:
-            if self.auto_manage_session:
-                self.session.stop()
+        return asyncio.run(self.arun(**data))

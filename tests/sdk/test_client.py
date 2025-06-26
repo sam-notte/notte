@@ -8,7 +8,6 @@ from notte_core.browser.observation import Observation, StepResult
 from notte_core.data.space import DataSpace
 from notte_core.space import SpaceCategory
 from notte_sdk.client import NotteClient
-from notte_sdk.endpoints.sessions import get_context_session_id
 from notte_sdk.errors import AuthenticationError
 from notte_sdk.types import (
     DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES,
@@ -346,11 +345,3 @@ def test_format_observe_response(client: NotteClient, session_id: str) -> None:
         ),
     ]
     assert obs.space.category == SpaceCategory.HOMEPAGE
-
-
-@pytest.fixture(autouse=True)
-def check_context_cleanup(request: pytest.FixtureRequest) -> None:
-    """Fixture to check that context is cleaned up after each test"""
-    yield
-    if request.node.name != "test_start_session":
-        assert get_context_session_id() is None, "Session context was not properly cleaned up"

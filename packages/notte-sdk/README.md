@@ -26,11 +26,12 @@ from notte_sdk import NotteClient
 notte = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
 
 # Run an AI agent
-agent = notte.Agent()
-agent.run(
-    task="What is the capital of France?",
-    url="https://www.google.com",
-)
+with notte.Session(headless=False) as session:
+    agent = notte.Agent(session=session)
+    agent.run(
+        task="What is the capital of France?",
+        url="https://www.google.com",
+    )
 ```
 
 ## Core Components
@@ -59,12 +60,14 @@ Deploy and manage AI agents for automated tasks:
 from notte_sdk import NotteClient
 notte = NotteClient()
 # Run an agent with specific tasks
-agent = notte.Agent()
-# Start an agent with non-blocking call
-agent.start(
-    task="Summarize the content of the page",
-    url="https://www.google.com"
-)
+
+with notte.Session(headless=False) as session:
+    agent = notte.Agent(session=session)
+    # Start an agent with non-blocking call
+    agent.start(
+        task="Summarize the content of the page",
+        url="https://www.google.com"
+    )
 
 # Monitor agent status
 status = agent.status()

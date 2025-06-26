@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import TypeVar, Unpack
+from typing import Unpack
 
 from pydantic import BaseModel
 from typing_extensions import final, override
@@ -12,13 +12,10 @@ from notte_sdk.types import (
     ScrapeRequest,
     ScrapeRequestDict,
     ScrapeResponse,
-    SessionRequest,
     StepRequest,
     StepRequestDict,
     StepResponse,
 )
-
-TSessionRequestDict = TypeVar("TSessionRequestDict", bound=SessionRequest)
 
 
 @final

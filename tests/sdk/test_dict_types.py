@@ -14,7 +14,6 @@ from notte_sdk.types import (
     AgentRunRequest,
     AgentRunRequestDict,
     AgentStartRequest,
-    AgentStartRequestDict,
     AgentStatusRequest,
     AgentStatusRequestDict,
     DeleteCredentialsRequest,
@@ -37,10 +36,10 @@ from notte_sdk.types import (
     PaginationParamsDict,
     PersonaCreateRequest,
     PersonaCreateRequestDict,
+    SdkAgentCreateRequest,
+    SdkAgentCreateRequestDict,
     SessionListRequest,
     SessionListRequestDict,
-    SessionRequest,
-    SessionRequestDict,
     SessionResponse,
     SessionResponseDict,
     SessionStartRequest,
@@ -112,10 +111,6 @@ def test_agent_status_request_dict_alignment():
     _test_request_dict_alignment(AgentStatusRequest, AgentStatusRequestDict)
 
 
-def test_session_request_dict_alignment():
-    _test_request_dict_alignment(SessionRequest, SessionRequestDict)
-
-
 def test_session_start_request_dict_alignment():
     _test_request_dict_alignment(SessionStartRequest, SessionStartRequestDict)
 
@@ -160,12 +155,12 @@ def test_pagination_params_dict_alignment():
     _test_request_dict_alignment(PaginationParams, PaginationParamsDict)
 
 
-def test_agent_create_request_dict_alignment():
+def test_local_agent_create_request_dict_alignment():
     _test_request_dict_alignment(AgentCreateRequest, AgentCreateRequestDict)
 
 
-def test_agent_start_request_dict_alignment():
-    _test_request_dict_alignment(AgentStartRequest, AgentStartRequestDict)
+def test_sdk_agent_create_request_dict_alignment():
+    _test_request_dict_alignment(SdkAgentCreateRequest, SdkAgentCreateRequestDict)
 
 
 def test_create_vault_request_dict_alignment():
@@ -222,6 +217,7 @@ def test_agent_run_request_default_values():
 def test_agent_start_request_default_values():
     request = AgentStartRequest(
         task="test_task",
+        session_id="test_session_id",
     )
 
     assert request.task == "test_task"
@@ -229,6 +225,7 @@ def test_agent_start_request_default_values():
     assert request.use_vision is True
     assert request.max_steps == DEFAULT_MAX_NB_STEPS
     assert request.vault_id is None
+    assert request.session_id == "test_session_id"
 
 
 @pytest.mark.parametrize("model", ["notavalid/gpt-4o-mini", "openrouter/google/gemma-3-27b-it"])

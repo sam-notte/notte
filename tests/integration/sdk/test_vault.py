@@ -3,10 +3,11 @@ from unittest import TestCase
 
 import pytest
 from dotenv import load_dotenv
-from notte_agent import Agent
 from notte_core.credentials.base import BaseVault, CredentialField
 from notte_sdk import NotteClient
 from notte_sdk.errors import NotteAPIError
+
+import notte
 
 
 def test_vault_in_local_agent():
@@ -18,8 +19,9 @@ def test_vault_in_local_agent():
         email="xyz@notte.cc",
         password="xyz",
     )
-    agent = Agent(vault=vault, max_steps=5, headless=True)
-    _ = agent.run(task="Go to the github.com and try to login with the credentials")
+    with notte.Session() as session:
+        agent = notte.Agent(session=session, vault=vault, max_steps=5)
+        _ = agent.run(task="Go to the github.com and try to login with the credentials")
 
     _ = client.vaults.delete_vault(vault.vault_id)
 
@@ -40,7 +42,7 @@ def test_vault_in_remote_agent():
 
     client = NotteClient()
     # Create a new secure vault
-    with client.vaults.create() as vault:
+    with client.vaults.create() as vault, client.Session(headless=False) as session:
         # Add your credentials securely
         _ = vault.add_credentials(
             url="https://github.com/",
@@ -49,7 +51,7 @@ def test_vault_in_remote_agent():
             mfa_secret="AAAAAAAAAAAA",  # pragma: allowlist secret
         )
         # Run an agent with secure credential access
-        agent = client.Agent(vault=vault, max_steps=1)
+        agent = client.Agent(session=session, vault=vault, max_steps=1)
         _ = agent.run(task="try to login to github.com with the credentials")
 
 

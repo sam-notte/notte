@@ -2,9 +2,10 @@ from typing import Annotated
 
 import typer
 from dotenv import load_dotenv
-from notte_agent import Agent
 from notte_agent.common.types import AgentResponse
 from notte_core.common.config import LlmModel
+
+import notte
 
 
 def main(
@@ -12,8 +13,9 @@ def main(
     reasoning_model: Annotated[str, typer.Option(help="Reasoning model to use")] = LlmModel.default(),  # type: ignore[reportArgumentType]
     headless: Annotated[bool, typer.Option(help="Run in headless mode")] = False,
 ) -> AgentResponse:
-    agent = Agent(headless=headless, reasoning_model=reasoning_model)
-    return agent.run(task=task)
+    with notte.Session(headless=headless) as session:
+        agent = notte.Agent(reasoning_model=reasoning_model, session=session)
+        return agent.run(task=task)
 
 
 if __name__ == "__main__":

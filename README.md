@@ -37,7 +37,7 @@ Notte provides the full-stack web AI agents framework that allows you to develop
 ### 🚀 Zero Friction Agentic Browsing
 
 ```
-notte.Agent().run(task="go to twitter and post: new era this is @nottecore taking over my acc")
+notte.Agent(session).run(task="go to twitter and post: new era this is @nottecore taking over my acc")
 ```
 
 <p align="center">
@@ -82,8 +82,10 @@ import os
 from notte_sdk import NotteClient
 
 notte = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
-agi = notte.Agent(headless=False,reasoning_model="gemini/gemini-2.0-flash", max_steps=5)
-agi.run(task="doom scroll cat memes on google images")
+
+with notte.Session(headless=False) as session:
+    agi = notte.Agent(reasoning_model="gemini/gemini-2.0-flash", max_steps=5, session=session)
+    agi.run(task="doom scroll cat memes on google images")
 ```
 
 This is by far the closest attempt to AGI we've ever witnessed ;)
@@ -165,8 +167,9 @@ The perception layer enables smaller models (e.g. the llama suite) to be connect
 from notte_sdk import NotteClient
 
 notte = NotteClient()
-agent = notte.Agent(headless=False,reasoning_model="gemini/gemini-2.0-flash", max_steps=5)
-agent.run(task="search cheapest flight from paris to nyc on gflight")
+with notte.Session(headless=False) as session:
+    agent = notte.Agent(reasoning_model="gemini/gemini-2.0-flash", max_steps=5, session=session)
+    agent.run(task="search cheapest flight from paris to nyc on gflight")
 ```
 
 > left:browser-use, right:notte-agent (cerebras)
@@ -258,8 +261,9 @@ export GEMINI_API_KEY="your-api-key"
 ```python
 import notte
 
-agi = notte.Agent(headless=False,reasoning_model="gemini/gemini-2.0-flash", max_steps=5)
-agi.run(task="doom scroll cat memes on google images")
+with notte.Session(headless=False) as session:
+    agi = notte.Agent(reasoning_model="gemini/gemini-2.0-flash", max_steps=5, session=session)
+    agi.run(task="doom scroll cat memes on google images")
 ```
 
 
