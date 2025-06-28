@@ -97,14 +97,13 @@ class FalcoBench(AgentBenchmark[FalcoInput, FalcoOutput]):
         screenshots: list[bytes] = []
         for (step, in_step_calls), hist in zip(out.per_step_calls, out.output.trajectory):
             last_url = ""
-            for res in hist.results:
-                if res.result.success:
-                    obs = res.obs
-                    screen = obs.screenshot
-                    if screen is not None:
-                        screenshots.append(screen)
+            if hist.result.success:
+                obs = hist.obs
+                screen = obs.screenshot
+                if screen is not None:
+                    screenshots.append(screen)
 
-                    last_url = obs.metadata.url
+                last_url = obs.metadata.url
 
             llm_calls: list[LLMCall] = []
             llm_calls_logs = in_step_calls["LLMEngine.completion"]
@@ -149,9 +148,14 @@ class FalcoBench(AgentBenchmark[FalcoInput, FalcoOutput]):
             step = Step(url=last_url, duration_in_s=step.duration_in_s, llm_calls=llm_calls)
             steps.append(step)
 
+        if "NotteAgent.run" not in out.logged_data:
+            raise ValueError(
+                f"NotteAgent.run not found in logged data. Valid keys are: {', '.join(out.logged_data.keys())}"
+            )
+
         return ResultWithCode(
             success=out.output.success,
-            duration_in_s=out.logged_data["FalcoAgent.run"][0].duration_in_s,
+            duration_in_s=out.logged_data["NotteAgent.run"][0].duration_in_s,
             agent_answer=str(out.output.answer),
             task=task,
             steps=steps,
@@ -164,10 +168,9 @@ class FalcoBench(AgentBenchmark[FalcoInput, FalcoOutput]):
         LINE_TAG = "obs = await env.astep(action={action_name})"
         steps: list[str] = []
         for step in agent_output.trajectory:
-            for result in step.results:
-                action = result.action
-                action_name = action.model_dump()
-                steps.append(LINE_TAG.format(action_name=action_name))
+            action = step.action
+            action_name = action.model_dump()
+            steps.append(LINE_TAG.format(action_name=action_name))
 
         replay_steps = "\n".join(steps)
         return replay_steps

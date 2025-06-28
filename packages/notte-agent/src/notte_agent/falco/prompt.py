@@ -1,21 +1,20 @@
-import datetime as dt
 import json
-from collections.abc import Sequence
-from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 import chevron
 from notte_core.actions import (
     BaseAction,
     ClickAction,
     CompletionAction,
-    FillAction,
+    FormFillAction,
     GotoAction,
     ScrapeAction,
 )
 from notte_core.errors.processing import InvalidInternalCheckError
+from typing_extensions import override
 
-system_prompt_dir = Path(__file__).parent / "prompts"
+from notte_agent.common.prompt import BasePrompt
 
 
 class ActionRegistry:
@@ -59,56 +58,35 @@ class ActionRegistry:
         return "".join(descriptions)
 
 
-class PromptType(StrEnum):
-    SINGLE_ACTION = "single_action"
-    MULTI_ACTION = "multi_action"
-
-    def prompt_file(self) -> Path:
-        match self:
-            case PromptType.SINGLE_ACTION:
-                return system_prompt_dir / "system_prompt_single_action.md"
-            case PromptType.MULTI_ACTION:
-                return system_prompt_dir / "system_prompt_multi_action.md"
-
-
-class FalcoPrompt:
-    def __init__(
-        self,
-        max_actions_per_step: int,
-    ) -> None:
-        multi_act = max_actions_per_step > 1
-        prompt_type = PromptType.MULTI_ACTION if multi_act else PromptType.SINGLE_ACTION
-        self.system_prompt: str = prompt_type.prompt_file().read_text()
-        self.max_actions_per_step: int = max_actions_per_step
+class FalcoPrompt(BasePrompt):
+    def __init__(self, prompt_file: Path | None = None) -> None:
+        if prompt_file is None:
+            prompt_file = Path(__file__).parent / "system.md"
+        self.system_prompt: str = prompt_file.read_text()
+        self.max_actions_per_step: int = 1
 
     @staticmethod
     def action_registry() -> str:
         return ActionRegistry.render()
 
-    @staticmethod
-    def _json_dump(actions: Sequence[BaseAction]) -> str:
-        lines = ",\n  ".join([action.model_dump_agent_json() for action in actions])
-        return "[\n  " + lines + "\n]"
-
     def example_form_filling(self) -> str:
-        return self._json_dump(
-            actions=[
-                FillAction(id="I99", value="username"),
-                FillAction(id="I101", value="password"),
-                ClickAction(id="B1"),
-            ]
-        )
+        form_values: dict[Literal["address1", "city", "state"], str] = {
+            "address1": "<my address>",
+            "city": "<my city>",
+            "state": "<my state>",
+        }
+        return FormFillAction(value=form_values).model_dump_agent_json()  # pyright: ignore [reportArgumentType]
 
     def example_invalid_sequence(self) -> str:
-        return self._json_dump(actions=[ClickAction(id="L1"), ClickAction(id="B4"), ClickAction(id="L2")])
+        return ClickAction(id="X1").model_dump_agent_json()
 
     def example_navigation_and_extraction(self) -> str:
-        return self._json_dump(
-            [GotoAction(url="https://www.google.com"), ScrapeAction(instructions="Extract the search results")]
-        )
+        return ScrapeAction(
+            instructions="Extract the search results from the Google search page"
+        ).model_dump_agent_json()
 
     def completion_example(self) -> str:
-        return self._json_dump([CompletionAction(success=True, answer="<answer to the task>")])
+        return CompletionAction(success=True, answer="<answer to the task>").model_dump_agent_json()
 
     def example_step(self) -> str:
         goal_eval = (
@@ -128,23 +106,21 @@ class FalcoPrompt:
     "memory": "Description of what has been done and what you need to remember until the end of the task",
     "next_goal": "What needs to be done with the next actions"
   },
-  "actions": [
-   {
+  "action": {
       "type: "one_action_type",
       // action-specific parameter
       ...
-   }, // ... more actions in sequence ...
-  ]
+   }
 }
 """,
             {"goal_eval": goal_eval},
         )
 
+    @override
     def system(self) -> str:
         return chevron.render(
             self.system_prompt,
             {
-                "timstamp": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "max_actions_per_step": self.max_actions_per_step,
                 "action_description": self.action_registry(),
                 "example_form_filling": self.example_form_filling(),
@@ -157,21 +133,30 @@ class FalcoPrompt:
             },
         )
 
-    def task(self, task: str):
+    @override
+    def task(self, task: str) -> str:
         return f"""
 Your ultimate task is: "{task}".
-If you achieved your ultimate task, stop everything and use the done action in the next step to complete the task.
+If you achieved your ultimate task, stop everything and use the `completion` action in the next step to complete the task.
 If not, continue as usual.
 """
 
-    def new_task(self, task: str) -> str:
-        return f"""
-Your new ultimate task is: {task}.
-Take the previous context into account and finish your new ultimate task.
-"""
-
-    def action_message(self) -> str:
+    @override
+    def select_action(self) -> str:
         return """Given the previous information, start by reflecting on your last action. Then, summarize the current page and list relevant available interactions.
 Absolutely do not under any circumstance list or pay attention to any id that is not explicitly found in the page.
 From there, select the your next goal, and in turn, your next action.
+    """
+
+    @override
+    def empty_trajectory(self) -> str:
+        return f"""
+    No action executed so far...
+    Your first action should always be a `{GotoAction.name()}` action with a url related to the task.
+    You should reflect what url best fits the task you are trying to solve to start the task, e.g.
+    - flight search task => https://www.google.com/travel/flights
+    - go to reddit => https://www.reddit.com
+    - ...
+    ONLY if you have ABSOLUTELY no idea what to do, you can use `https://www.google.com` as the default url.
+    THIS SHOULD BE THE LAST RESORT.
     """

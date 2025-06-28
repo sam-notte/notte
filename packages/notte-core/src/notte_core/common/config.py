@@ -168,7 +168,6 @@ class NotteConfigDict(TypedDict, total=False):
     perception_model: str | None
 
     # [scraping]
-    auto_scrape: bool
     use_llm: bool
     scraping_type: ScrapingType
 
@@ -186,7 +185,6 @@ class NotteConfigDict(TypedDict, total=False):
 
     # [agent]
     max_steps: int
-    max_actions_per_step: int
     use_vision: bool
 
     # [dom_parsing]
@@ -271,7 +269,6 @@ class NotteConfig(TomlConfig):
     perception_model: str | None = None  # if none use reasoning_model
 
     # [scraping]
-    auto_scrape: bool
     use_llm: bool
     scraping_type: ScrapingType
 
@@ -289,7 +286,6 @@ class NotteConfig(TomlConfig):
 
     # [agent]
     max_steps: int
-    max_actions_per_step: int
     use_vision: bool
 
     # [dom_parsing]
