@@ -224,26 +224,6 @@ PS: The title of services are figurative eg. `agent.cloud()` refers to hosting a
 ⏭️ We have either already partially shipped or are working on the following features: captcha resolution, residential proxies, web security, vpn-style browsing, authentication and payments with secure safe, improved speed and memory, human-in-the-loop integration, channeled notifications, and cookies management.
 
 
-## Notte Console
-
-You use our [console]((https://console.notte.cc) to manage your agents and sessions, create API keys and monitor your usage.
-
-Most of our open-source features are also available on the cloud-hosted version with a large free-tier!
-
-Example for webpage scraping & structured schema llm extraction
-
-```python
-from notte_sdk import NotteClient
-
-notte = NotteClient()
-data = notte.scrape(url="https://pump.fun", instructions="get top 5 latest trendy coins on pf, return ticker, name, mcap")
-```
-
-<p align="center">
-  <img src="docs/gifs/v3.gif" alt="Demo" width="100%" href="https://video.twimg.com/ext_tw_video/1891808695886991360/pu/vid/avc1/1014x720/uc56Q0q3RGK2h8YM.mp4?tag=12">
-</p>
-
-
 ## How to run notte locally ?
 
 You will need to provide your own LLM provider API key, and install the dependencies:
@@ -265,7 +245,6 @@ with notte.Session(headless=False) as session:
     agi = notte.Agent(reasoning_model="gemini/gemini-2.0-flash", max_steps=5, session=session)
     agi.run(task="doom scroll cat memes on google images")
 ```
-
 
 ## Contribute
 
