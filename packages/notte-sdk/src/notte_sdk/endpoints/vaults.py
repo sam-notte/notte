@@ -11,6 +11,7 @@ from notte_core.credentials.base import (
     Credential,
     CredentialsDict,
     CreditCardDict,
+    Vault,
 )
 from pydantic import BaseModel
 from typing_extensions import override
@@ -41,12 +42,10 @@ from notte_sdk.types import (
     ListCredentialsRequest,
     ListCredentialsRequestDict,
     ListCredentialsResponse,
-    ListVaultsRequest,
-    ListVaultsRequestDict,
-    ListVaultsResponse,
     VaultCreateRequest,
     VaultCreateRequestDict,
-    VaultCreateResponse,
+    VaultListRequest,
+    VaultListRequestDict,
 )
 
 
@@ -56,16 +55,12 @@ from notte_sdk.types import (
 class NotteVault(BaseVault, SyncResource):
     """Vault that fetches credentials stored using the sdk"""
 
-    def __init__(self, vault_id: str, vault_client: VaultsClient | None = None):
+    def __init__(self, vault_id: str, vault_client: VaultsClient):
         super().__init__()
         if len(vault_id) == 0:
             raise ValueError("Vault ID cannot be empty")
 
         self.vault_id: str = vault_id
-
-        if vault_client is None:
-            vault_client = VaultsClient()
-
         self.vault_client = vault_client
 
     @override
@@ -106,7 +101,7 @@ class NotteVault(BaseVault, SyncResource):
         _ = self.vault_client.delete_credit_card(self.vault_id)
 
     def delete(self) -> None:
-        _ = self.vault_client.delete_vault(self.vault_id)
+        _ = self.vault_client.delete(self.vault_id)
 
 
 @final
@@ -165,7 +160,7 @@ class VaultsClient(BaseClient):
         )
 
     @staticmethod
-    def _list_endpoint() -> NotteEndpoint[ListVaultsResponse]:
+    def _list_endpoint() -> NotteEndpoint[Vault]:
         """
         Returns a NotteEndpoint configured for listing all vaults.
 
@@ -174,7 +169,7 @@ class VaultsClient(BaseClient):
         """
         return NotteEndpoint(
             path=VaultsClient.LIST_VAULTS,
-            response=ListVaultsResponse,
+            response=Vault,
             method="GET",
         )
 
@@ -294,16 +289,16 @@ class VaultsClient(BaseClient):
         super().__init__(base_endpoint_path="vaults", server_url=server_url, api_key=api_key, verbose=verbose)
 
     @staticmethod
-    def _create_vault_endpoint() -> NotteEndpoint[VaultCreateResponse]:
+    def _create_vault_endpoint() -> NotteEndpoint[Vault]:
         """
         Returns a NotteEndpoint configured for creating a new vault.
 
         Returns:
-            A NotteEndpoint with the POST method that expects a VaultCreateResponse.
+            A NotteEndpoint with the POST method that expects a Vault response.
         """
         return NotteEndpoint(
             path=VaultsClient.CREATE_VAULT,
-            response=VaultCreateResponse,
+            response=Vault,
             method="POST",
         )
 
@@ -409,7 +404,7 @@ class VaultsClient(BaseClient):
         return response
 
     @track_usage("cloud.vault.delete")
-    def delete_vault(self, vault_id: str, **data: Unpack[DeleteVaultRequestDict]) -> DeleteVaultResponse:
+    def delete(self, vault_id: str, **data: Unpack[DeleteVaultRequestDict]) -> DeleteVaultResponse:
         """
         Deletes a vault.
 
@@ -441,7 +436,7 @@ class VaultsClient(BaseClient):
         return response
 
     @track_usage("cloud.vault.list")
-    def list_vaults(self, **data: Unpack[ListVaultsRequestDict]) -> ListVaultsResponse:
+    def list(self, **data: Unpack[VaultListRequestDict]) -> Sequence[Vault]:
         """
         Lists all available vaults.
 
@@ -451,9 +446,9 @@ class VaultsClient(BaseClient):
         Returns:
             ListVaultsResponse: Response containing the list of vaults.
         """
-        params = ListVaultsRequest.model_validate(data)
-        response = self.request(self._list_endpoint().with_params(params))
-        return response
+        params = VaultListRequest.model_validate(data)
+        endpoint = self._list_endpoint().with_params(params)
+        return self.request_list(endpoint)
 
     @track_usage("cloud.vault.credit_card.delete")
     def delete_credit_card(
