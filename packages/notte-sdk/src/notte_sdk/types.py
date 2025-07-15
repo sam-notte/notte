@@ -610,6 +610,7 @@ class SessionResponse(SdkBaseModel):
     ]
     # TODO: discuss if this is the best way to handle errors
     error: Annotated[str | None, Field(description="Error message if the operation failed to complete")] = None
+    credit_usage: Annotated[float | None, Field(description="Credit usage for the session. None")] = None
     proxies: Annotated[
         bool,
         Field(
@@ -1563,3 +1564,7 @@ class AgentStatusResponse(AgentResponse, ReplayResponse):
         list[AgentStepResponse],
         Field(description="The steps that the agent has currently taken"),
     ] = Field(default_factory=lambda: [])
+
+    credit_usage: Annotated[
+        float | None, Field(description="Credit usage for the agent. None if the agent is still running")
+    ] = None
