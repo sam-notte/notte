@@ -58,5 +58,5 @@ fi
 
 # Pull and run the latest quickstart_launcher.py from GitHub
 mkdir -p examples
-curl -s https://raw.githubusercontent.com/nottelabs/notte/branding/examples/quickstart_launcher.py -o examples/quickstart_launcher.py
+curl -s https://raw.githubusercontent.com/nottelabs/notte/refs/heads/main/examples/quickstart_launcher.py -o examples/quickstart_launcher.py
 python examples/quickstart_launcher.py
