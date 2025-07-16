@@ -7,6 +7,10 @@
     "light": "#00e673",
     "dark": "#00e673"
   },
+  "logo": {
+    "dark": "/logo/logo-dark.png",
+    "light": "/logo/logo-white.png"
+  },
   "favicon": "/favicon.ico",
   "navigation": {
     "tabs": [
@@ -32,9 +36,18 @@
             ]
           },
           {
+            "group": "Guides",
+            "pages": [
+              "guides/reliability",
+              "guides/scraping",
+              "guides/stealth"
+            ]
+          },
+          {
             "group": "Session Features",
             "pages": [
               "features/sessions/proxies",
+              "features/sessions/captchas",
               "features/sessions/cdp",
               "features/sessions/session-replay",
               "features/sessions/cookies",

@@ -13,14 +13,28 @@ from pytest_examples import CodeExample, EvalExample
 from pytest_examples.find_examples import _extract_code_chunks
 
 SNIPPETS_DIR = Path(__file__).parent.parent / "snippets"
-DOCS_DIR = Path(__file__).parent.parent / "side"
-SDK_DIR = Path(__file__).parent.parent / "sdk"
+DOCS_DIR = Path(__file__).parent.parent / "features"
+CONCEPTS_DIR = Path(__file__).parent.parent / "concepts"
+SDK_DIR = Path(__file__).parent.parent / "sdk-reference"
+
+if not SDK_DIR.exists():
+    raise FileNotFoundError(f"SDK directory not found: {SDK_DIR}")
+
+if not SNIPPETS_DIR.exists():
+    raise FileNotFoundError(f"Snippets directory not found: {SNIPPETS_DIR}")
+
+if not DOCS_DIR.exists():
+    raise FileNotFoundError(f"Docs directory not found: {DOCS_DIR}")
+
+
+if not CONCEPTS_DIR.exists():
+    raise FileNotFoundError(f"Concepts directory not found: {CONCEPTS_DIR}")
 
 
 def test_no_snippets_outside_folder():
     all_docs = [
         file
-        for folder in (DOCS_DIR, SDK_DIR / "manual")
+        for folder in (DOCS_DIR, SDK_DIR / "manual", CONCEPTS_DIR)
         for file in folder.glob("**/*.mdx")
         if file.parent.name != "use-cases" and file.name != "bua.mdx"
     ]
@@ -87,6 +101,15 @@ def handle_agent(
     run_example(eval_example, code=code)
 
 
+@handle_file("scraping/agent.mdx")
+def handle_scraping_agent(
+    eval_example: EvalExample,
+    code: str,
+) -> None:
+    code = code.replace("<your-vault-id>", "8c618111-1d01-4e54-842a-6cac98ef4838")
+    run_example(eval_example, code=code)
+
+
 @handle_file("vaults/manual.mdx")
 def handle_vault_manual(
     eval_example: EvalExample,
@@ -112,6 +135,24 @@ def handle_vault_index(
     with notte.Vault() as vault:
         code = code.replace("<your-mfa-secret>", "JBSWY3DPEHPK3PXP").replace("my_vault_id", vault.vault_id)
         run_example(eval_example, code=code)
+
+
+@handle_file("sessions/file_storage_basic.mdx")
+def handle_storage_base_upload_file(
+    eval_example: EvalExample,
+    code: str,
+) -> None:
+    code = code.replace("/path/to/document.pdf", "tests/data/test.pdf")
+    run_example(eval_example, code=code)
+
+
+@handle_file("sessions/file_storage_upload.mdx")
+def handle_storage_upload_file(
+    eval_example: EvalExample,
+    code: str,
+) -> None:
+    code = code.replace("/path/to/document.pdf", "tests/data/test.pdf")
+    run_example(eval_example, code=code)
 
 
 @handle_file("sessions/upload_cookies.mdx")

@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'docs/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'docs/**'
 
 env:
   NOTTE_API_KEY: ${{ secrets.NOTTE_API_KEY }}
@@ -17,7 +21,7 @@ env:
 jobs:
   snippets-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,4 +54,4 @@ jobs:
           echo "Environment variables are set"
 
       - name: Run snippets tests
-        run: uv run pytest docs/src/tests -v --tb=short
+        run: cd docs/src && uv run pytest -v --tb=short
