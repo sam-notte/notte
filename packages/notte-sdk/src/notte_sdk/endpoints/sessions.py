@@ -266,10 +266,12 @@ class SessionsClient(BaseClient):
         Returns:
             SessionResponse: The validated response from the session stop request.
         """
+        logger.info(f"[Session] {session_id} is stopping")
         endpoint = SessionsClient._session_stop_endpoint(session_id=session_id)
         response = self.request(endpoint)
         if response.status != "closed":
             raise RuntimeError(f"[Session] {session_id} failed to stop")
+        logger.info(f"[Session] {session_id} stopped")
         return response
 
     @track_usage("cloud.session.status")
@@ -477,6 +479,15 @@ class RemoteSession(SyncResource):
         self.response: SessionResponse | None = None
         self.storage: FileStorageClient | None = storage
 
+    @override
+    def __exit__(  # pyright: ignore [reportMissingSuperCall]
+        self, exc_type: type[BaseException], exc_val: BaseException, exc_tb: type[BaseException] | None
+    ) -> None:
+        self.stop()
+
+        if isinstance(exc_val, KeyboardInterrupt):
+            raise KeyboardInterrupt() from None
+
     # #######################################################################
     # ############################# Session #################################
     # #######################################################################
@@ -516,7 +527,6 @@ class RemoteSession(SyncResource):
             ValueError: If the session hasn't been started (no session_id available).
             RuntimeError: If the session fails to close properly.
         """
-        logger.info(f"[Session] {self.session_id} stopped")
         self.response = self.client.stop(session_id=self.session_id)
 
     @property
