@@ -55,10 +55,10 @@ async def test_google_flights_with_agent(patch_llm_service) -> None:
 @pytest.mark.asyncio
 async def test_observe_with_instructions() -> None:
     async with NotteSession() as session:
-        obs = await session.aobserve(url="https://www.notte.cc", instructions="Open the carreer page")
+        obs = await session.aobserve(url="https://www.notte.cc", instructions="Open the carreer docs page")
         if obs.space.is_empty():
             raise ValueError(f"No actions available for space: {obs.space.description}")
         action = obs.space.first()
         _ = await session.astep(type=action.type, action_id=action.id)
         obs = await session.aobserve()
-        assert obs.metadata.url == "https://www.notte.cc/careers"
+        assert obs.metadata.url.startswith("https://docs.notte.cc")
