@@ -6,11 +6,11 @@ from typing import Annotated, Any, Callable, TypeVar, Unpack, final
 
 import markdownify  # type: ignore[import]
 from loguru import logger
-from notte_core.actions import EmailReadAction, ToolAction
+from notte_core.actions import EmailReadAction, SmsReadAction, ToolAction
 from notte_core.browser.observation import StepResult
 from notte_core.data.space import DataSpace
 from notte_sdk.endpoints.personas import Persona
-from notte_sdk.types import EmailResponse
+from notte_sdk.types import EmailResponse, SMSResponse
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
@@ -73,9 +73,39 @@ class SimpleEmailResponse(BaseModel):
     created_at: Annotated[dt.datetime, Field(description="The date and time the email was sent")]
     sender_email: Annotated[str, Field(description="The email address of the sender")]
 
+    @staticmethod
+    def from_email(email: EmailResponse) -> "SimpleEmailResponse":
+        content: str | None = email.text_content
+        if content is None or len(content) == 0:
+            content = markdownify.markdownify(email.html_content)  # type: ignore[attr-defined]
+        return SimpleEmailResponse(
+            subject=email.subject,
+            content=content or "no content",  # type: ignore[attr-defined]
+            created_at=email.created_at,
+            sender_email=email.sender_email or "unknown",
+        )
+
 
 class ListEmailResponse(BaseModel):
     emails: list[SimpleEmailResponse]
+
+
+class SimpleSmsResponse(BaseModel):
+    content: Annotated[str, Field(description="The body of the sms")]
+    created_at: Annotated[dt.datetime, Field(description="The date and time the sms was sent")]
+    sender_number: Annotated[str, Field(description="The phone number of the sender")]
+
+    @staticmethod
+    def from_sms(sms: SMSResponse) -> "SimpleSmsResponse":
+        return SimpleSmsResponse(
+            content=sms.body or "no content",
+            created_at=sms.created_at,
+            sender_number=sms.sender or "unknown",
+        )
+
+
+class ListSmsResponse(BaseModel):
+    sms: list[SimpleSmsResponse]
 
 
 # #########################################################
@@ -135,21 +165,40 @@ Use the {EmailReadAction.name()} action to read emails from the inbox.
                 message=f"No emails found in the inbox {time_str}",
                 data=DataSpace.from_structured(ListEmailResponse(emails=[])),
             )
-        emails: list[SimpleEmailResponse] = []
-        for email in raw_emails:
-            content: str | None = email.text_content
-            if content is None or len(content) == 0:
-                content = markdownify.markdownify(email.html_content)  # type: ignore[attr-defined]
-            emails.append(
-                SimpleEmailResponse(
-                    subject=email.subject,
-                    content=content or "no content",  # type: ignore[attr-defined]
-                    created_at=email.created_at,
-                    sender_email=email.sender_email or "unknown",
-                )
-            )
+        emails: list[SimpleEmailResponse] = [SimpleEmailResponse.from_email(email) for email in raw_emails]
         return StepResult(
             success=True,
             message=f"Successfully read {len(emails)} emails from the inbox {time_str}",
             data=DataSpace.from_structured(ListEmailResponse(emails=emails)),
+        )
+
+    @BaseTool.register(SmsReadAction)
+    def read_sms(self, action: SmsReadAction) -> StepResult:
+        raw_sms: Sequence[SMSResponse] = []
+        time_str = f"in the last {action.timedelta}" if action.timedelta is not None else ""
+        for _ in range(self.nb_retries):
+            raw_sms = self.persona.sms(
+                only_unread=action.only_unread,
+                timedelta=action.timedelta,
+                limit=action.limit,
+            )
+            if len(raw_sms) > 0:
+                break
+            # if we have not found any emails, we wait for 5 seconds and retry
+            logger.warning(
+                f"No sms found in the inbox {time_str}, waiting for 5 seconds and retrying {self.nb_retries} times"
+            )
+            time.sleep(5)
+
+        if len(raw_sms) == 0:
+            return StepResult(
+                success=True,
+                message=f"No emails found in the inbox {time_str}",
+                data=DataSpace.from_structured(ListEmailResponse(emails=[])),
+            )
+        sms: list[SimpleSmsResponse] = [SimpleSmsResponse.from_sms(sms) for sms in raw_sms]
+        return StepResult(
+            success=True,
+            message=f"Successfully read {len(sms)} sms from the inbox {time_str}",
+            data=DataSpace.from_structured(ListSmsResponse(sms=sms)),
         )

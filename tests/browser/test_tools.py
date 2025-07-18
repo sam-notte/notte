@@ -11,7 +11,7 @@ client = NotteClient()
 
 @pytest.fixture
 def persona():
-    return client.Persona("f2e2834b-a054-4a96-a388-a447c37756ff")
+    return client.Persona("7abb4f37-25a1-4409-98d9-c4c916918254")
 
 
 @pytest.fixture
