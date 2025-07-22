@@ -123,7 +123,11 @@ class BrowserType(StrEnum):
 class ScrapingType(StrEnum):
     MARKDOWNIFY = "markdownify"
     MAIN_CONTENT = "main_content"
-    LLM_EXTRACT = "llm_extract"
+
+
+class PerceptionType(StrEnum):
+    FAST = "fast"
+    DEEP = "deep"
 
 
 class RaiseCondition(StrEnum):
@@ -167,11 +171,10 @@ class NotteConfigDict(TypedDict, total=False):
     chrome_args: list[str] | None
 
     # [perception]
-    enable_perception: bool
+    perception_type: PerceptionType
     perception_model: str | None
 
     # [scraping]
-    use_llm: bool
     scraping_type: ScrapingType
 
     # [error]
@@ -269,11 +272,10 @@ class NotteConfig(TomlConfig):
     chrome_args: list[str] | None = None
 
     # [perception]
-    enable_perception: bool = True
+    perception_type: PerceptionType = PerceptionType.DEEP
     perception_model: str | None = None  # if none use reasoning_model
 
     # [scraping]
-    use_llm: bool
     scraping_type: ScrapingType
 
     # [error]

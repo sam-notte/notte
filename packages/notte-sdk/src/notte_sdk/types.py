@@ -13,12 +13,13 @@ from notte_core.actions import (
     BrowserAction,
     InteractionAction,
 )
-from notte_core.agent_types import AgentStepResponse
-from notte_core.browser.observation import Observation, StepResult
+from notte_core.agent_types import AgentCompletion
+from notte_core.browser.observation import ExecutionResult, Observation
 from notte_core.browser.snapshot import TabsData
-from notte_core.common.config import BrowserType, LlmModel, PlaywrightProxySettings, config
+from notte_core.common.config import BrowserType, LlmModel, PerceptionType, PlaywrightProxySettings, config
 from notte_core.credentials.base import Credential, CredentialsDict, CreditCardDict
 from notte_core.data.space import DataSpace
+from notte_core.trajectory import ElementLiteral
 from notte_core.utils.pydantic_schema import convert_response_format_to_pydantic_model
 from notte_core.utils.url import get_root_domain
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -51,6 +52,8 @@ class SdkBaseModel(BaseModel):
 
 
 class ExecutionResponse(SdkBaseModel):
+    """Used for page operation like setting cookies"""
+
     success: Annotated[bool, Field(description="Whether the operation was successful")]
     message: Annotated[str, Field(description="A message describing the operation")]
 
@@ -693,8 +696,8 @@ class SessionDebugResponse(SdkBaseModel):
 class SessionDebugRecordingEvent(SdkBaseModel):
     """Model for events that can be sent over the recording WebSocket"""
 
-    type: Literal["action", "observation", "result", "error"]
-    data: BaseAction | Observation | StepResult | str
+    type: ElementLiteral | Literal["error"]
+    data: AgentCompletion | Observation | ExecutionResult | str
     timestamp: dt.datetime = Field(default_factory=lambda: dt.datetime.now())
 
     @staticmethod
@@ -1085,6 +1088,9 @@ class ObserveRequest(PaginationParams):
         str | None,
         Field(description="Additional instructions to use for the observation."),
     ] = None
+    perception_type: Annotated[PerceptionType, Field(description="Whether to run with fast or deep perception")] = (
+        config.perception_type
+    )
 
 
 class ObserveRequestDict(PaginationParamsDict, total=False):
@@ -1097,6 +1103,7 @@ class ObserveRequestDict(PaginationParamsDict, total=False):
 
     url: str | None
     instructions: str | None
+    perception_type: PerceptionType
 
 
 class ScrapeParamsDict(TypedDict, total=False):
@@ -1108,7 +1115,6 @@ class ScrapeParamsDict(TypedDict, total=False):
         only_main_content: Whether to only scrape the main content of the page. If True, navbars, footers, etc. are excluded.
         response_format: The response format to use for the scrape. You can use a Pydantic model or a JSON Schema dict.
         instructions: Additional instructions to use for the scrape.
-        use_llm: Whether to use an LLM for the extraction process.
         use_link_placeholders: Whether to use link/image placeholders to reduce the number of tokens in the prompt and hallucinations.
     """
 
@@ -1117,7 +1123,6 @@ class ScrapeParamsDict(TypedDict, total=False):
     only_main_content: bool
     response_format: type[BaseModel] | None
     instructions: str | None
-    use_llm: bool | None
     use_link_placeholders: bool
 
 
@@ -1162,16 +1167,6 @@ class ScrapeParams(SdkBaseModel):
         str | None,
         Field(
             description="Additional instructions to use for the scrape. E.g. 'Extract only the title, date and content of the articles.'"
-        ),
-    ] = None
-
-    use_llm: Annotated[
-        bool | None,
-        Field(
-            description=(
-                "Whether to use an LLM for the extraction process. This will result in a longer response time but a"
-                " better accuracy. If not provided, the default value is the same as the NotteSession config."
-            )
         ),
     ] = None
 
@@ -1222,7 +1217,7 @@ class ScrapeRequest(ScrapeParams):
     ] = None
 
 
-class StepRequestDict(TypedDict, total=False):
+class ExecutionRequestDict(TypedDict, total=False):
     """Request dictionary for step operations.
 
     Args:
@@ -1238,10 +1233,9 @@ class StepRequestDict(TypedDict, total=False):
     value: str | int | None
     enter: bool | None
     selector: str | None
-    action: ActionUnion | None
 
 
-class StepRequest(SdkBaseModel):
+class ExecutionRequest(SdkBaseModel):
     type: Annotated[str | None, Field(description="The type of action to execute")] = None
     action_id: Annotated[str | None, Field(description="The ID of the action to execute")] = None
 
@@ -1256,46 +1250,43 @@ class StepRequest(SdkBaseModel):
         str | None, Field(description="The dom selector to use to find the element to interact with")
     ] = None
 
-    action: Annotated[ActionUnion | None, Field(description="The action to execute")] = None
+    def get_action(self, action: ActionUnion | None = None) -> ActionUnion:
+        # if provided, return the action
+        if action is not None:
+            return action
 
-    @override
-    def model_post_init(self, context: Any, /) -> None:
-        if self.action is None:
-            if self.type is None:
-                raise ValueError(f"Action need to have a valid type: {BaseAction.ACTION_REGISTRY.keys()}")
-            elif self.type in BrowserAction.BROWSER_ACTION_REGISTRY:
-                self.action = BrowserAction.from_param(self.type, self.value)
-            elif self.type in InteractionAction.INTERACTION_ACTION_REGISTRY:
-                if (self.action_id is None or self.action_id == "") and self.selector is None:
-                    raise ValueError("Interaction action need to provide either an action_id or a selector")
-                self.action = InteractionAction.from_param(self.type, self.value, self.action_id, self.selector)
-            else:
-                raise ValueError(
-                    f"Invalid action type: {self.type}. Valid types are: {BrowserAction.ACTION_REGISTRY.keys()}"
-                )
-        elif self.action_id is not None:
-            raise ValueError("action_id is not allowed when action is provided")
-        elif self.value is not None:
-            raise ValueError("value is not allowed when action is provided")
-        elif self.enter is not None:
-            raise ValueError("enter is not allowed when action is provided")
+        # otherwise, convert current object to action
+        if self.type is None:
+            raise ValueError(f"Action need to have a valid type: {BaseAction.ACTION_REGISTRY.keys()}")
+        elif self.type in BrowserAction.BROWSER_ACTION_REGISTRY:
+            return BrowserAction.from_param(self.type, self.value)
+        elif self.type in InteractionAction.INTERACTION_ACTION_REGISTRY:
+            if (self.action_id is None or self.action_id == "") and self.selector is None:
+                raise ValueError("Interaction action need to provide either an action_id or a selector")
+            return InteractionAction.from_param(self.type, self.value, self.action_id, self.selector)
+        else:
+            raise ValueError(
+                f"Invalid action type: {self.type}. Valid types are: {BrowserAction.ACTION_REGISTRY.keys()}"
+            )
 
-    @override
-    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        dump = super().model_dump(*args, **kwargs)
-        if self.action is not None:
-            if "type" in dump:
-                del dump["type"]
-            if "action_id" in dump:
-                del dump["action_id"]
-            if "value" in dump:
-                del dump["value"]
-            if "enter" in dump:
-                del dump["enter"]
-        return dump
+    # @override
+    # def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    #     dump = super().model_dump(*args, **kwargs)
+    #     if self.action is not None:
+    #         if "type" in dump:
+    #             del dump["type"]
+    #         if "action_id" in dump:
+    #             del dump["action_id"]
+    #         if "value" in dump:
+    #             del dump["value"]
+    #         if "enter" in dump:
+    #             del dump["enter"]
+    #     return dump
 
 
-class StepResponse(StepResult):
+class ExecutionResponseWithSession(ExecutionResult):
+    """Used for session.execute calls"""
+
     session: Annotated[SessionResponse, Field(description="Browser session information")]
 
 
@@ -1311,7 +1302,6 @@ class ObserveResponse(Observation):
         return ObserveResponse(
             metadata=obs.metadata,
             space=obs.space,
-            progress=obs.progress,
             screenshot=obs.screenshot,
             session=session,
         )
@@ -1527,7 +1517,7 @@ class AgentStatusResponse(AgentResponse, ReplayResponse):
         Field(description="The answer to the agent task. None if the agent is still running"),
     ] = None
     steps: Annotated[
-        list[AgentStepResponse],
+        list[AgentCompletion],
         Field(description="The steps that the agent has currently taken"),
     ] = Field(default_factory=lambda: [])
 

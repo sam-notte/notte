@@ -1,10 +1,8 @@
-from collections import Counter
-
 import notte_core
 import pytest
 from notte_browser.captcha import CaptchaHandler
 from notte_browser.errors import CaptchaSolverNotAvailableError, NoSnapshotObservedError
-from notte_browser.session import NotteSession, SessionTrajectoryStep
+from notte_browser.session import NotteSession
 from notte_core.actions import (
     ClickAction,
     GotoAction,
@@ -13,8 +11,8 @@ from notte_core.actions import (
     WaitAction,
 )
 from notte_core.browser.snapshot import BrowserSnapshot
+from notte_core.common.config import PerceptionType
 from notte_core.llms.service import LLMService
-from pydantic import ValidationError
 
 from tests.mock.mock_browser import MockBrowserDriver
 from tests.mock.mock_service import MockLLMService
@@ -63,8 +61,10 @@ async def test_context_property_before_observation(patch_llm_service: MockLLMSer
 @pytest.mark.asyncio
 async def test_context_property_after_observation(patch_llm_service: MockLLMService) -> None:
     """Test that context is properly set after observation"""
-    async with NotteSession(window=MockBrowserDriver()) as page:
-        _ = await page.aobserve("https://notte.cc")
+    driver = MockBrowserDriver()
+    async with NotteSession(window=driver) as page:
+        _ = await page.aexecute(GotoAction(url="https://notte.cc"))
+        _ = await page.aobserve()
 
     # Verify context exists and has expected properties
     assert isinstance(page.snapshot, BrowserSnapshot)
@@ -84,7 +84,8 @@ async def test_trajectory_empty_before_observation(patch_llm_service: MockLLMSer
 async def test_valid_observation_after_observation(patch_llm_service: MockLLMService) -> None:
     """Test that last observation returns valid actions after observation"""
     async with NotteSession(window=MockBrowserDriver()) as page:
-        obs = await page.aobserve("https://example.com")
+        _ = await page.aexecute(GotoAction(url="https://www.example.com"))
+        obs = await page.aobserve()
 
     assert obs.space is not None
     actions = obs.space.interaction_actions
@@ -104,35 +105,16 @@ async def test_valid_observation_after_step(patch_llm_service: MockLLMService) -
     """Test that last observation returns valid actions after taking a step"""
     # Initial observation
     async with NotteSession(window=MockBrowserDriver()) as page:
-        obs = await page.aobserve("https://example.com")
+        _ = await page.aexecute(GotoAction(url="https://www.example.com"))
+        obs = await page.aobserve()
         initial_actions = obs.space.interaction_actions
         assert initial_actions is not None
         assert len(initial_actions) == 1
 
         # Take a step
-        _ = await page.astep(type="click", action_id="L1")  # Using L1 from mock response
+        _ = await page.aexecute(type="click", action_id="L1")  # Using L1 from mock response
 
         # TODO: verify that the action space is updated
-
-
-@pytest.mark.asyncio
-async def test_valid_observation_after_reset(patch_llm_service: MockLLMService) -> None:
-    """Test that last observation returns valid actions after reset"""
-    # Initial observation
-    async with NotteSession(window=MockBrowserDriver()) as page:
-        obs = await page.aobserve("https://example.com")
-
-        # Reset environment
-        await page.areset()
-        obs = await page.aobserve("https://example.com")
-
-        # Verify new observation is correct
-        assert len(obs.space.interaction_actions) > 0
-        assert "https://example.com" in obs.metadata.url
-
-        # Verify the state was effectively reset
-        assert page.snapshot.screenshot == obs.screenshot.raw  # poor proxy but ok
-        assert len(page.trajectory) == 1  # the trajectory should only contains a single obs (from reset)
 
 
 @pytest.mark.asyncio
@@ -145,45 +127,29 @@ async def test_llm_service_from_config(patch_llm_service: MockLLMService, mock_l
 
 
 @pytest.mark.asyncio
-async def test_callback_should_be_called_once_per_observation(patch_llm_service: MockLLMService) -> None:
-    """Test that the callback is called once per observation"""
-    counter = Counter(callback_count=0)
-
-    def callback(step: SessionTrajectoryStep) -> None:
-        counter["callback_count"] += 1
-
-    async with NotteSession(enable_perception=False, act_callback=callback) as page:
-        obs = await page.astep(action=GotoAction(url="https://example.com"))
-        obs = await page.aobserve()
-        assert obs.space is not None
-        assert len(obs.space.interaction_actions) == 1
-        assert len(page.trajectory) == 1
-        assert counter["callback_count"] == 1
-
-
-@pytest.mark.asyncio
 async def test_step_should_fail_without_observation() -> None:
     """Test that step should fail without observation"""
-    async with NotteSession(enable_perception=False) as page:
+    async with NotteSession() as page:
         with pytest.raises(NoSnapshotObservedError):
-            _ = await page.astep(action=ClickAction(id="L1"))
+            _ = await page.aexecute(ClickAction(id="L1"))
 
 
 @pytest.mark.asyncio
 async def test_step_should_succeed_after_observation() -> None:
     """Test that step should fail without observation"""
-    async with NotteSession(enable_perception=False) as page:
-        _ = await page.aobserve(url="https://example.com")
-        _ = await page.astep(action=ClickAction(id="L1"))
+    async with NotteSession() as page:
+        _ = await page.aexecute(type="goto", value="https://www.example.com")
+        _ = await page.aobserve(perception_type=PerceptionType.FAST)
+        _ = await page.aexecute(ClickAction(id="L1"))
 
 
 @pytest.mark.asyncio
 async def test_browser_action_step_should_succeed_without_observation() -> None:
     """Test that step should fail without observation"""
-    async with NotteSession(enable_perception=False) as page:
-        _ = await page.astep(action=GotoAction(url="https://example.com"))
-        _ = await page.astep(action=ScrollDownAction())
-        _ = await page.astep(action=WaitAction(time_ms=1000))
+    async with NotteSession() as page:
+        _ = await page.aexecute(GotoAction(url="https://www.example.com"))
+        _ = await page.aexecute(ScrollDownAction())
+        _ = await page.aexecute(WaitAction(time_ms=1000))
 
 
 @pytest.mark.asyncio
@@ -191,11 +157,12 @@ async def test_browser_action_step_should_succeed_without_observation() -> None:
 async def test_step_with_invalid_action_id_returns_failed_result(action_id: str):
     """Test that stepping with an invalid action ID returns a failed StepResult."""
 
-    async with NotteSession(enable_perception=False) as session:
+    async with NotteSession() as session:
         # First observe a page to get a snapshot
-        _ = await session.aobserve(url="https://example.com")
+        _ = await session.aexecute(type="goto", value="https://www.example.com")
+        _ = await session.aobserve(perception_type=PerceptionType.FAST)
         # Try to step with an invalid action ID that doesn't exist on the page
-        step_response = await session.astep(type="click", action_id=action_id)
+        step_response = await session.aexecute(type="click", action_id=action_id)
 
         # Verify that the step failed
         assert not step_response.success
@@ -207,18 +174,19 @@ async def test_step_with_invalid_action_id_returns_failed_result(action_id: str)
 async def test_step_with_empty_action_id_should_fail_validation_pydantic():
     """Test that stepping with an invalid action ID returns a failed StepResult."""
 
-    async with NotteSession(enable_perception=False) as session:
+    async with NotteSession() as session:
         # First observe a page to get a snapshot
-        _ = await session.aobserve(url="https://example.com")
+        _ = await session.aexecute(type="goto", value="https://www.example.com")
+        _ = await session.aobserve(perception_type=PerceptionType.FAST)
         # Try to step with an invalid action ID that doesn't exist on the page
-        with pytest.raises(ValidationError):
-            _ = await session.astep(type="click", action_id="")
+        with pytest.raises(ValueError):
+            _ = await session.aexecute(type="click", action_id="")
 
 
 def test_captcha_solver_not_available_error():
     with pytest.raises(CaptchaSolverNotAvailableError):
-        _ = NotteSession(enable_perception=False, solve_captchas=True)
+        _ = NotteSession(solve_captchas=True)
 
     CaptchaHandler.is_available = True
-    _ = NotteSession(enable_perception=False, solve_captchas=True)
+    _ = NotteSession(solve_captchas=True)
     CaptchaHandler.is_available = False

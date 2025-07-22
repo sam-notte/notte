@@ -153,10 +153,16 @@ class BrowserWindow(BaseModel):
     resource: BrowserResource
     screenshot_mask: ScreenshotMask | None = None
     on_close: Callable[[], Awaitable[None]] | None = None
+    page_callbacks: dict[str, Callable[[Page], None]] = Field(default_factory=dict)
 
     @override
     def model_post_init(self, __context: Any) -> None:
         self.resource.page.set_default_timeout(config.timeout_default_ms)
+        self.apply_page_callbacks()
+
+    def apply_page_callbacks(self):
+        for key, callback in self.page_callbacks.items():
+            self.page.on(key, callback)  # pyright: ignore [reportArgumentType, reportCallIssue]
 
     @property
     def page(self) -> Page:
@@ -196,6 +202,7 @@ class BrowserWindow(BaseModel):
     @page.setter
     def page(self, page: Page) -> None:
         self.resource.page = page
+        self.apply_page_callbacks()
 
     @property
     def tabs(self) -> list[Page]:
@@ -306,20 +313,37 @@ class BrowserWindow(BaseModel):
             screenshot=snapshot_screenshot,
         )
 
-    async def goto(self, url: str) -> None:
+    async def goto(self, url: str, tries: int = 3) -> None:
         if url == self.page.url:
             return
-        if not is_valid_url(url, check_reachability=False):
-            raise InvalidURLError(url=url)
-        try:
-            _ = await self.page.goto(url, timeout=config.timeout_goto_ms)
-        except PlaywrightTimeoutError:
-            await self.long_wait()
-        except Exception as e:
-            raise PageLoadingError(url=url) from e
-        # extra wait to make sure that css animations can start
-        # to make extra element visible
-        await self.short_wait()
+        prefixes = ("http://", "https://")
+
+        if not any(url.startswith(prefix) for prefix in prefixes):
+            logger.info(f"Provided URL doesnt have a scheme, adding https to {url}")
+            url = "https://" + url
+
+        def is_default_page():
+            return self.page.url == "about:blank" and not url == "about:blank"
+
+        while True:
+            tries -= 1
+            if not is_valid_url(url, check_reachability=False):
+                raise InvalidURLError(url=url)
+            try:
+                _ = await self.page.goto(url, timeout=config.timeout_goto_ms)
+            except PlaywrightTimeoutError:
+                await self.long_wait()
+            except Exception as e:
+                raise PageLoadingError(url=url) from e
+            # extra wait to make sure that css animations can start
+            # to make extra element visible
+            await self.short_wait()
+
+            if not is_default_page() or tries < 0:
+                break
+
+        if is_default_page():
+            raise PageLoadingError(url)
 
     async def set_cookies(self, cookies: list[Cookie] | None = None, cookie_path: str | Path | None = None) -> None:
         if cookies is None and cookie_path is not None:

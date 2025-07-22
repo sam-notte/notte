@@ -44,11 +44,10 @@ temperature = 0.0
 
 # [scraping]
 # scraping_model = "gpt-4o-mini"
-use_llm = false
 scraping_type = "markdownify"
 
 # [perception]
-# enable_perception = true
+# perception_type = "deep"
 # perception_model = "cerebras/llama-3.3-70b"
 
 

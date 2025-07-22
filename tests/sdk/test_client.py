@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from notte_core.actions import BrowserAction, ClickAction
-from notte_core.browser.observation import Observation, StepResult
+from notte_core.browser.observation import ExecutionResult, Observation
 from notte_core.data.space import DataSpace
 from notte_core.space import SpaceCategory
 from notte_sdk.client import NotteClient
@@ -13,11 +13,12 @@ from notte_sdk.errors import AuthenticationError
 from notte_sdk.types import (
     DEFAULT_OPERATION_SESSION_TIMEOUT_IN_MINUTES,
     BrowserType,
+    ExecutionRequest,
+    ExecutionRequestDict,
     ObserveRequestDict,
     ObserveResponse,
     SessionResponse,
     SessionStartRequestDict,
-    StepRequestDict,
 )
 
 
@@ -214,7 +215,7 @@ def test_observe(
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = mock_response
 
-    observation = client.sessions.page.observe(session_id=session_id, url="https://example.com")
+    observation = client.sessions.page.observe(session_id=session_id)
 
     assert isinstance(observation, Observation)
     assert observation.metadata.url == "https://example.com"
@@ -225,7 +226,6 @@ def test_observe(
         mock_post.assert_called_once()
     actual_call = mock_post.call_args
     assert actual_call.kwargs["headers"] == {"Authorization": f"Bearer {api_key}"}
-    assert actual_call.kwargs["json"]["url"] == "https://example.com"
 
     if start_session:
         _ = _stop_session(mock_delete=mock_delete, client=client, session_id=session_id)
@@ -258,21 +258,23 @@ def test_step(
         "data": {
             "markdown": "test data",
         },
+        "action": {"type": "fill", "action_id": "I1", "value": "#submit-button", "enter": False},
         "success": True,
         "message": "test message",
     }
     mock_post.return_value.status_code = 200
     mock_post.return_value.json.return_value = mock_response
 
-    step_data: StepRequestDict = {
+    step_data: ExecutionRequestDict = {
         "type": "fill",
         "action_id": "I1",
         "value": "#submit-button",
         "enter": False,
     }
-    obs = client.sessions.page.step(session_id=session_id, **step_data)
+    action = ExecutionRequest.model_validate(step_data).get_action()
+    obs = client.sessions.page.execute(session_id=session_id, action=action)
 
-    assert isinstance(obs, StepResult)
+    assert isinstance(obs, ExecutionResult)
     assert obs.success
     assert obs.message == "test message"
 
@@ -280,8 +282,8 @@ def test_step(
         mock_post.assert_called_once()
     actual_call = mock_post.call_args
     assert actual_call.kwargs["headers"] == {"Authorization": f"Bearer {api_key}"}
-    assert actual_call.kwargs["json"]["action"]["id"] == "I1"
-    assert actual_call.kwargs["json"]["action"]["value"] == "#submit-button"
+    assert actual_call.kwargs["json"]["id"] == "I1"
+    assert actual_call.kwargs["json"]["value"] == "#submit-button"
 
     if start_session:
         _ = _stop_session(mock_delete=mock_delete, client=client, session_id=session_id)
