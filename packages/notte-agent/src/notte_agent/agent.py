@@ -179,6 +179,7 @@ class NotteAgent(BaseAgent):
                 )
                 if val_result.success:
                     # Successfully validated the output
+                    logger.info(f"Validation successful: {val_result.message}")
                     logger.info("✅ Task completed successfully")
                     result = ExecutionResult(action=response.action, success=True, message=val_result.message)
                     self.trajectory.append(result, force=True)
@@ -211,6 +212,7 @@ class NotteAgent(BaseAgent):
                 # Successfully executed the action => add to trajectory
         step_msg = self.perception.perceive_action_result(result, include_ids=True)
         logger.info(f"{step_msg}\n\n")
+
         return None
 
     @property
@@ -246,18 +248,15 @@ class NotteAgent(BaseAgent):
         conv.add_system_message(content=system_msg)
         conv.add_user_message(content=task_msg)
 
-        # if no steps in trajectory, add the start trajectory message
-        if self.trajectory.num_steps == 0:
-            conv.add_user_message(content=self.prompt.empty_trajectory())
-            return conv.messages()
-
         # otherwise, add all past trajectorysteps to the conversation
         for step in self.trajectory:
             match step:
                 case AgentCompletion():
                     # TODO: choose if we want this to be an assistant message or a tool message
                     # self.conv.add_tool_message(step.agent_response, tool_id="step")
-                    conv.add_assistant_message(step.model_dump_json(exclude_none=True))
+                    conv.add_assistant_message(
+                        step.model_dump_json(exclude_none=True, context=dict(hide_interactions=True))
+                    )
                 case ExecutionResult():
                     # add step execution status to the conversation
                     conv.add_user_message(
@@ -268,13 +267,19 @@ class NotteAgent(BaseAgent):
                     pass
 
         # Add current observation (only if it's not empty)
-        obs = self.trajectory.last_observation
-        if obs is not None and obs is not Observation.empty():
+        last_obs = self.trajectory.last_observation
+        if last_obs is not None and last_obs is not Observation.empty():
             conv.add_user_message(
-                content=self.perception.perceive(obs=obs, progress=self.progress),
-                image=(obs.screenshot.bytes() if self.config.use_vision else None),
+                content=self.perception.perceive(obs=last_obs, progress=self.progress),
+                image=(last_obs.screenshot.bytes() if self.config.use_vision else None),
             )
-        conv.add_user_message(self.prompt.select_action())
+            conv.add_user_message(self.prompt.select_action())
+
+        # if no action execution in trajectory, add the start trajectory message
+        last_exec = self.trajectory.last_result
+        if last_exec is None:
+            conv.add_user_message(content=self.prompt.empty_trajectory())
+
         return conv.messages()
 
     @profiler.profiled()

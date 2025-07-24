@@ -47,6 +47,7 @@ from notte_browser.errors import (
     FailedToGetFileError,
     FailedToUploadFileError,
     NoStorageObjectProvidedError,
+    PlaywrightTimeoutError,
     ScrollActionFailedError,
     capture_playwright_errors,
 )
@@ -83,7 +84,7 @@ class BrowserController:
             case FormFillAction(value=value):
                 form_filler = FormFiller(window.page)
                 unpacked_values = {k: get_str_value(v) for k, v in value.items()}
-                await form_filler.fill_form(unpacked_values)
+                _ = await form_filler.fill_form(unpacked_values)
 
             case CaptchaSolveAction(captcha_type=_):
                 _ = await CaptchaHandler.handle_captchas(window, action)
@@ -156,7 +157,12 @@ class BrowserController:
         match action:
             # Interaction actions
             case ClickAction():
-                await locator.click(timeout=action_timeout)
+                try:
+                    await locator.click(timeout=action_timeout)
+                except PlaywrightTimeoutError as e:
+                    logger.warning(f"Failed to click on element: {e}, fallback to js click")
+                    await locator.evaluate("(el) => el.click()", timeout=action_timeout)
+
             case FillAction(value=value):
                 if text_contains_tabs(text=get_str_value(value)):
                     if self.verbose:

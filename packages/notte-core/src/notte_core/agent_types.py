@@ -1,10 +1,9 @@
-import time
 from typing import Any, Literal
 
 from loguru import logger
 from pydantic import BaseModel, field_serializer
 
-from notte_core.actions import ActionUnion, BaseAction, CompletionAction, GotoAction
+from notte_core.actions import ActionUnion, BaseAction, BrowserAction, CompletionAction, GotoAction, InteractionAction
 
 
 class RelevantInteraction(BaseModel):
@@ -79,11 +78,20 @@ class AgentCompletion(BaseModel):
     def serialize_state(self, state: AgentState, _info: Any) -> dict[str, Any]:
         # remove the previous ids as they might have changed
         response = state.model_dump(exclude_none=True)
-        response["relevant_interactions"] = []
+        if _info.context is not None and _info.context.get("hide_interactions"):
+            response["relevant_interactions"] = []
         return response
 
     def log_state(self, colors: bool = True) -> list[tuple[str, dict[str, str]]]:
-        action_str = f"   ▶ {self.action.name()} with id {self.action.id}"
+        if isinstance(self.action, InteractionAction):
+            action_str = f"   ▶ {self.action.name()} with id {self.action.id}"
+        elif isinstance(self.action, BrowserAction) and self.action.param is not None:
+            param_name = self.action.param.name
+            param_value = getattr(self.action, param_name, None)
+            action_str = f"   ▶ {self.action.name()} with {param_name}={param_value}"
+        else:
+            action_str = f"   ▶ {self.action.name()}"
+
         interaction_str = ""
         for interaction in self.state.relevant_interactions:
             interaction_str += f"\n   ▶ {interaction.id}: {interaction.reason}"
@@ -101,7 +109,6 @@ class AgentCompletion(BaseModel):
 
     def live_log_state(self, colors: bool = True) -> None:
         for text, data in self.log_state(colors=colors):
-            time.sleep(0.1)
             logger.opt(colors=True).info(text, **data)
 
     def is_completed(self) -> bool:

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
-from typing import List, Unpack, overload  # pyright: ignore [reportDeprecated]
+from typing import TYPE_CHECKING, List, Unpack, overload  # pyright: ignore [reportDeprecated]
 from urllib.parse import urljoin
 from webbrowser import open as open_browser
 
@@ -40,6 +40,9 @@ from notte_sdk.types import (
 from notte_sdk.websockets.base import WebsocketService
 from notte_sdk.websockets.jupyter import display_image_in_notebook
 
+if TYPE_CHECKING:
+    from notte_sdk.client import NotteClient
+
 
 class SessionViewerType(StrEnum):
     CDP = "cdp"
@@ -73,6 +76,7 @@ class SessionsClient(BaseClient):
 
     def __init__(
         self,
+        root_client: "NotteClient",
         api_key: str | None = None,
         server_url: str | None = None,
         verbose: bool = False,
@@ -84,8 +88,16 @@ class SessionsClient(BaseClient):
         Initializes the client with an optional API key and server URL for session management,
         setting the base endpoint to "sessions". Also initializes the last session response to None.
         """
-        super().__init__(base_endpoint_path="sessions", server_url=server_url, api_key=api_key, verbose=verbose)
-        self.page: PageClient = PageClient(api_key=api_key, verbose=verbose, server_url=server_url)
+        super().__init__(
+            root_client=root_client,
+            base_endpoint_path="sessions",
+            server_url=server_url,
+            api_key=api_key,
+            verbose=verbose,
+        )
+        self.page: PageClient = PageClient(
+            root_client=root_client, api_key=api_key, verbose=verbose, server_url=server_url
+        )
         self.viewer_type: SessionViewerType = viewer_type
 
     @staticmethod
@@ -485,6 +497,8 @@ class RemoteSession(SyncResource):
     def __exit__(  # pyright: ignore [reportMissingSuperCall]
         self, exc_type: type[BaseException], exc_val: BaseException, exc_tb: type[BaseException] | None
     ) -> None:
+        if exc_val is not None:  # pyright: ignore [reportUnnecessaryComparison]
+            logger.warning(f"Session exiting because of exception: {exc_val}")
         self.stop()
 
         if isinstance(exc_val, KeyboardInterrupt):
