@@ -6,9 +6,11 @@ from typing import Annotated, Final, Literal
 from dotenv import load_dotenv
 from loguru import logger
 from mcp.server.fastmcp import FastMCP, Image
+from notte_core.actions import ActionUnion
+from notte_core.common.config import PerceptionType
 from notte_sdk import NotteClient, __version__
 from notte_sdk.endpoints.sessions import RemoteSession
-from notte_sdk.types import ExecutionResponseWithSession, ObserveResponse, ScrapeResponse, SessionResponse
+from notte_sdk.types import ExecutionResponseWithSession, ScrapeResponse, SessionResponse
 
 _ = load_dotenv()
 
@@ -21,6 +23,7 @@ NOTTE_MCP_SERVER_PROTOCOL: Final[Literal["sse", "stdio"]] = os.getenv("NOTTE_MCP
 if NOTTE_MCP_SERVER_PROTOCOL not in ["sse", "stdio"]:
     raise ValueError(f"Invalid protocol: {NOTTE_MCP_SERVER_PROTOCOL}. Valid protocols are 'sse' and 'stdio'.")
 NOTTE_MCP_MAX_AGENT_WAIT_TIME: Final[int] = int(os.getenv("NOTTE_MCP_MAX_AGENT_WAIT_TIME", 120))
+NOTTE_API_URL: Final[str] = os.getenv("NOTTE_API_URL", "https://api.notte.cc")
 
 logger.info(f"""
 #######################################
@@ -30,6 +33,7 @@ notte-sdk version  : {__version__}
 protocol           : {NOTTE_MCP_SERVER_PROTOCOL}
 max agent wait time: {NOTTE_MCP_MAX_AGENT_WAIT_TIME}
 path               : {mcp_server_path}
+api url            : {NOTTE_API_URL}
 ########################################
 ########################################
 #######################################
@@ -97,7 +101,7 @@ def notte_stop_session() -> str:
 def notte_screenshot() -> Image | str:
     """Takes a screenshot of the current page"""
     session = get_session()
-    response = session.observe()
+    response = session.observe(perception_type=PerceptionType.FAST)
     return Image(
         data=response.screenshot.bytes(),
         format="png",
@@ -107,24 +111,15 @@ def notte_screenshot() -> Image | str:
 @mcp.tool(
     description="Observes elements on the web page. Use this tool to observe elements that you can later use in an action. Use observe instead of extract when dealing with actionable (interactable) elements rather than text."
 )
-def notte_observe(
-    url: Annotated[
-        str | None,
-        "The URL of the webpage to observe. If not provided, the current page in the Notte Browser Session will be observed.",
-    ] = None,
-    instructions: Annotated[
-        str | None, "Additional instructions to use for the observe (i.e specific fields or information to observe)."
-    ] = None,
-) -> ObserveResponse:
+def notte_observe() -> str:
     """Observe the current page and the available actions on it"""
     session = get_session()
-    _ = session.execute(type="goto", value=url)
-    response = session.observe(instructions=instructions)
+    response = session.observe()
     response.screenshot.raw = b""
     response.screenshot.bboxes = []
     response.screenshot.last_action_id = None
     assert session is not None
-    return response
+    return response.space.markdown
 
 
 @mcp.tool(description="Scrape the current page data")
@@ -146,17 +141,12 @@ def notte_scrape(
 @mcp.tool(
     description="Take an action on the current page. Use `notte_observe` first to list the available actions. Then use this tool to take an action. Don't hallucinate any action not listed in the observation."
 )
-def notte_step(
-    type: Annotated[str, "The type of action to execute. Use `notte_observe` to list the available actions."],
-    action_id: Annotated[str, "The ID of the action to execute. Use `notte_observe` to list the available actions."],
-    value: Annotated[
-        str | None,
-        "The value to input for form actions. Only to be provider for interactions actions (i.e ID starts with `I`, e.g. `I0`, `I1`, etc.)",
-    ] = None,
+def notte_execute(
+    action: ActionUnion,
 ) -> ExecutionResponseWithSession:
     """Take an action on the current page"""
     session = get_session()
-    response = session.execute(type=type, action_id=action_id, value=value)
+    response = session.execute(action=action)
     return response
 
 
