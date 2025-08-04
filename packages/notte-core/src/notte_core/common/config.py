@@ -128,6 +128,11 @@ class BrowserType(StrEnum):
     FIREFOX = "firefox"
 
 
+class BrowserBackend(StrEnum):
+    PLAYWRIGHT = "playwright"
+    PATCHRIGHT = "patchright"
+
+
 class ScrapingType(StrEnum):
     MARKDOWNIFY = "markdownify"
     MAIN_CONTENT = "main_content"
@@ -173,6 +178,7 @@ class NotteConfigDict(TypedDict, total=False):
     screenshot_type: ScreenshotType
     cdp_url: str | None
     browser_type: BrowserType
+    browser_backend: BrowserBackend
     web_security: bool
     custom_devtools_frontend: str | None
     debug_port: int | None
@@ -274,6 +280,7 @@ class NotteConfig(TomlConfig):
     cdp_url: str | None = None
     screenshot_type: ScreenshotType = "last_action"
     browser_type: BrowserType
+    browser_backend: BrowserBackend = BrowserBackend.PATCHRIGHT
     web_security: bool
     custom_devtools_frontend: str | None = None
     debug_port: int | None = None

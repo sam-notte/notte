@@ -18,6 +18,7 @@ max_consecutive_failures = 3
 # [browser]
 headless = false
 browser_type = "chromium"
+browser_backend = "patchright"
 screenshot_type = "last_action"
 web_security = false
 solve_captchas = false
