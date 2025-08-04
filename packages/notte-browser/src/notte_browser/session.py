@@ -79,6 +79,7 @@ class NotteSession(AsyncResource, SyncResource):
         self,
         window: BrowserWindow | None = None,
         perception_type: PerceptionType = config.perception_type,
+        raise_exception_on_failure: bool = False,
         storage: BaseStorage | None = None,
         tools: list[BaseTool] | None = None,
         **data: Unpack[SessionStartRequestDict],
@@ -95,6 +96,7 @@ class NotteSession(AsyncResource, SyncResource):
         self._action_selection_pipe: ActionSelectionPipe = ActionSelectionPipe(llmserve=llmserve)
         self.tools: list[BaseTool] = tools or []
         self.default_perception_type: PerceptionType = perception_type
+        self.default_raise_exception_on_failure: bool = raise_exception_on_failure
         self.trajectory: Trajectory = Trajectory()
         self._snapshot: BrowserSnapshot | None = None
 
@@ -187,7 +189,7 @@ class NotteSession(AsyncResource, SyncResource):
         retry: int = observe_max_retry_after_snapshot_update,
     ) -> ActionSpace:
         if config.verbose:
-            logger.info(f"🧿 observing page {self.snapshot.metadata.url}")
+            logger.info(f"🧿 observing page {self.snapshot.metadata.url} and {perception_type} perception")
         space = await self._action_space_pipe.with_perception(perception_type=perception_type).forward(
             snapshot=self.snapshot,
             previous_action_list=self.previous_interaction_actions,
@@ -264,7 +266,7 @@ class NotteSession(AsyncResource, SyncResource):
                 logger.warning(f"❌ Action selection failed: {selected_actions.reason}. Space will be empty.")
                 space = ActionSpace.empty(description=f"Action selection failed: {selected_actions.reason}")
             else:
-                space = space.filter([a.action_id for a in selected_actions.actions])
+                space = space.filter(action_ids=[a.action_id for a in selected_actions.actions])
 
         # --------------------------------
         # ------- Step 3: tracing --------
@@ -292,17 +294,30 @@ class NotteSession(AsyncResource, SyncResource):
         return None
 
     @overload
-    async def aexecute(self, action: BaseAction, /) -> ExecutionResult: ...
+    async def aexecute(
+        self, action: BaseAction, /, raise_exception_on_failure: bool | None = None
+    ) -> ExecutionResult: ...
     @overload
-    async def aexecute(self, action: dict[str, Any], /) -> ExecutionResult: ...
+    async def aexecute(
+        self, action: dict[str, Any], /, raise_exception_on_failure: bool | None = None
+    ) -> ExecutionResult: ...
     @overload
-    async def aexecute(self, action: None = None, **data: Unpack[ExecutionRequestDict]) -> ExecutionResult: ...
+    async def aexecute(
+        self,
+        /,
+        action: None = None,
+        raise_exception_on_failure: bool | None = None,
+        **data: Unpack[ExecutionRequestDict],
+    ) -> ExecutionResult: ...
 
     @timeit("aexecute")
     @track_usage("local.session.step")
     @profiler.profiled()
     async def aexecute(
-        self, action: BaseAction | dict[str, Any] | None = None, **data: Unpack[ExecutionRequestDict]
+        self,
+        action: BaseAction | dict[str, Any] | None = None,
+        raise_exception_on_failure: bool | None = None,
+        **data: Unpack[ExecutionRequestDict],
     ) -> ExecutionResult:
         """
         Execute an action, either by passing a BaseAction as the first argument, or by passing ExecutionRequestDict fields as kwargs.
@@ -408,6 +423,14 @@ class NotteSession(AsyncResource, SyncResource):
             exception=exception,
         )
         self.trajectory.append(execution_result)
+
+        _raise_exception_on_failure = (
+            raise_exception_on_failure
+            if raise_exception_on_failure is not None
+            else self.default_raise_exception_on_failure
+        )
+        if _raise_exception_on_failure and exception is not None:
+            raise exception
         return execution_result
 
     def execute_saved_actions(self, actions_file: str) -> None:

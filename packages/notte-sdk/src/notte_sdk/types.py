@@ -1256,6 +1256,8 @@ class ExecutionRequest(SdkBaseModel):
         # if provided, return the action
         if action is not None:
             if isinstance(action, dict):
+                if "selector" in action and "id" not in action:
+                    action["id"] = ""  # TODO: find a better way to handle this
                 return ActionValidation.model_validate({"action": action}).action
             return action
 
