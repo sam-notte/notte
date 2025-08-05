@@ -1,8 +1,9 @@
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Unpack
+from typing import TYPE_CHECKING, Literal, Unpack, overload
 
 from notte_core.actions import ActionUnion
-from pydantic import BaseModel
+from notte_core.data.space import ImageData, StructuredData, TBaseModel
+from pydantic import BaseModel, RootModel
 from typing_extensions import final, override
 
 from notte_sdk.endpoints.base import BaseClient, NotteEndpoint
@@ -11,6 +12,7 @@ from notte_sdk.types import (
     ObserveRequest,
     ObserveRequestDict,
     ObserveResponse,
+    ScrapeMarkdownParamsDict,
     ScrapeRequest,
     ScrapeRequestDict,
     ScrapeResponse,
@@ -113,7 +115,30 @@ class PageClient(BaseClient):
             PageClient._page_step_endpoint(),
         ]
 
-    def scrape(self, session_id: str, **data: Unpack[ScrapeRequestDict]) -> ScrapeResponse:
+    @overload
+    def scrape(self, session_id: str, /, **params: Unpack[ScrapeMarkdownParamsDict]) -> str: ...
+
+    @overload
+    def scrape(
+        self, session_id: str, *, instructions: str, **params: Unpack[ScrapeMarkdownParamsDict]
+    ) -> StructuredData[BaseModel]: ...
+
+    @overload
+    def scrape(self, session_id: str, *, only_images: Literal[True]) -> list[ImageData]: ...
+
+    @overload
+    def scrape(
+        self,
+        session_id: str,
+        *,
+        response_format: type[TBaseModel],
+        instructions: str | None = None,
+        **params: Unpack[ScrapeMarkdownParamsDict],
+    ) -> StructuredData[TBaseModel]: ...
+
+    def scrape(
+        self, session_id: str, **data: Unpack[ScrapeRequestDict]
+    ) -> str | StructuredData[BaseModel] | list[ImageData]:
         """
         Scrapes a page using provided parameters via the Notte API.
 
@@ -135,12 +160,21 @@ class PageClient(BaseClient):
         endpoint = PageClient._page_scrape_endpoint(session_id=session_id)
         response = self.request(endpoint.with_request(request))
         # Manually override the data.structured space to better match the response format
+        if request.only_images and response.images is not None:
+            return response.images
         response_format = request.response_format
         structured = response.structured
-        if response_format is not None and structured is not None:
-            if structured.success and structured.data is not None:
+        if request.requires_schema():
+            if structured is None:
+                raise ValueError("Failed to scrape structured data. This should not happen. Please report this issue.")
+            if not structured.success or structured.data is None:
+                return structured
+            if response_format is not None:
                 structured.data = response_format.model_validate(structured.data.model_dump())
-        return response
+            if isinstance(structured.data, RootModel):
+                structured.data = structured.data.root  # type: ignore[attr-defined]
+            return structured
+        return response.markdown
 
     def observe(self, session_id: str, **data: Unpack[ObserveRequestDict]) -> ObserveResponse:
         """

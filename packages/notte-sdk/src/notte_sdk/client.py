@@ -1,11 +1,12 @@
 # pyright: reportImportCycles=false
-from typing import Unpack
+from typing import Literal, Unpack, overload
 
 from loguru import logger
 from notte_core import enable_nest_asyncio
-from notte_core.actions import ActionValidation
-from notte_core.common.config import LlmModel
-from notte_core.data.space import DataSpace
+from notte_core.actions import ActionValidation, GotoAction
+from notte_core.common.config import LlmModel, PerceptionType
+from notte_core.data.space import ImageData, StructuredData, TBaseModel
+from pydantic import BaseModel
 from typing_extensions import final
 
 from notte_sdk.endpoints.agents import AgentsClient, BatchAgentFactory, RemoteAgentFactory
@@ -13,7 +14,7 @@ from notte_sdk.endpoints.files import FileStorageClient, RemoteFileStorageFactor
 from notte_sdk.endpoints.personas import PersonasClient, RemotePersonaFactory
 from notte_sdk.endpoints.sessions import RemoteSessionFactory, SessionsClient, SessionViewerType
 from notte_sdk.endpoints.vaults import RemoteVaultFactory, VaultsClient
-from notte_sdk.types import AgentResponse, ScrapeRequestDict
+from notte_sdk.types import AgentResponse, ScrapeMarkdownParamsDict, ScrapeRequestDict
 
 enable_nest_asyncio()
 
@@ -87,8 +88,40 @@ class NotteClient:
     def FileStorage(self) -> RemoteFileStorageFactory:
         return RemoteFileStorageFactory(self.files)
 
-    def scrape(self, **data: Unpack[ScrapeRequestDict]) -> DataSpace:
-        with self.Session() as session:
+    @overload
+    def scrape(self, /, url: str, **params: Unpack[ScrapeMarkdownParamsDict]) -> str: ...
+
+    @overload
+    def scrape(  # pyright: ignore [reportOverlappingOverload]
+        self,
+        /,
+        url: str,
+        *,
+        instructions: str,
+        **params: Unpack[ScrapeMarkdownParamsDict],
+    ) -> StructuredData[BaseModel]: ...
+
+    @overload
+    def scrape(  # pyright: ignore [reportOverlappingOverload]
+        self,
+        /,
+        url: str,
+        *,
+        response_format: type[TBaseModel],
+        instructions: str | None = None,
+        **params: Unpack[ScrapeMarkdownParamsDict],
+    ) -> StructuredData[TBaseModel]: ...
+
+    @overload
+    def scrape(self, /, url: str, *, only_images: Literal[True]) -> list[ImageData]: ...  # pyright: ignore [reportOverlappingOverload]
+
+    def scrape(
+        self, /, url: str, **data: Unpack[ScrapeRequestDict]
+    ) -> str | StructuredData[BaseModel] | list[ImageData]:
+        with self.Session(headless=True, perception_type=PerceptionType.FAST) as session:
+            result = session.execute(GotoAction(url=url))
+            if not result.success and result.exception is not None:
+                raise result.exception
             return session.scrape(**data)
 
     def Workflow(self, session_id: str, agent_id: str) -> AgentResponse:

@@ -3,6 +3,7 @@ import os
 import pytest
 from dotenv import load_dotenv
 from notte_browser.session import NotteSession
+from notte_core.data.space import StructuredData
 from notte_sdk.client import NotteClient
 from pydantic import BaseModel
 
@@ -19,63 +20,118 @@ class PricingPlans(BaseModel):
 
 def test_scraping_markdown():
     _ = load_dotenv()
-    with NotteSession() as page:
-        data = page.scrape(url="https://www.notte.cc")
-        assert data.markdown is not None
+    with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        markdown = session.scrape()
+        assert isinstance(markdown, str)
+        assert len(markdown) > 0
 
 
 @pytest.mark.asyncio
 async def test_scraping_response_format():
     _ = load_dotenv()
-    async with NotteSession() as page:
-        data = await page.ascrape(url="https://www.notte.cc", response_format=PricingPlans)
-        assert data.structured is not None
-        assert data.structured.success
-        assert data.structured.data is not None
-        plans = PricingPlans.model_validate(data.structured.data)
+    async with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        structured = await session.ascrape(response_format=PricingPlans)
+        assert structured.success
+        assert structured.data is not None
+        plans = PricingPlans.model_validate(structured.data)
         assert len(plans.plans) == 4
-        assert plans == data.structured.get()
+        assert plans == structured.get()
 
 
 @pytest.mark.asyncio
 async def test_scraping_custom_instructions():
     _ = load_dotenv()
-    async with NotteSession() as page:
-        data = await page.ascrape(url="https://www.notte.cc", instructions="Extract the pricing plans from the page")
-        assert data.structured is not None
-        assert data.structured.success
-        assert data.structured.data is not None
-        assert data.structured.get() == data.structured.data.model_dump()
+    async with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        structured = await session.ascrape(instructions="Extract the pricing plans from the page")
+        assert structured.success
+        assert structured.data is not None
+        assert structured.get() == structured.data
+
+
+@pytest.mark.asyncio
+async def test_scraping_custom_instructions_and_response_format():
+    _ = load_dotenv()
+    async with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        structured = await session.ascrape(
+            instructions="Extract the pricing plans from the page", response_format=PricingPlans
+        )
+        assert structured.success
+        assert structured.data is not None
+        assert structured.get() == structured.data
 
 
 def test_sdk_scraping_markdown():
     _ = load_dotenv()
     client = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
     data = client.scrape(url="https://www.notte.cc")
-    assert data.markdown is not None
+    assert isinstance(data, str)
+    assert len(data) > 0
+
+
+def test_sdk_scraping_markdown_no_positional():
+    _ = load_dotenv()
+    client = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
+    data = client.scrape("https://www.notte.cc")
+    assert isinstance(data, str)
+    assert len(data) > 0
 
 
 def test_sdk_scraping_response_format():
     _ = load_dotenv()
     client = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
-    data = client.scrape(url="https://www.notte.cc", response_format=PricingPlans)
-    assert data.structured is not None
-    assert data.structured.success
-    assert data.structured.data is not None
-    assert isinstance(data.structured.data, PricingPlans)
+    structured = client.scrape(url="https://www.notte.cc", response_format=PricingPlans)
+    assert structured.success
+    assert structured.data is not None
+    assert isinstance(structured.data, PricingPlans)
 
 
 @pytest.mark.asyncio
 async def test_readme_async_scraping_example():
     _ = load_dotenv()
-    async with NotteSession() as page:
-        data = await page.ascrape(url="https://www.notte.cc")
-        assert data.markdown is not None
+    async with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        data = await session.ascrape()
+        assert isinstance(data, str)
+        assert len(data) > 0
 
 
 def test_readme_sync_scraping_example():
     _ = load_dotenv()
     client = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
-    with client.Session() as page:
-        data = page.scrape(url="https://www.notte.cc")
-        assert data.markdown is not None
+    with client.Session() as session:
+        result = session.execute({"type": "goto", "url": "https://www.notte.cc"})
+        assert result.success
+        data = session.scrape()
+        assert isinstance(data, str)
+        assert len(data) > 0
+
+
+@pytest.mark.asyncio
+async def test_scraping_images_only():
+    _ = load_dotenv()
+    async with NotteSession() as session:
+        result = session.execute({"type": "goto", "url": "https://gymbeam.pl"})
+        assert result.success
+        images = await session.ascrape()
+        assert len(images) > 0
+
+
+@pytest.mark.asyncio
+async def test_scraping_structured_data():
+    _ = load_dotenv()
+    client = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
+    with client.Session() as session:
+        _ = session.execute({"type": "goto", "url": "https://gymbeam.pl"})
+        data = session.scrape(instructions="Extract the company name")
+        assert isinstance(data, StructuredData)
+        assert data.success
+        assert isinstance(data.data, dict)
