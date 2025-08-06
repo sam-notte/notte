@@ -10,6 +10,8 @@ from notte_agent.falco.perception import FalcoPerception
 from notte_core.actions import ActionUnion
 from notte_core.browser.observation import ExecutionResult, TrajectoryProgress
 from notte_core.common.config import PerceptionType
+from notte_core.data.space import StructuredData
+from notte_core.utils.pydantic_schema import JsonResponseFormat, convert_response_format_to_pydantic_model
 from notte_sdk import NotteClient, __version__
 from notte_sdk.endpoints.sessions import RemoteSession
 from notte_sdk.types import (
@@ -53,6 +55,7 @@ api url            : {NOTTE_API_URL}
 """)
 
 notte = NotteClient(api_key=os.getenv("NOTTE_API_KEY"))
+notte.health_check()
 
 # Create an MCP server
 mcp = FastMCP(
@@ -175,18 +178,33 @@ def notte_observe() -> ObservationToolResponse:
 
 @mcp.tool(description="Scrape the current page data")
 def notte_scrape(
+    response_format: Annotated[
+        JsonResponseFormat | None,
+        "The response format to use for the scrape. If None and no instructions are provided, the full current page will be scraped as a markdown string (useful for debugging).",
+    ] = None,
     instructions: Annotated[
         str | None,
-        "Additional instructions to use for the scrape (i.e specific fields or information to extract). If None, the current page will be scraped as a markdown string.",
+        "Additional instructions to use for the scrape (i.e specific fields or information to extract). You can use that with `response_format=None` first to try to extract some data from the page from a rough natural language description. If None and no response format is provided, the full current page will be scraped as a markdown string (useful for debugging).",
     ] = None,
-) -> str | BaseModel:
+) -> str | StructuredData[BaseModel]:
     """Scrape the current page data"""
     global current_step
-    current_step += 1
     session = get_session()
-    if instructions is None:
-        return session.scrape()
-    return session.scrape(instructions=instructions)
+    current_step += 1
+    match response_format, instructions:
+        case None, None:
+            return session.scrape()
+        case None, _:
+            return session.scrape(instructions=instructions)
+        case _, _:
+            try:
+                _response_format = convert_response_format_to_pydantic_model(response_format.model_dump())
+            except Exception as e:
+                return f"Error converting response format to pydantic model: {e}"
+            assert _response_format is not None, (
+                f"Error converting response format to pydantic model: {response_format.model_dump_json()}"
+            )
+            return session.scrape(instructions=instructions, response_format=_response_format)
 
 
 @mcp.tool(
