@@ -22,7 +22,8 @@
             "pages": [
               "intro/what-is-notte",
               "intro/quickstart",
-              "intro/python-sdk"
+              "intro/python-sdk",
+              "intro/pricing"
             ]
           },
           {
