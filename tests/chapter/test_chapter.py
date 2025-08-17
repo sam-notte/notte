@@ -22,7 +22,7 @@ def mock_agent_run(monkeypatch):
 
 
 def test_chapter_success_does_not_spawn_agent(mock_agent_run):
-    with notte.Script() as session:
+    with notte.SessionScript() as session:
         _ = session.execute(type="goto", value="https://shop.notte.cc/")
         _ = session.observe()
 
@@ -37,7 +37,7 @@ def test_chapter_success_does_not_spawn_agent(mock_agent_run):
 
 
 def test_chapter_failure_triggers_agent(mock_agent_run):
-    with notte.Script() as session:
+    with notte.SessionScript() as session:
         _ = session.execute(type="goto", value="https://shop.notte.cc/")
         _ = session.observe()
 
@@ -55,12 +55,12 @@ def test_chapter_failure_triggers_agent(mock_agent_run):
 
 
 def test_chapter_with_agent_fix():
-    with notte.Script() as session:
+    with notte.SessionScript() as session:
         _ = session.execute(type="goto", value="https://shop.notte.cc/")
         _ = session.observe()
 
         # close modal if it appears but don't fail if it doesn't
-        _ = session.execute(type="click", id="B1", raise_exception_on_failure=False)
+        _ = session.execute(type="click", id="B1", raise_on_failure=False)
         _ = session.observe()
 
         with notte.Chapter(session, "Add Cap to cart") as chapter:

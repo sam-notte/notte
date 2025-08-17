@@ -26,7 +26,7 @@ from notte_core.utils.pydantic_schema import convert_response_format_to_pydantic
 from notte_core.utils.url import get_root_domain
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pyotp import TOTP
-from typing_extensions import TypedDict, override
+from typing_extensions import NotRequired, TypedDict, override
 
 # ############################################################
 # Session Management
@@ -882,7 +882,7 @@ class DeleteCredentialsRequest(SdkBaseModel):
 
 
 class DeleteCredentialsResponse(SdkBaseModel):
-    status: Annotated[str, Field(description="Status of the deletion")]
+    status: Annotated[Literal["success", "failure"], Field(description="Status of the deletion")]
     message: Annotated[str, Field(description="Message of the deletion")] = "Credentials deleted successfully"
 
 
@@ -897,7 +897,7 @@ class DeleteVaultRequest(SdkBaseModel):
 
 
 class DeleteVaultResponse(SdkBaseModel):
-    status: Annotated[str, Field(description="Status of the deletion")]
+    status: Annotated[Literal["success", "failure"], Field(description="Status of the deletion")]
     message: Annotated[str, Field(description="Message of the deletion")] = "Vault deleted successfully"
 
 
@@ -944,7 +944,7 @@ class DeleteCreditCardRequest(SdkBaseModel):
 
 
 class DeleteCreditCardResponse(SdkBaseModel):
-    status: Annotated[str, Field(description="Status of the deletion")]
+    status: Annotated[Literal["success", "failure"], Field(description="Status of the deletion")]
     message: Annotated[str, Field(description="Message of the deletion")] = "Credit card deleted successfully"
 
 
@@ -976,7 +976,7 @@ class PersonaResponse(SdkBaseModel):
 
 
 class DeletePersonaResponse(SdkBaseModel):
-    status: Annotated[str, Field(description="Status of the deletion")]
+    status: Annotated[Literal["success", "failure"], Field(description="Status of the deletion")]
     message: Annotated[str, Field(description="Message of the deletion")] = "Persona deleted successfully"
 
 
@@ -1044,7 +1044,7 @@ class CreatePhoneNumberResponse(SdkBaseModel):
 
 
 class DeletePhoneNumberResponse(SdkBaseModel):
-    status: Annotated[str, Field(description="Status of the deletion")]
+    status: Annotated[Literal["success", "failure"], Field(description="Status of the deletion")]
     message: Annotated[str, Field(description="Message of the deletion")] = "Phone number deleted successfully"
 
 
@@ -1534,3 +1534,118 @@ class AgentStatusResponse(AgentResponse, ReplayResponse):
     credit_usage: Annotated[
         float | None, Field(description="Credit usage for the agent. None if the agent is still running")
     ] = None
+
+
+# ############################################################
+# Agent endpoints
+# ############################################################
+
+
+# Script request dictionaries
+class CreateScriptRequestDict(TypedDict, total=True):
+    """Request dictionary for creating a script.
+
+    Args:
+        script_path: The path to the script to upload.
+    """
+
+    script_path: str
+
+
+class UpdateScriptRequestDict(TypedDict):
+    """Request dictionary for updating a script.
+
+    Args:
+        script_path: The path to the script to upload.
+        script_id: The ID of the script to update.
+        version: The version of the script to update.
+    """
+
+    script_path: str
+    script_id: str
+    version: NotRequired[str | None]
+
+
+class GetScriptRequestDict(TypedDict, total=False):
+    """Request dictionary for getting a script.
+
+    Args:
+        script_id: The ID of the script to get.
+        version: The version of the script to get.
+    """
+
+    script_id: Required[str]
+    version: str | None
+
+
+class DeleteScriptRequestDict(TypedDict, total=True):
+    """Request dictionary for deleting a script.
+
+    Args:
+        script_id: The ID of the script to delete.
+    """
+
+    script_id: str
+
+
+class ListScriptsRequestDict(TypedDict, total=False):
+    """Request dictionary for listing scripts.
+
+    Args:
+        page: The page number to list scripts for.
+        page_size: The number of scripts to list per page.
+    """
+
+    page: int
+    page_size: int
+
+
+# Script request models
+class CreateScriptRequest(SdkBaseModel):
+    script_path: Annotated[str, Field(description="The path to the script to upload")]
+
+
+class GetScriptResponse(SdkBaseModel):
+    script_id: Annotated[str, Field(description="The ID of the script")]
+    created_at: Annotated[dt.datetime, Field(description="The creation time of the script")]
+    updated_at: Annotated[dt.datetime, Field(description="The last update time of the script")]
+    latest_version: Annotated[str, Field(description="The version of the script")]
+    versions: Annotated[list[str], Field(description="The versions of the script")]
+    status: Annotated[str, Field(description="The status of the script")]
+
+
+class GetScriptWithLinkResponse(GetScriptResponse, FileLinkResponse):
+    pass
+
+
+class UpdateScriptRequest(SdkBaseModel):
+    script_path: Annotated[str, Field(description="The path to the script to upload")]
+    script_id: Annotated[str, Field(description="The ID of the script to update")]
+    version: Annotated[str | None, Field(description="The version of the script to update")] = None
+
+
+class GetScriptRequest(SdkBaseModel):
+    script_id: Annotated[str, Field(description="The ID of the script to get")]
+    version: Annotated[str | None, Field(description="The version of the script to get")] = None
+
+
+class DeleteScriptRequest(SdkBaseModel):
+    script_id: Annotated[str, Field(description="The ID of the script to delete")]
+
+
+class DeleteScriptResponse(SdkBaseModel):
+    status: Annotated[Literal["success", "failure"], Field(description="The status of the deletion")]
+    message: Annotated[str, Field(description="The message of the deletion")]
+
+
+class ListScriptsRequest(SdkBaseModel):
+    page: Annotated[int, Field(description="The page number to list scripts for")] = 1
+    page_size: Annotated[int, Field(description="The number of scripts to list per page")] = 10
+
+
+class ListScriptsResponse(SdkBaseModel):
+    items: Annotated[list[GetScriptResponse], Field(description="The scripts")]
+    page: Annotated[int, Field(description="Current page number")]
+    page_size: Annotated[int, Field(description="Number of items per page")]
+    has_next: Annotated[bool, Field(description="Whether there are more pages")]
+    has_previous: Annotated[bool, Field(description="Whether there are previous pages")]

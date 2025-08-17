@@ -71,6 +71,19 @@ class NodeSelectors(BaseModel):
             selector_list.append(f"xpath={self.xpath_selector}")
         return selector_list
 
+    @staticmethod
+    def from_unique_selector(unique_selector: str) -> "NodeSelectors":
+        return NodeSelectors(
+            playwright_selector=unique_selector,
+            css_selector="",
+            xpath_selector="",
+            notte_selector="",
+            in_iframe=False,
+            in_shadow_root=False,
+            iframe_parent_css_selectors=[],
+            python_selector="",
+        )
+
 
 # Type alias for clarity
 AttributeValue: TypeAlias = str | int | bool | None
