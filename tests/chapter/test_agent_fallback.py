@@ -26,14 +26,14 @@ def test_chapter_success_does_not_spawn_agent(mock_agent_run):
         _ = session.execute(type="goto", value="https://shop.notte.cc/")
         _ = session.observe()
 
-        with notte.Chapter(session, "Go to cart") as chapter:
+        with notte.AgentFallback(session, "Go to cart") as chapter:
             _ = session.execute(type="click", id="L1")
         assert chapter.success is True
 
     assert mock_agent_run["count"] == 0
     assert chapter.success is True
     assert len(chapter.steps) == 1
-    assert "Go to cart" in chapter.goal
+    assert "Go to cart" in chapter.task
 
 
 def test_chapter_failure_triggers_agent(mock_agent_run):
@@ -41,11 +41,11 @@ def test_chapter_failure_triggers_agent(mock_agent_run):
         _ = session.execute(type="goto", value="https://shop.notte.cc/")
         _ = session.observe()
 
-        with notte.Chapter(session, "Go to cart") as chapter:
+        with notte.AgentFallback(session, "Go to cart") as chapter:
             res = session.execute(type="click", id="INVALID_ACTION_ID")
             assert res.success is False
 
-    # Agent should have been invoked exactly once with the goal as task
+    # Agent should have been invoked exactly once with the task as task
     assert mock_agent_run["count"] == 1
     assert "Go to cart" in mock_agent_run["last_kwargs"]["task"]
 
@@ -63,7 +63,7 @@ def test_chapter_with_agent_fix():
         _ = session.execute(type="click", id="B1", raise_on_failure=False)
         _ = session.observe()
 
-        with notte.Chapter(session, "Add Cap to cart") as chapter:
+        with notte.AgentFallback(session, "Add Cap to cart") as chapter:
             _ = session.execute(type="click", id="L7")
             res = session.execute(type="click", id="X1")  # force agent to spawn because ID is not found
             assert res.success is False
