@@ -760,7 +760,7 @@
 
 	// --- Define constants for distinct interaction check ---
 	const DISTINCT_INTERACTIVE_TAGS = new Set([
-		'a', 'button', 'input', 'select', 'textarea', 'summary', 'details', 'label', 'option'
+		'button', 'input', 'select', 'textarea', 'summary', 'details', 'label', 'option'
 	]);
 	const INTERACTIVE_ROLES = new Set([
 		'button', 'link', 'menuitem', 'menuitemradio', 'menuitemcheckbox',
