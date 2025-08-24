@@ -757,16 +757,7 @@ class InteractionAction(BaseAction, metaclass=ABCMeta):
         # could maybe dispatch?
         if selector is not None:
             if isinstance(selector, str):
-                action.selector = NodeSelectors(
-                    playwright_selector=selector,
-                    css_selector="",
-                    xpath_selector="",
-                    notte_selector="",
-                    in_iframe=False,
-                    in_shadow_root=False,
-                    iframe_parent_css_selectors=[],
-                    python_selector="",
-                )
+                action.selector = NodeSelectors.from_unique_selector(selector)
             elif isinstance(selector, NodeSelectors):  # pyright: ignore [reportUnnecessaryIsInstance]
                 action.selector = selector
             else:

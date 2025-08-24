@@ -34,9 +34,7 @@ async def locate_element(page: Page, selectors: NodeSelectors) -> Locator:
             logger.debug(f"Found {count} elements for '{selector}'. Check out the dom tree for more details.")
         elif count == 1:
             return locator
-    raise InvalidLocatorRuntimeError(
-        f"No locator is available for xpath='{selectors.xpath_selector}' or css='{selectors.css_selector}'"
-    )
+    raise InvalidLocatorRuntimeError(f"No locator is available for: {selectors.selectors()}")
 
 
 def selectors_through_shadow_dom(node: DomNode) -> NodeSelectors:

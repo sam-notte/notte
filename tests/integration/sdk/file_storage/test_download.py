@@ -2,8 +2,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 from notte_sdk import NotteClient
 from pydantic import BaseModel
+
+_ = load_dotenv()
 
 
 class DownloadTest(BaseModel):
@@ -32,7 +35,7 @@ def test_file_storage_downloads(test: DownloadTest):
 
         assert resp.success
 
-        downloaded_files = storage.list()
+        downloaded_files = storage.list_downloaded_files()
         assert len(downloaded_files) == 1, f"Expected 1 downloaded files, but found {len(downloaded_files)}"
 
         # try to dowwload the file

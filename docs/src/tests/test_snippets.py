@@ -105,7 +105,7 @@ def handle_scraping_agent(
     eval_example: EvalExample,
     code: str,
 ) -> None:
-    code = code.replace("<your-vault-id>", "8c618111-1d01-4e54-842a-6cac98ef4838")
+    code = code.replace("<your-vault-id>", "4d97be83-baf3-4c7a-a417-693e23903e70")
     run_example(eval_example, code=code)
 
 
@@ -115,7 +115,7 @@ def handle_vault_manual(
     code: str,
 ) -> None:
     code = code.replace("<your-mfa-secret>", "JBSWY3DPEHPK3PXP").replace(
-        "my_vault_id", "8c618111-1d01-4e54-842a-6cac98ef4838"
+        "my_vault_id", "4d97be83-baf3-4c7a-a417-693e23903e70"
     )
     try:
         run_example(eval_example, code=code)
@@ -152,6 +152,18 @@ def handle_storage_upload_file(
 ) -> None:
     code = code.replace("/path/to/document.pdf", "tests/data/test.pdf")
     run_example(eval_example, code=code)
+
+
+@handle_file("sessions/external_cdp.mdx")
+def handle_external_cdp(
+    eval_example: EvalExample,
+    code: str,
+) -> None:
+    client = NotteClient()
+    with client.Session() as session:
+        cdp_url = session.cdp_url()
+        code = code.replace("wss://your-external-cdp-url", cdp_url)
+        run_example(eval_example, code=code)
 
 
 @handle_file("sessions/upload_cookies.mdx")

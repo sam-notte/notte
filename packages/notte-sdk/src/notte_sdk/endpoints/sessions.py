@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from typing_extensions import final, override
 
 from notte_sdk.endpoints.base import BaseClient, NotteEndpoint
-from notte_sdk.endpoints.files import FileStorageClient
+from notte_sdk.endpoints.files import RemoteFileStorage
 from notte_sdk.endpoints.page import PageClient
 from notte_sdk.types import (
     Cookie,
@@ -481,7 +481,7 @@ class RemoteSession(SyncResource):
         self,
         client: SessionsClient,
         request: SessionStartRequest,
-        storage: FileStorageClient | None = None,
+        storage: RemoteFileStorage | None = None,
         perception_type: PerceptionType = config.perception_type,
         raise_on_failure: bool = False,
     ) -> None:
@@ -499,9 +499,15 @@ class RemoteSession(SyncResource):
         self.request.headless = True
         self.client: SessionsClient = client
         self.response: SessionResponse | None = None
-        self.storage: FileStorageClient | None = storage
+        self.storage: RemoteFileStorage | None = storage
         self.default_perception_type: PerceptionType = perception_type
         self.default_raise_on_failure: bool = raise_on_failure
+
+        if self.storage is not None and not self.request.use_file_storage:
+            logger.warning(
+                "Storage is provided but `use_file_storage=False` in session start request. Overriding `use_file_storage=True`."
+            )
+            self.request.use_file_storage = True
 
     @override
     def __exit__(  # pyright: ignore [reportMissingSuperCall]
@@ -814,7 +820,7 @@ class RemoteSessionFactory:
     def __call__(
         self,
         *,
-        storage: FileStorageClient | None = None,
+        storage: RemoteFileStorage | None = None,
         perception_type: PerceptionType = config.perception_type,
         raise_on_failure: bool = config.raise_on_session_execution_failure,
         **data: Unpack[SessionStartRequestDict],
@@ -827,7 +833,7 @@ class RemoteSessionFactory:
         self,
         session_id: str | None = None,
         *,
-        storage: FileStorageClient | None = None,
+        storage: RemoteFileStorage | None = None,
         perception_type: PerceptionType = config.perception_type,
         raise_on_failure: bool = config.raise_on_session_execution_failure,
         **data: Unpack[SessionStartRequestDict],

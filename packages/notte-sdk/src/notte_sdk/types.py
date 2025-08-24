@@ -1280,8 +1280,16 @@ class ExecutionRequest(SdkBaseModel):
     ] = None
 
     selector: Annotated[
-        str | NodeSelectors | None, Field(description="The dom selector to use to find the element to interact with")
+        NodeSelectors | None, Field(description="The dom selector to use to find the element to interact with")
     ] = None
+
+    @field_validator("selector", mode="before")
+    @classmethod
+    def convert_selector(cls, value: str | NodeSelectors | None) -> NodeSelectors | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return NodeSelectors.from_unique_selector(value)
 
     def get_action(self, action: ActionUnion | dict[str, Any] | None = None) -> ActionUnion:
         # if provided, return the action

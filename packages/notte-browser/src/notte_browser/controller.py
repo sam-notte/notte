@@ -1,3 +1,5 @@
+import traceback
+
 from loguru import logger
 from notte_core.actions import (
     BaseAction,
@@ -59,7 +61,7 @@ from notte_browser.window import BrowserWindow
 class BrowserController:
     def __init__(
         self,
-        verbose: bool = False,
+        verbose: bool,
         storage: BaseStorage | None = None,
     ) -> None:
         self.verbose: bool = verbose
@@ -289,8 +291,29 @@ class BrowserController:
                             logger.info("Trying to set files")
                         await locator.set_input_files(files=[upload_file_path])
                     except Exception as e:
-                        logger.info("Error setting files")
-                        logger.info(f"Error: {e}")
+                        if "Node is not an HTMLInputElement" in str(e):
+                            # this is a special case where the element cannot be clicked on
+                            # try to go to the root element throught the element bounding boxes and click on it
+                            bbox = await locator.bounding_box()
+                            if bbox is None:
+                                raise FailedToUploadFileError(
+                                    action_id=action.id,
+                                    file_path=file_path,
+                                    error=e,
+                                )
+                            # click on the center of the element
+                            try:
+                                async with window.page.expect_file_chooser() as fc_info:
+                                    await window.page.mouse.click(
+                                        bbox["x"] + bbox["width"] * 0.54, bbox["y"] + bbox["height"] * 0.35
+                                    )
+                                    fc = await fc_info.value
+                                    await fc.set_files(upload_file_path)
+                                    return True
+                            except Exception:
+                                logger.warning("Error setting files through bounding box...")
+                        else:
+                            logger.warning(f"Error setting files: {traceback.format_exc()}")
                         raise FailedToUploadFileError(
                             action_id=action.id,
                             file_path=file_path,
