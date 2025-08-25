@@ -18,7 +18,7 @@ from notte_core.actions import (
     ScrapeAction,
     ToolAction,
 )
-from notte_core.browser.observation import ExecutionResult, Observation
+from notte_core.browser.observation import ExecutionResult, Observation, Screenshot
 from notte_core.browser.snapshot import BrowserSnapshot
 from notte_core.common.config import PerceptionType, RaiseCondition, ScreenshotType, config
 from notte_core.common.logging import timeit
@@ -204,13 +204,13 @@ class NotteSession(AsyncResource, SyncResource):
         return actions
 
     @track_usage("local.session.replay")
+    @profiler.profiled()
     def replay(self, screenshot_type: ScreenshotType = config.screenshot_type) -> WebpReplay:
-        observations = list(self.trajectory.observations())
-        screenshots: list[bytes] = [obs.screenshot.bytes(screenshot_type) for obs in observations]
+        screenshots_traj = list(self.trajectory.all_screenshots())
+        screenshots: list[bytes] = [screen.bytes(screenshot_type) for screen in screenshots_traj]
         if len(screenshots) == 0:
             raise ValueError("No screenshots found in agent trajectory")
-        # remove first obs if it's empty observation (for agent, the first one is always empty)
-        elif len(screenshots) > 1 and observations[0] is Observation.empty():
+        elif len(screenshots) > 1 and screenshots[0] == Observation.empty().screenshot.bytes(screenshot_type):
             screenshots = screenshots[1:]
         return ScreenshotReplay.from_bytes(screenshots).get(quality=90)  # pyright: ignore [reportArgumentType]
 
@@ -253,6 +253,16 @@ class NotteSession(AsyncResource, SyncResource):
                 )
 
         return space
+
+    async def ascreenshot(self) -> Screenshot:
+        screenshot = Screenshot(raw=(await self.window.screenshot()), bboxes=[], last_action_id=None)
+        self.trajectory.append(screenshot)
+        return screenshot
+
+    def screenshot(
+        self,
+    ) -> Screenshot:
+        return asyncio.run(self.ascreenshot())
 
     @timeit("observe")
     @track_usage("local.session.observe")
@@ -444,6 +454,9 @@ class NotteSession(AsyncResource, SyncResource):
                 raise InvalidActionError(reason="Could not resolve action", action_id="")
             else:
                 resolved_action = step_action
+
+        # add screenshot to trajectory
+        _ = await self.ascreenshot()
 
         execution_result = ExecutionResult(
             action=resolved_action,

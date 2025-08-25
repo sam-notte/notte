@@ -18,7 +18,13 @@ from notte_core.agent_types import AgentCompletion
 from notte_core.browser.dom_tree import NodeSelectors
 from notte_core.browser.observation import ExecutionResult, Observation
 from notte_core.browser.snapshot import TabsData
-from notte_core.common.config import BrowserType, LlmModel, PerceptionType, PlaywrightProxySettings, config
+from notte_core.common.config import (
+    BrowserType,
+    LlmModel,
+    PerceptionType,
+    PlaywrightProxySettings,
+    config,
+)
 from notte_core.credentials.base import Credential, CredentialsDict, CreditCardDict
 from notte_core.data.space import DataSpace
 from notte_core.trajectory import ElementLiteral
