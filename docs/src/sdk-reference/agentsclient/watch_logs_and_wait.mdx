@@ -3,7 +3,11 @@ title: "watch_logs_and_wait"
 description: "Asynchronously execute a task with the agent"
 ---
 
-This is currently a wrapper around the synchronous run method. In future versions, this might be implemented as a true async operation
+
+
+This is currently a wrapper around the synchronous run method.
+In future versions, this might be implemented as a true async operation.
+
 
 
 ## Parameters
@@ -16,14 +20,10 @@ This is currently a wrapper around the synchronous run method. In future version
 
 </ParamField>
 
-<ParamField path="max_steps" type="int">
-
-</ParamField>
-
 <ParamField path="log" type="bool">
    (default: True)
 </ParamField>
 
 ## Returns
 
-[`AgentStatusResponse`](../misc/agentstatusresponse): The response from the completed agent execution.
+[`AgentStatusResponse`](/sdk-reference/misc/agentstatusresponse): The response from the completed agent execution.

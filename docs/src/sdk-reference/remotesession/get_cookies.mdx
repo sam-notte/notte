@@ -5,10 +5,18 @@ description: "Gets cookies from the session"
 
 
 
+```python
+import json
+cookies = session.get_cookies() # get the cookies from the session
+with open("cookies.json", "w") as f:
+    json.dump(cookies, f) # save the cookies to a json file
+```
+
+
 
 ## Returns
 
-`list`[[`Cookie`](../misc/cookie)]: The response containing the list of cookies in the session.
+`list`[[`CookieDict`](/sdk-reference/misc/cookiedict)]: The response containing the list of cookies in the session.
 
 ## Raises
 

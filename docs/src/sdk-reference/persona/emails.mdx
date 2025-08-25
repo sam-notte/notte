@@ -1,0 +1,41 @@
+---
+title: "emails"
+description: "Read recent emails sent to the persona"
+---
+
+
+
+```python
+persona = notte.Persona("<your-persona-id>")
+emails = persona.emails()
+```
+
+You can also filter the emails by using the `only_unread` parameter.
+
+```python
+emails = persona.emails(only_unread=True)
+```
+
+Be careful once emails are listed, they are considered read.
+
+
+Use the `limit` and/or `timedelta` parameters to limit the number of emails returned
+
+
+## Parameters
+
+<ParamField path="limit" type="int">
+  Max number of emails to return
+</ParamField>
+
+<ParamField path="timedelta" type="datetime.timedelta | None">
+  Return only emails that are not older than `timedelta`
+</ParamField>
+
+<ParamField path="only_unread" type="bool">
+
+</ParamField>
+
+## Returns
+
+`Sequence`[[`EmailResponse`](/sdk-reference/misc/emailresponse)]

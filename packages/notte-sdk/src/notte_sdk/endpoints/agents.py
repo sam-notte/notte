@@ -380,8 +380,15 @@ class AgentsClient(BaseClient):
         Run an agent with the specified request parameters.
         and wait for completion
 
-        Validates the provided data using the AgentCreateRequest model, sends a run request through the
-        designated endpoint, updates the last agent response, and returns the resulting AgentResponse.
+        ```python
+        with notte.Session() as session:
+            agent = notte.Agent(session=session)
+            agent.run(task="go to notte.cc and explain what their product is")
+        ```
+
+        This function is synchronous and will block the main thread until the agent is completed.
+
+        > Websockets are used to stream the agent logs to the standard output to provide live logs to the user.
         """
         return asyncio.run(self.arun(**data))
 
@@ -443,6 +450,16 @@ class AgentsClient(BaseClient):
     def replay(self, agent_id: str) -> WebpReplay:
         """
         Downloads the replay for the specified agent in webp format.
+
+        ```python
+        replay = agent.replay()
+        ```
+
+        The replay is a webp file that can be displayed in a browser.
+
+        ```python
+        replay.show()
+        ```
 
         Args:
             agent_id: The identifier of the agent to download the replay for.
@@ -782,10 +799,17 @@ class RemoteAgent:
     @track_usage("cloud.agent.run")
     def run(self, **data: Unpack[AgentRunRequestDict]) -> AgentStatusResponse:
         """
-        Execute a task with the agent and wait for completion.
+        Run an agent with the specified request parameters and wait for completion.
 
-        This method combines starting the agent and waiting for its completion in one operation.
-        It's the recommended way to run tasks that need to complete before proceeding.
+        ```python
+        with notte.Session() as session:
+            agent = notte.Agent(session=session)
+            agent.run(task="go to notte.cc and explain what their product is")
+        ```
+
+        This function is synchronous and will block the main thread until the agent is completed.
+
+        > Websockets are used to stream the agent logs to the standard output to provide live logs to the user.
 
         Args:
             **data: Keyword arguments representing the fields of an AgentRunRequest.
@@ -825,6 +849,11 @@ class RemoteAgent:
         This method retrieves the current state of the agent, including its progress,
         actions taken, and any errors or messages.
 
+        ```python
+        status = agent.status()
+        ```
+
+
         Returns:
             LegacyAgentStatusResponse: The current status of the agent execution.
 
@@ -840,6 +869,11 @@ class RemoteAgent:
 
         This method downloads a visual replay of the agent's actions, which can be
         useful for debugging or understanding the agent's behavior.
+
+        ```python
+        replay = agent.replay()
+        replay.save(f"{agent.agent_id}_replay.webp")
+        ```
 
         Returns:
             WebpReplay: The replay data in WEBP format.

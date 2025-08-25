@@ -1,0 +1,32 @@
+---
+title: "download"
+description: "Stores a file that has been downloaded from a website in the current session"
+---
+
+
+
+```python
+file_storage = notte.FileStorage("<session_id>")
+# file.pdf has been downloaded by an agent in the session
+# you can download it to your local machine using:
+file_storage.download(file_name="file.pdf", local_dir="<local_download_dir>")
+```
+
+
+## Parameters
+
+<ParamField path="file_name" type="str">
+
+</ParamField>
+
+<ParamField path="local_dir" type="str">
+
+</ParamField>
+
+<ParamField path="force" type="bool">
+   (default: False)
+</ParamField>
+
+## Returns
+
+`bool`

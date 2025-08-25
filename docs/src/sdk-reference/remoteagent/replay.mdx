@@ -3,12 +3,21 @@ title: "replay"
 description: "Get a replay of the agent's execution in WEBP format"
 ---
 
-This method downloads a visual replay of the agent's actions, which can be useful for debugging or understanding the agent's behavior
+
+
+This method downloads a visual replay of the agent's actions, which can be
+useful for debugging or understanding the agent's behavior.
+
+```python
+replay = agent.replay()
+replay.save(f"{agent.agent_id}_replay.webp")
+```
+
 
 
 ## Returns
 
-[`WebpReplay`](../misc/webpreplay): The replay data in WEBP format.
+[`WebpReplay`](/sdk-reference/misc/webpreplay): The replay data in WEBP format.
 
 ## Raises
 

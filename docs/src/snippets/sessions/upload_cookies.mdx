@@ -1,10 +1,9 @@
 ```python upload_cookies.py
 from notte_sdk import NotteClient
-from notte_sdk.types import Cookie
 
 # Upload cookies for github.com to automatically login
 cookies = [
-    Cookie(
+    dict(
         name="sb-db-auth-token",
         value="base64-cookie-value",
         domain="github.com",

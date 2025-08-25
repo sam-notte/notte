@@ -3,7 +3,11 @@ title: "__call__"
 description: "Create a new RemoteAgent instance with the specified configuration"
 ---
 
-This method validates the agent creation request and sets up the appropriate connections with the provided vault and session if specified
+
+
+This method validates the agent creation request and sets up the appropriate
+connections with the provided vault and session if specified.
+
 
 
 ## Parameters
@@ -18,6 +22,10 @@ This method validates the agent creation request and sets up the appropriate con
 
 <ParamField path="notifier" type="UnionType[BaseNotifier, None]">
   A notifier (for example, email), which will get called upon task completion. (default: None)
+</ParamField>
+
+<ParamField path="persona" type="UnionType[Persona, None]">
+   (default: None)
 </ParamField>
 
 <ParamField path="reasoning_model" type="notte_core.common.config.LlmModel | str">
@@ -36,10 +44,14 @@ This method validates the agent creation request and sets up the appropriate con
   Optional ID of the vault to use.
 </ParamField>
 
+<ParamField path="persona_id" type="str | None">
+
+</ParamField>
+
 <ParamField path="notifier_config" type="dict[str, typing.Any] | None">
   Config used for the notifier.
 </ParamField>
 
 ## Returns
 
-[`RemoteAgent`](../misc/remoteagent): A new RemoteAgent instance configured with the specified parameters.
+[`RemoteAgent`](/sdk-reference/misc/remoteagent): A new RemoteAgent instance configured with the specified parameters.
