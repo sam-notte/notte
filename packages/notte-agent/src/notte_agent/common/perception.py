@@ -11,7 +11,7 @@ from notte_core.space import ActionSpace
 def trim_message(message: str, max_length: int | None = config.max_error_length) -> str:
     if max_length is None or len(message) <= max_length:
         return message
-    logger.warning(f"Trimming message ({message[:20]})")
+    logger.warning(f"Trimming message ({message[:100]})")
     return f"...{message[-max_length:]}"
 
 

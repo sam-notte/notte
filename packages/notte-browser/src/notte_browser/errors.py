@@ -1,3 +1,4 @@
+import traceback
 from collections.abc import Awaitable
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -151,7 +152,7 @@ class ScrollActionFailedError(BrowserError):
 class UnexpectedBrowserError(BrowserError):
     def __init__(self, url: str) -> None:
         super().__init__(
-            dev_message=f"Unexpected error detected: {url}. Notte cannot continue without a valid page. ",
+            dev_message=f"Unexpected error detected: {url}. Notte cannot continue without a valid page. {traceback.format_exc()}",
             user_message="An unexpected error occurred within the browser session.",
             agent_message=(
                 "An unexpected error occurred within the browser session. Hint: wait a couple seconds and retry the"

@@ -132,6 +132,8 @@ class LLMEngine:
                     )
                 )
                 raised_exc = e
+                logger.error(f"Error parsing LLM response: {e.errors()}, retrying")
+
                 continue
 
         error_string = (

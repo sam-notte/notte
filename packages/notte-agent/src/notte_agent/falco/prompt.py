@@ -41,11 +41,20 @@ class ActionRegistry:
                 # Get schema and safely remove common fields
                 skip_keys = action_cls.non_agent_fields().difference(set(["description"]))
                 sub_skip_keys = ["title", "$ref"]
+                full_schema = action_cls.model_json_schema()
                 schema = {
                     k: {sub_k: sub_v for sub_k, sub_v in v.items() if sub_k not in sub_skip_keys}
-                    for k, v in action_cls.model_json_schema()["properties"].items()
+                    for k, v in full_schema["properties"].items()
                     if k not in skip_keys
                 }
+                full_schema["properties"] = schema
+                full_schema["additionalProperties"] = False
+
+                if "$defs" in full_schema:
+                    del full_schema["$defs"]
+                # if "title" in full_schema:
+                #     del full_schema["title"]
+
                 # schema['id'] = schema['id']['default']
                 __description: dict[str, str] = schema.pop("description", "No description available")  # type: ignore[type-arg]
                 if "default" not in __description:
@@ -59,7 +68,7 @@ class ActionRegistry:
                 description = f"""
 * "{action_name}" : {_description}. Format:
 ```json
-{json.dumps(schema)}
+{json.dumps(full_schema)}
 ```
 """
                 descriptions.append(description)

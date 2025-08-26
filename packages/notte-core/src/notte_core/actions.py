@@ -6,7 +6,7 @@ import re
 import warnings
 from abc import ABCMeta, abstractmethod
 from functools import reduce
-from typing import Annotated, Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal, get_args
 
 from pydantic import BaseModel, Field, field_validator
 from typing_extensions import override
@@ -104,6 +104,7 @@ class BaseAction(BaseModel, metaclass=ABCMeta):
             "params",
             "code",
             "status",
+            "param",
         }
         if "selector" in cls.model_fields:
             fields.remove("id")
@@ -199,7 +200,7 @@ class FormFillAction(BrowserAction):
     """
 
     type: Literal["form_fill"] = "form_fill"  # pyright: ignore [reportIncompatibleVariableOverride]
-    description: str = "Fill a form with multiple values. Critical: If you detect a form on a page, try to use this action at first, and otherwise use the regular fill action"
+    description: str = "Fill a form with multiple values. Important: If you detect a form requesting personal information, try to use this action at first, and otherwise use the regular fill action. CRITICAL: If this action fails once, use the regular form fill instead."
     value: dict[
         Literal[
             "title",
@@ -229,12 +230,17 @@ class FormFillAction(BrowserAction):
             "totp",
         ],
         str | ValueWithPlaceholder,
-    ]
+    ] = Field(min_length=1)
 
     @field_validator("value", mode="before")
     @classmethod
     def verify_value(cls, value: Any) -> Any:
         """Validator necessary to ignore typing issues with ValueWithPlaceholder"""
+        if value is None:
+            allowed_keys = get_args(get_args(cls.model_fields["value"].annotation)[0])
+            raise ValueError(
+                f"'value' key in form fill action has to be an object with at least one key among {allowed_keys}, but got {value}. CRITICAL: fall back to the regular fill action"
+            )
         return value
 
     @override

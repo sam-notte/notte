@@ -16,7 +16,7 @@ from notte_core.actions import (
 )
 from notte_core.agent_types import AgentCompletion
 from notte_core.browser.observation import ExecutionResult, Observation, TrajectoryProgress
-from notte_core.common.config import NotteConfig, RaiseCondition
+from notte_core.common.config import LlmModel, NotteConfig, RaiseCondition
 from notte_core.common.telemetry import track_usage
 from notte_core.common.tracer import LlmUsageDictTracer
 from notte_core.credentials.base import BaseVault, LocatorAttributes
@@ -126,7 +126,9 @@ class NotteAgent(BaseAgent):
 
         with ErrorConfig.message_mode("developer"):
             response: AgentCompletion = await self.llm.structured_completion(
-                messages, response_format=AgentCompletion, use_strict_response_format=False
+                messages,
+                response_format=AgentCompletion,
+                use_strict_response_format=LlmModel.use_strict_response_format(self.config.reasoning_model),
             )
 
         self.trajectory.append(response, force=True)

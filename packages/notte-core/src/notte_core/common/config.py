@@ -112,6 +112,10 @@ class LlmModel(StrEnum):
         return self.provider.context_length
 
     @staticmethod
+    def use_strict_response_format(val: "str | LlmModel") -> bool:
+        return not val.startswith(str(LlmProvider.cerebras)) and "gemini-2.0-flash" not in str(val)
+
+    @staticmethod
     def default() -> "LlmModel":
         if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
             return LlmModel.gemini_vertex
