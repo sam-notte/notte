@@ -1,6 +1,6 @@
 import json
 import os
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Literal, Self, TypeVar
 from urllib.parse import urljoin
@@ -22,7 +22,7 @@ class NotteEndpoint(BaseModel, Generic[TResponse]):
     path: str
     response: type[TResponse]
     request: BaseModel | None = None
-    method: Literal["GET", "POST", "DELETE"]
+    method: Literal["GET", "POST", "DELETE", "PATCH"]
     params: BaseModel | None = None
     files: BaseModel | None = None
 
@@ -108,9 +108,6 @@ class BaseClient(ABC):
             raise AuthenticationError("NOTTE_API_KEY needs to be provided")
         self.token: str = token
         self.server_url: str = server_url or os.getenv("NOTTE_API_URL") or self.DEFAULT_NOTTE_API_URL
-        self._endpoints: dict[str, NotteEndpoint[BaseModel]] = {
-            endpoint.path: endpoint for endpoint in self.endpoints()
-        }
         self.base_endpoint_path: str | None = base_endpoint_path
         self.verbose: bool = verbose
 
@@ -140,28 +137,14 @@ class BaseClient(ABC):
             ) from e
         logger.info("🔥 Health check passed. API ready to serve requests.")
 
-    @staticmethod
-    @abstractmethod
-    def endpoints() -> Sequence[NotteEndpoint[BaseModel]]:
-        """
-        Return API endpoints for the client.
-
-        This abstract method should be implemented by subclasses to supply the list of available
-        NotteEndpoint instances for the client.
-
-        Returns:
-            Sequence[NotteEndpoint[BaseModel]]: A list of endpoints for the client.
-        """
-        pass
-
-    def headers(self) -> dict[str, str]:
+    def headers(self, headers: dict[str, str] | None = None) -> dict[str, str]:
         """
         Return HTTP headers for authenticated API requests.
 
         Constructs and returns a dictionary containing the 'Authorization' header,
         which is formatted as a Bearer token using the API key stored in self.token.
         """
-        return {"Authorization": f"Bearer {self.token}"}
+        return {"Authorization": f"Bearer {self.token}", **(headers or {})}
 
     def request_path(self, endpoint: NotteEndpoint[TResponse]) -> str:
         """
@@ -185,7 +168,7 @@ class BaseClient(ABC):
         path = urljoin(path, endpoint_path)
         return path
 
-    def _request(self, endpoint: NotteEndpoint[TResponse]) -> requests.Response:
+    def _request(self, endpoint: NotteEndpoint[TResponse], headers: dict[str, str] | None = None) -> requests.Response:
         """
         Executes an HTTP request for the given API endpoint.
 
@@ -205,7 +188,7 @@ class BaseClient(ABC):
             ValueError: If a POST request is attempted without a request model.
             NotteAPIError: If the API response indicates a failure.
         """
-        headers = self.headers()
+        headers = self.headers(headers=headers)
         url = self.request_path(endpoint)
         params = endpoint.params.model_dump(exclude_none=True) if endpoint.params is not None else None
         files = endpoint.files if endpoint.files is not None else None
@@ -219,7 +202,7 @@ class BaseClient(ABC):
                     params=params,
                     timeout=self.DEFAULT_REQUEST_TIMEOUT_SECONDS,
                 )
-            case "POST":
+            case "POST" | "PATCH":
                 if endpoint.request is None and endpoint.files is None:
                     raise ValueError("Request model or file is required for POST requests")
                 if endpoint.request is None:
@@ -227,7 +210,8 @@ class BaseClient(ABC):
                 else:
                     data = endpoint.request.model_dump_json(exclude_none=True)
                     headers["Content-Type"] = "application/json"
-                response = requests.post(
+                method = requests.post if endpoint.method == "POST" else requests.patch
+                response = method(
                     url=url,
                     headers=headers,
                     data=data,
@@ -252,7 +236,7 @@ class BaseClient(ABC):
             raise NotteAPIError(path=f"{self.base_endpoint_path}/{endpoint.path}", response=response)
         return response_dict
 
-    def request(self, endpoint: NotteEndpoint[TResponse]) -> TResponse:
+    def request(self, endpoint: NotteEndpoint[TResponse], headers: dict[str, str] | None = None) -> TResponse:
         """
         Requests the specified API endpoint and returns the validated response.
 
@@ -271,7 +255,7 @@ class BaseClient(ABC):
         Raises:
             NotteAPIError: If the API response is not a dictionary.
         """
-        response: Any = self._request(endpoint)
+        response: Any = self._request(endpoint, headers=headers)
         if not isinstance(response, dict):
             raise NotteAPIError(path=f"{self.base_endpoint_path}/{endpoint.path}", response=response)
 
