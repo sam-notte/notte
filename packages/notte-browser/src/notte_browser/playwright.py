@@ -4,6 +4,7 @@ from typing import ClassVar
 
 from loguru import logger
 from notte_core.common.resource import AsyncResource
+from notte_core.profiling import profiler
 from notte_sdk.types import SessionStartRequest
 from openai import BaseModel
 from pydantic import PrivateAttr
@@ -37,8 +38,9 @@ class PlaywrightManager(BaseModel, BaseWindowManager):
     @override
     async def astart(self) -> None:
         """Initialize the playwright instance"""
-        if self._playwright is None:
-            self._playwright = await async_playwright().start()
+        async with profiler.profile("start_playwright"):
+            if self._playwright is None:
+                self._playwright = await async_playwright().start()
 
     @override
     async def astop(self) -> None:
@@ -71,6 +73,7 @@ class PlaywrightManager(BaseModel, BaseWindowManager):
         except Exception as e:
             raise CdpConnectionError(options.cdp_url) from e
 
+    @profiler.profiled()
     async def create_playwright_browser(self, options: BrowserWindowOptions) -> Browser:
         """Get an existing browser or create a new one if needed"""
         if options.cdp_url is not None:
@@ -114,6 +117,7 @@ class PlaywrightManager(BaseModel, BaseWindowManager):
                 raise FirefoxNotAvailableError()
         return browser
 
+    @profiler.profiled()
     async def get_browser_resource(self, options: BrowserWindowOptions, browser: Browser) -> BrowserResource:
         async with asyncio.timeout(self.BROWSER_OPERATION_TIMEOUT_SECONDS):
             viewport = None
@@ -152,6 +156,7 @@ class PlaywrightManager(BaseModel, BaseWindowManager):
             )
 
     @override
+    @profiler.profiled()
     async def new_window(self, options: BrowserWindowOptions | None = None) -> BrowserWindow:
         if not self.is_started():
             _ = await self.astart()
