@@ -56,6 +56,7 @@ class ScriptValidator(RestrictingNodeTransformer):
         # Safe third-party
         "pydantic",  # Data validation library
         "loguru",  # Logging library
+        "requests",
         # Safe standard library modules - data processing and utilities
         "json",  # JSON parsing
         "datetime",  # Date/time handling
@@ -365,6 +366,11 @@ class SecureScriptRunner:
                 "_getitem_": self.safe_getitem,
                 "_getiter_": self.safe_getiter,
                 "_write_": self.safe_write,
+                # RestrictedPython requires these variables to be defined
+                "__metaclass__": type,  # Required for RestrictedPython compiled code
+                "_iter_unpack_sequence_": iter,  # Iterator unpacking guard
+                "__name__": "__main__",  # Standard module name
+                "__file__": "<user_script.py>",  # Standard filename
                 # Import handling
                 # Additional safe built-ins that might be useful
                 "len": len,
@@ -472,9 +478,10 @@ class SecureScriptRunner:
             restricted: If True, use RestrictedPython for safety (default: False)
                    If False, use regular Python execution (full access)
         """
+
         if restricted:
             # Use RestrictedPython for strict mode
-            code = ScriptValidator.parse_script(code_string, restricted=True)
+            code = ScriptValidator.parse_script(code_string, restricted=restricted)
             execution_globals = self.get_safe_globals()
             result: Mapping[str, object] = {}
 
