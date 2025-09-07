@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
-import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar, Literal, Unpack, overload
@@ -20,7 +19,7 @@ from notte_core.actions import (
 )
 from notte_core.browser.observation import ExecutionResult, Observation, Screenshot
 from notte_core.browser.snapshot import BrowserSnapshot
-from notte_core.common.config import PerceptionType, RaiseCondition, ScreenshotType, config
+from notte_core.common.config import CookieDict, PerceptionType, RaiseCondition, ScreenshotType, config
 from notte_core.common.logging import timeit
 from notte_core.common.resource import AsyncResource, SyncResource
 from notte_core.common.telemetry import track_usage
@@ -33,9 +32,9 @@ from notte_core.profiling import profiler
 from notte_core.space import ActionSpace
 from notte_core.storage import BaseStorage
 from notte_core.trajectory import Trajectory
+from notte_core.utils.files import create_or_append_cookies_to_file
 from notte_core.utils.webp_replay import ScreenshotReplay, WebpReplay
 from notte_sdk.types import (
-    CookieDict,
     ExecutionRequest,
     ExecutionRequestDict,
     PaginationParams,
@@ -146,21 +145,8 @@ class NotteSession(AsyncResource, SyncResource):
     @track_usage("local.session.stop")
     async def astop(self) -> None:
         if self._cookie_file is not None:
-            logger.info(f"🍪 Automatically saving cookies to {self._cookie_file}")
-            try:
-                # Read existing cookies if file exists, else start with empty list
-                if self._cookie_file.exists():
-                    with self._cookie_file.open("r", encoding="utf-8") as f:
-                        existing_cookies: list[CookieDict] = json.load(f)
-                else:
-                    existing_cookies = []
-                # Append new cookies
-                cookies = await self.aget_cookies()
-                existing_cookies.extend(cookies)
-                with self._cookie_file.open("w", encoding="utf-8") as f:
-                    json.dump(existing_cookies, f)
-            except Exception as e:
-                logger.error(f"🍪 Error saving cookies to {self._cookie_file}: {e}")
+            cookies = await self.aget_cookies()
+            create_or_append_cookies_to_file(self._cookie_file, cookies)
         await self.window.close()
         self._window = None
 
@@ -348,30 +334,28 @@ class NotteSession(AsyncResource, SyncResource):
     @overload
     async def aexecute(self, action: dict[str, Any], *, raise_on_failure: bool | None = None) -> ExecutionResult: ...
     @overload
-    @track_usage("local.session.execute")
     async def aexecute(
         self,
-        *,
         action: None = None,
+        *,
         raise_on_failure: bool | None = None,
         **data: Unpack[ExecutionRequestDict],
     ) -> ExecutionResult: ...
 
     @timeit("aexecute")
-    @track_usage("local.session.step")
+    @track_usage("local.session.execute")
     @profiler.profiled()
     async def aexecute(
         self,
         action: BaseAction | dict[str, Any] | None = None,
+        *,
         raise_on_failure: bool | None = None,
         **data: Unpack[ExecutionRequestDict],
     ) -> ExecutionResult:
         """
         Execute an action, either by passing a BaseAction as the first argument, or by passing ExecutionRequestDict fields as kwargs.
         """
-
-        request = ExecutionRequest.model_validate(data)
-        step_action = request.get_action(action=action)
+        step_action = ExecutionRequest.get_action(action=action, data=data)
 
         message = None
         exception = None

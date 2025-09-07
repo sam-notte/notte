@@ -321,25 +321,6 @@ class ExternalProxy(SdkBaseModel):
 ProxySettings = Annotated[NotteProxy | ExternalProxy, Field(discriminator="type")]
 
 
-class CookieDict(TypedDict, total=False):
-    """
-    Cookie dictionary as returned by the session.get_cookies() method.
-    """
-
-    name: Required[str]
-    value: Required[str]
-    domain: Required[str]
-    path: Required[str]
-    httpOnly: Required[bool]
-    expirationDate: float | None
-    hostOnly: bool | None
-    sameSite: Literal["Lax", "None", "Strict"] | None
-    secure: bool | None
-    session: bool | None
-    storeId: str | None
-    expires: float | None
-
-
 class Cookie(SdkBaseModel):
     name: str
     value: str
@@ -1180,6 +1161,7 @@ class ScrapeStructuredParamsDict(TypedDict, total=False):
 
 
 class ScrapeParamsDict(ScrapeMarkdownParamsDict, ScrapeStructuredParamsDict, total=False):
+    ignored_tags: list[str] | None
     only_images: bool
     response_format: type[BaseModel] | None
     instructions: str | None
@@ -1296,11 +1278,11 @@ class ExecutionRequestDict(TypedDict, total=False):
     id: str | None
     value: str | int | None
     enter: bool | None
-    selector: str | None
+    selector: str | NodeSelectors | None
 
 
 class ExecutionRequest(SdkBaseModel):
-    type: Annotated[str | None, Field(description="The type of action to execute")] = None
+    type: Annotated[str, Field(description="The type of action to execute")]
     id: Annotated[str | None, Field(description="The ID of the action to execute")] = None
 
     value: Annotated[str | int | None, Field(description="The value to input for form actions")] = None
@@ -1323,28 +1305,40 @@ class ExecutionRequest(SdkBaseModel):
             return NodeSelectors.from_unique_selector(value)
         return value
 
-    def get_action(self, action: ActionUnion | dict[str, Any] | None = None) -> ActionUnion:
-        # if provided, return the action
-        if action is not None:
-            if isinstance(action, dict):
-                if "selector" in action and "id" not in action:
-                    action["id"] = ""  # TODO: find a better way to handle this
-                return ActionValidation.model_validate({"action": action}).action
-            return action
+    @field_validator("type", mode="after")
+    @classmethod
+    def verify_type(cls, value: Any) -> Any:
+        valid_keys = BaseAction.ACTION_REGISTRY.keys()
+        if value not in valid_keys:
+            raise ValueError(f"Invalid action type '{value}'. Valid types are: {valid_keys}")
+        return value
 
+    @staticmethod
+    def get_action(
+        action: ActionUnion | dict[str, Any] | None, data: ExecutionRequestDict | None = None
+    ) -> ActionUnion:
+        # if provided, return the action
+        if isinstance(action, BaseAction):
+            # already a valid action
+            return action
+        if isinstance(action, dict):
+            if "selector" in action and "id" not in action:
+                action["id"] = ""  # TODO: find a better way to handle this
+            return ActionValidation.model_validate({"action": action}).action
+        if data is None and action is None:
+            raise ValueError("No action provided")
+
+        # otherwise, convert data to action
+        action = ExecutionRequest.model_validate(data)
         # otherwise, convert current object to action
-        if self.type is None:
-            raise ValueError(f"Action need to have a valid type: {BaseAction.ACTION_REGISTRY.keys()}")
-        elif self.type in BrowserAction.BROWSER_ACTION_REGISTRY:
-            return BrowserAction.from_param(self.type, self.value)
-        elif self.type in InteractionAction.INTERACTION_ACTION_REGISTRY:
-            if (self.id is None or self.id == "") and self.selector is None:
-                raise ValueError("Interaction action need to provide either an action_id or a selector")
-            return InteractionAction.from_param(self.type, self.value, self.id, self.selector)
-        else:
-            raise ValueError(
-                f"Invalid action type: {self.type}. Valid types are: {BrowserAction.ACTION_REGISTRY.keys()}"
-            )
+        if action.type in BrowserAction.BROWSER_ACTION_REGISTRY:
+            return BrowserAction.from_param(action.type, action.value)
+
+        if (action.id is None or action.id == "") and action.selector is None:
+            raise ValueError(f"Action '{action.type}' need to provided an action_id or a selector")
+        return InteractionAction.from_param(
+            action_type=action.type, value=action.value, id=action.id, selector=action.selector
+        )
 
 
 class ExecutionResponseWithSession(ExecutionResult):
@@ -1695,9 +1689,8 @@ class DeleteWorkflowResponse(SdkBaseModel):
     message: Annotated[str, Field(description="The message of the deletion")]
 
 
-class ListWorkflowsRequest(SdkBaseModel):
-    page: Annotated[int, Field(description="The page number to list workflows for")] = 1
-    page_size: Annotated[int, Field(description="The number of workflows to list per page")] = 10
+class ListWorkflowsRequest(SessionListRequest):
+    pass
 
 
 class ListWorkflowsResponse(SdkBaseModel):

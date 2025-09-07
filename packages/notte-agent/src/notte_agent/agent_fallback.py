@@ -90,6 +90,7 @@ class AgentFallback:
         # Define wrappers
         async def wrapped_aexecute(
             action: BaseAction | dict[str, Any] | None = None,
+            *,
             raise_on_failure: bool | None = None,
             **data: Unpack[ExecutionRequestDict],
         ) -> ExecutionResult:
@@ -106,7 +107,7 @@ class AgentFallback:
                     data=None,
                     exception=None,
                 )
-            logger.info(f"✏️ AgentFallback executing action: {action_log}")
+            logger.info(f"✏️ Agent fallback executing action: {action_log}")
             # Delegate to original aexecute and do not raise on failure
             result = await self._orig_aexecute(  # type: ignore[misc]
                 action=action, raise_on_failure=False, **data
