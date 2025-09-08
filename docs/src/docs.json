@@ -1,5 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
+  "site": "https://docs.notte.cc",
   "theme": "willow",
   "name": "Notte",
   "colors": {
